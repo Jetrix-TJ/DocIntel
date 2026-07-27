@@ -33,18 +33,27 @@ CEILING = Decimal("0.99")
 _PER_BOOST = Decimal("1.03")
 
 
+def _clamp(value: Decimal) -> float:
+    """Confidence is always within [0, CEILING].
+
+    CEILING is a global invariant, not a boost-only rule: this pipeline never
+    reports certainty about a value read off a document.
+    """
+    return float(min(CEILING, max(Decimal("0"), value)))
+
+
 def apply_modifiers(base: float, names: Sequence[str]) -> float:
     value = Decimal(str(base))
     for name in names:
         if name not in MODIFIERS:
             raise ValueError(f"unknown confidence modifier: {name!r}")
         value *= MODIFIERS[name]
-    return float(max(Decimal("0"), value))
+    return _clamp(value)
 
 
 def apply_boosts(base: float, count: int) -> float:
-    """Corroboration raises confidence, but only a little and never to certainty."""
+    """Corroboration raises confidence a little, never to certainty."""
     if count <= 0:
-        return base
+        return _clamp(Decimal(str(base)))
     factor = min(BOOST_CAP, _PER_BOOST ** count)
-    return float(min(CEILING, Decimal(str(base)) * factor))
+    return _clamp(Decimal(str(base)) * factor)
