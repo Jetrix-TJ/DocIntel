@@ -9,7 +9,12 @@ DEFAULT_FIELDS = ["vendor_name", "invoice_number", "invoice_date", "total_printe
 
 
 def _collapsed(ctx: JobContext) -> bool:
-    """Several fields below threshold means the rules failed, not the document."""
+    """Have the cached rules failed, rather than the document being bad?
+
+    True when two or more fields fall below threshold, and also when NOTHING was
+    extracted at all — a persona whose selectors matched zero fields has failed
+    just as completely as one whose values came back weak.
+    """
     if not ctx.extracted.match_quality:
         return True
     weak = [q for q in ctx.extracted.match_quality.values() if q < COLLAPSE_THRESHOLD]
