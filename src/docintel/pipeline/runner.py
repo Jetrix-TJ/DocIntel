@@ -23,6 +23,29 @@ class Stage(Protocol):
     def run(self, ctx: JobContext) -> JobContext: ...
 
 
+# Which hook socket fires at which stage boundary.
+#
+# The runner owns BOUNDARY sockets, because it is the only object that can see
+# the seams between stages. Two sockets are deliberately absent: classifySignals
+# fires *inside* stage 3 (a pack injects its signal ladder there, cluster C5), and
+# onRegenTrigger belongs to the rule lifecycle, which runs beside the pipeline
+# rather than in it.
+HOOKS_BEFORE: dict[str, str] = {
+    "intake": "beforeIntake",
+    "persona_lookup": "beforePersonaLookup",
+    "capture_fields": "afterExtraction",
+    "confidence_gate": "beforeConfidenceGate",
+}
+
+HOOKS_AFTER: dict[str, str] = {
+    "attachment_filter": "afterFilter",
+}
+
+# beforeEmit is NOT in either map. It fires inside _emit() so that it reaches
+# every emitted record — including skipped and dead-lettered ones, which never
+# reach the emit stage because _run_stages breaks out early.
+
+
 class Runner:
     def __init__(
         self,
@@ -71,11 +94,12 @@ class Runner:
         is itself a dead letter, not an exception.
         """
         try:
+            ctx = self.hooks.run("beforeEmit", ctx)
             record = build_record(ctx)
             validate_record(record)
             return record
         except Exception as exc:  # noqa: BLE001 - deliberate catch-all
-            ctx.log(f"contract validation failed, degrading: {exc}")
+            ctx.log(f"emit failed, degrading: {exc}")
             return self._minimal_dead_letter(ctx.document_id, str(exc))
 
     @staticmethod
@@ -92,7 +116,18 @@ class Runner:
 
     def _run_stages(self, ctx: JobContext) -> JobContext:
         for stage in self.stages:
+            before = HOOKS_BEFORE.get(stage.name)
+            if before is not None:
+                ctx = self.hooks.run(before, ctx)
+
             ctx = self._run_one(stage, ctx)
+
+            # The after-socket runs before the disposition check so a pack can
+            # observe - or react to - a skip the base pipeline just decided.
+            after = HOOKS_AFTER.get(stage.name)
+            if after is not None:
+                ctx = self.hooks.run(after, ctx)
+
             if ctx.disposition != "processed":
                 break
         return ctx
@@ -109,5 +144,8 @@ class Runner:
             if not isinstance(result, JobContext):
                 raise TypeError(f"stage {stage.name!r} must return a JobContext")
             return result
-        assert last is not None
+        if last is None:  # unreachable for max_retries >= 0, but not via assert:
+            raise RuntimeError(  # `python -O` strips asserts, and this is control flow
+                f"stage {stage.name!r} exhausted retries without a result"
+            )
         raise last

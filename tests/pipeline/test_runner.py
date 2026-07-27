@@ -97,7 +97,10 @@ def test_transient_error_that_recovers_emits_processed():
             return _classified(ctx)
 
     r = Runner(stages=[Flaky()], hooks=HookRegistry(), max_retries=2)
-    assert r.process("d1", "/tmp/a.pdf")["disposition"] == "processed"
+    rec = r.process("d1", "/tmp/a.pdf")
+    validate_record(rec)
+    assert rec["disposition"] == "processed"
+    assert r.stats == {"intaken": 1, "emitted": 1}
 
 
 def test_the_invariant_holds_over_a_burst_with_mixed_failures():
@@ -108,6 +111,79 @@ def test_the_invariant_holds_over_a_burst_with_mixed_failures():
     assert r.stats["intaken"] == r.stats["emitted"] == 50
     for rec in records:
         validate_record(rec)
+
+
+def test_a_throwing_pack_hook_still_emits_a_dead_letter():
+    """The docstring's claim that a pack hook is a guarded escape route, made real.
+
+    A hook registered by a third-party pack raises. The document must still emit.
+    """
+    hooks = HookRegistry()
+
+    def boom(ctx, nxt):
+        raise RuntimeError("pack bug")
+
+    hooks.register("afterFilter", boom, pack="northstar")
+
+    class Filter:
+        name = "attachment_filter"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            return _classified(ctx)
+
+    r = Runner(stages=[Filter()], hooks=hooks)
+    rec = r.process("d1", "/tmp/a.pdf")
+    validate_record(rec)
+    assert rec["disposition"] == "dead_letter"
+    assert "northstar" in rec["reason"]
+    assert r.stats == {"intaken": 1, "emitted": 1}
+
+
+def test_hooks_fire_at_their_declared_boundaries():
+    """Each boundary socket the runner owns must actually be dispatched."""
+    hooks = HookRegistry()
+    fired: list[str] = []
+
+    for socket in ("beforeIntake", "afterFilter", "beforePersonaLookup",
+                   "afterExtraction", "beforeConfidenceGate", "beforeEmit"):
+        hooks.register(
+            socket,
+            (lambda s: lambda ctx, nxt: (fired.append(s), nxt(ctx))[1])(socket),
+            pack="probe",
+        )
+
+    class Named:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def run(self, ctx: JobContext) -> JobContext:
+            return _classified(ctx)
+
+    stages = [Named(n) for n in ("intake", "attachment_filter", "persona_lookup",
+                                "capture_fields", "confidence_gate", "emit_record")]
+    Runner(stages=stages, hooks=hooks).process("d1", "/tmp/a.pdf")
+    assert fired == ["beforeIntake", "afterFilter", "beforePersonaLookup",
+                     "afterExtraction", "beforeConfidenceGate", "beforeEmit"]
+
+
+def test_beforeEmit_fires_even_for_a_skipped_document():
+    """Skipped documents never reach the emit stage, but they DO emit a record."""
+    hooks = HookRegistry()
+    fired: list[str] = []
+    hooks.register("beforeEmit", lambda ctx, nxt: (fired.append("x"), nxt(ctx))[1],
+                   pack="probe")
+
+    class Skipper:
+        name = "attachment_filter"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            ctx.disposition = "skipped"
+            ctx.skip_reason = "not in allowlist"
+            return ctx
+
+    rec = Runner(stages=[Skipper()], hooks=hooks).process("d1", "/tmp/a.png")
+    assert rec["disposition"] == "skipped"
+    assert fired == ["x"], "beforeEmit must reach every emitted record"
 
 
 def test_a_record_that_fails_validation_degrades_instead_of_raising():
