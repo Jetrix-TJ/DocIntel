@@ -26,11 +26,13 @@ scan line may only ever corroborate `total_printed`, `account_number`,
 business-logic oracle — Centracom's scan line encodes 33,876.40, the
 misleading headline "Total Amount Due" on the page, not the 13,752.60
 ("Subtotal Current Charges") that is actually payable once the prior
-balance is excluded. `corroborates` has no way to know which field it is
-being asked about, so this constraint is enforced by callers, not here —
-but nothing outside this module may wire `scanline.corroborates` to
-`amount_payable`, `balance_due`, or any other derived or business-computed
-field. Doing so would let a scan line "verify" precisely the wrong number.
+balance is excluded. A future caller wiring this to `amount_payable` would
+cement exactly the bug this project exists to prevent, so the constraint is
+not merely documented here — `corroborates` takes the field name being
+checked as a required argument and raises `ValueError` for anything outside
+`CORROBORATABLE_FIELDS`. This makes the restriction impossible to bypass by
+accident; a caller would have to explicitly widen `CORROBORATABLE_FIELDS`
+itself to break it, which is a much harder thing to do without noticing.
 """
 
 from __future__ import annotations
@@ -48,6 +50,14 @@ _NON_DIGIT_RE = re.compile(r"[^0-9]")
 _MIN_CORROBORATION_DIGITS = 3  # below this, a match is too likely to be a
 # coincidence (a lone "1" or "12" appears in almost any long digit run) to
 # count as corroborating anything.
+
+# The only fields a scan line may ever be asked to corroborate. Transcription
+# fidelity, never business correctness (see module docstring) - in
+# particular, this must never include `amount_payable` or any other derived
+# or business-computed field.
+CORROBORATABLE_FIELDS: frozenset[str] = frozenset(
+    {"total_printed", "account_number", "invoice_number", "due_date"}
+)
 
 
 def find(pages: tuple[PageText, ...]) -> str | None:
@@ -68,16 +78,28 @@ def find(pages: tuple[PageText, ...]) -> str | None:
     return None
 
 
-def corroborates(scanline: str, value: object) -> bool:
+def corroborates(scanline: str, value: object, field: str) -> bool:
     """True if `value`'s digits appear as a contiguous run in `scanline`.
+
+    `field` names the field `value` was read for and must be one of
+    `CORROBORATABLE_FIELDS` (`total_printed`, `account_number`,
+    `invoice_number`, `due_date`) — anything else raises `ValueError`
+    naming the offending field, rather than silently answering a question
+    the scan line has no business answering (see module docstring).
 
     `value` is converted with `str()` and stripped to digits first, so a
     `Decimal("248.09")` corroborates against "24809" and an account number
     already stored as a string works unchanged. Values with fewer than
-    `_MIN_CORROBORATION_DIGITS` digits never corroborate — see the module
-    docstring for why, and for the one field this must never be called with:
-    the scan line encodes what was printed, not what is actually owed.
+    `_MIN_CORROBORATION_DIGITS` digits never corroborate — below that, a
+    match is too likely to be coincidence (a lone "1" or "12" appears in
+    almost any long digit run) to mean anything.
     """
+    if field not in CORROBORATABLE_FIELDS:
+        raise ValueError(
+            f"scanline cannot corroborate {field!r}; it may only corroborate "
+            f"{sorted(CORROBORATABLE_FIELDS)} - transcription fidelity, never "
+            "business correctness (see module docstring)"
+        )
     value_digits = _NON_DIGIT_RE.sub("", str(value))
     if len(value_digits) < _MIN_CORROBORATION_DIGITS:
         return False

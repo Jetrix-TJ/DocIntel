@@ -42,6 +42,22 @@ review, a false negative lets contradicted reference numbers through
 silently, which is why `has_flattened_annotations` forces review
 unconditionally rather than merely discounting confidence.
 
+**Known blind spot, stated plainly because an undocumented one is a trap: this
+detector is entirely saturation-dependent, and therefore CANNOT see a
+greyscale scan or a black/grey-pen annotation.** Both pixel signals key off
+HSV saturation (`SAT_MIN`-`SAT_MAX`); any page rendered in greyscale, or any
+annotation made in black or grey ink on a greyscale-adjacent page, has
+S≈0 everywhere and never enters the pastel band no matter how much of the
+page it covers or how scattered it is. That is precisely the failure mode
+F3 cares about most — a contradicted value passing through with no forced
+review, silently. This is not something this task fixes (distinguishing
+"annotation ink" from "printed ink" in a greyscale image is a genuine
+computer-vision problem, out of scope here); `tests/extract/test_annotations.py`
+pins the limitation with a synthetic all-grey annotated page that this
+detector is expected — not merely observed — to miss, so a future change
+that silently narrows the blind spot further has to touch a test that says
+so, and so this gap stays visible instead of being rediscovered by surprise.
+
 Rendering a page is not free, and `detect_flattened` can be called many
 times for the same document within one process — the fault-injection matrix
 in `tests/test_invariant.py` reprocesses a single corpus document across
@@ -148,6 +164,16 @@ def _detect_uncached(path: str, page_numbers: frozenset[int]) -> bool:
 
 def _page_is_annotated(page: Page) -> bool:
     img = page.to_image(resolution=RESOLUTION).original.convert("RGB")
+    return _image_is_annotated(img)
+
+
+def _image_is_annotated(img: Image.Image) -> bool:
+    """The pixel-only half of detection, split out from `_page_is_annotated`
+    so it can be exercised directly against a synthetic `PIL.Image` in tests
+    — in particular the greyscale blind spot pinned in
+    `tests/extract/test_annotations.py` (see module docstring), which needs
+    no real PDF at all, just an image with S≈0 everywhere.
+    """
     total_px = img.size[0] * img.size[1]
     if total_px == 0:
         return False
@@ -160,9 +186,6 @@ def _page_is_annotated(page: Page) -> bool:
     if hit_px / total_px < FRAC_THRESHOLD:
         return False
 
-    # NB: Image.getdata() is deprecated in favour of get_flattened_data() as of
-    # recent Pillow, but the latter does not exist on the project's declared
-    # floor (Pillow>=10.0); getdata() remains correct and widely compatible.
     grid = mask.resize((GRID_COLS, GRID_ROWS), Image.BOX)
-    hit_cells = sum(1 for cell in grid.getdata() if cell >= CELL_HIT_THRESHOLD)
+    hit_cells = sum(1 for cell in grid.get_flattened_data() if cell >= CELL_HIT_THRESHOLD)
     return hit_cells >= MIN_HIT_CELLS

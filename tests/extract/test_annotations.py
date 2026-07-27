@@ -1,6 +1,9 @@
 import glob
 
-from docintel.extract.annotations import detect_flattened
+import pdfplumber
+
+from docintel.extract import annotations as annotations_module
+from docintel.extract.annotations import RESOLUTION, detect_flattened
 from docintel.extract.normalize import load_document
 
 FEDERAL = "docs/CONTRA ONLY Everything already on AR Federal Recycling 1330123.pdf"
@@ -41,3 +44,31 @@ def test_detection_is_memoized_and_does_not_mutate_shared_state():
     first = detect_flattened(FEDERAL, pages, meta)
     second = detect_flattened(FEDERAL, pages, meta)
     assert first is second is True
+
+
+def test_greyscale_annotations_are_a_known_blind_spot_not_detected():
+    """Pins Finding 3's documented limitation: detection is entirely
+    saturation-dependent, so a greyscale scan or black/grey-pen annotation
+    is invisible to it. This is EXPECTED, not desired, behaviour - a
+    regression test for a known gap, not a spec for correct output.
+
+    Uses Federal Recycling's own page, the one real annotated page in the
+    corpus, desaturated to grey. Same annotation geometry, same coverage,
+    same spread across the page that `test_federal_recycling_flattened_
+    annotations_are_detected` above confirms IS caught in colour - only the
+    saturation is gone. If this test ever starts failing (i.e. detection
+    starts returning True here), that is not a bug fix to celebrate
+    silently: it means the blind spot documented in the module docstring
+    has narrowed, and the docstring must be updated to match, or the
+    detector has started keying off something other than saturation and
+    the corpus-evidence thresholds need re-validating from scratch.
+    """
+    with pdfplumber.open(FEDERAL) as doc:
+        colour_img = doc.pages[0].to_image(resolution=RESOLUTION).original.convert("RGB")
+
+    # Sanity check: the colour version of this exact image IS detected -
+    # otherwise this test would be pinning nothing.
+    assert annotations_module._image_is_annotated(colour_img) is True  # noqa: SLF001
+
+    grey_img = colour_img.convert("L").convert("RGB")
+    assert annotations_module._image_is_annotated(grey_img) is False  # noqa: SLF001

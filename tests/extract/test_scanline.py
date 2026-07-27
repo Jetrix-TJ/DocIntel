@@ -1,7 +1,7 @@
 import pytest
 
 from docintel.extract.normalize import load_document
-from docintel.extract.scanline import corroborates, find
+from docintel.extract.scanline import CORROBORATABLE_FIELDS, corroborates, find
 
 CASES = [
     ("docs/Lumen - 5-QXH7QKM7.pdf", "24809"),
@@ -51,8 +51,8 @@ def test_centracom_scanline_corroborates_the_printed_total_not_the_payable_amoun
     pages, _, _ = load_document("docs/Centracom_0384043574_01012026_BILL.pdf")
     line = find(pages)
     assert line is not None
-    assert corroborates(line, "33876.40")
-    assert not corroborates(line, "13752.60")
+    assert corroborates(line, "33876.40", field="total_printed")
+    assert not corroborates(line, "13752.60", field="total_printed")
 
 
 def test_corroborates_strips_punctuation_from_a_decimal_value():
@@ -61,14 +61,36 @@ def test_corroborates_strips_punctuation_from_a_decimal_value():
     pages, _, _ = load_document("docs/Lumen - 5-QXH7QKM7.pdf")
     line = find(pages)
     assert line is not None
-    assert corroborates(line, Decimal("248.09"))
-    assert corroborates(line, "752233001")
-    assert not corroborates(line, "999999999")
+    assert corroborates(line, Decimal("248.09"), field="total_printed")
+    assert corroborates(line, "752233001", field="invoice_number")
+    assert not corroborates(line, "999999999", field="invoice_number")
 
 
 def test_corroborates_rejects_degenerate_short_values():
     pages, _, _ = load_document("docs/Lumen - 5-QXH7QKM7.pdf")
     line = find(pages)
     assert line is not None
-    assert not corroborates(line, "1")
-    assert not corroborates(line, "")
+    assert not corroborates(line, "1", field="total_printed")
+    assert not corroborates(line, "", field="total_printed")
+
+
+def test_corroborates_accepts_exactly_the_four_grammar_fields():
+    """docs/architecture/selector-grammar.md's hard constraint, enforced in
+    code: the scan line may only ever be asked about these four fields.
+    """
+    assert CORROBORATABLE_FIELDS == {
+        "total_printed", "account_number", "invoice_number", "due_date",
+    }
+
+
+@pytest.mark.parametrize("field", ["amount_payable", "current_charges"])
+def test_corroborates_rejects_fields_outside_the_grammar_constraint(field):
+    """The specific failure mode Finding 2 exists to prevent: wiring the
+    scan line to a derived/business field (`amount_payable`) or any other
+    field not on the allowed list (`current_charges`) must raise loudly
+    rather than silently answering a question it has no business answering
+    - Centracom's scan line encodes the misleading 33,876.40 headline
+    total, not the 13,752.60 actually payable.
+    """
+    with pytest.raises(ValueError, match=field):
+        corroborates("0384043574", "13752.60", field=field)
