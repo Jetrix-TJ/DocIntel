@@ -10,6 +10,13 @@ word boxes in pixels at whatever resolution the page was rendered, but
 here is scaled by `72 / RESOLUTION` before it becomes a `Word`, so a
 downstream selector executor sees the identical coordinate space regardless
 of source.
+
+OCR is also slow (roughly 1-2s/page) and this function has no idea whether
+it is being called for the first time or the tenth, so it defers to
+`ocr_cache` on every call: a hit returns the exact `PageText` tuple written
+by the last real OCR run for this file, resolution and tesseract version; a
+miss runs tesseract and writes the result before returning it. Set
+`DOCINTEL_OCR_CACHE=0` to bypass the cache and force a real run.
 """
 
 from __future__ import annotations
@@ -18,15 +25,35 @@ import pdfplumber
 import pytesseract
 
 from docintel.core.models import PageText, Word
+from docintel.extract import ocr_cache
 
 RESOLUTION = 200  # dpi used to rasterize each page before running tesseract
 _SCALE = 72 / RESOLUTION  # points per pixel at RESOLUTION dpi
 
 
+def tesseract_version() -> str:
+    return str(pytesseract.get_tesseract_version())
+
+
 def ocr_pages(path: str, page_numbers: list[int]) -> tuple[PageText, ...]:
     """OCR just the requested (1-indexed) pages and return them as PageText.
 
-    Word boxes are scaled from RESOLUTION-dpi pixels back to PDF points, and
+    Transparent cache lookup first: a hit returns byte-identical results to
+    the original OCR run, a miss falls through to `_run_ocr` and writes the
+    result before returning.
+    """
+    key = ocr_cache.cache_key(path, RESOLUTION, tesseract_version(), page_numbers)
+    cached = ocr_cache.load(key)
+    if cached is not None:
+        return cached
+
+    pages = _run_ocr(path, page_numbers)
+    ocr_cache.save(key, pages)
+    return pages
+
+
+def _run_ocr(path: str, page_numbers: list[int]) -> tuple[PageText, ...]:
+    """Word boxes are scaled from RESOLUTION-dpi pixels back to PDF points, and
     rows with blank text or tesseract's -1 "no confidence" sentinel are
     dropped rather than turned into zero-width noise words.
     """
