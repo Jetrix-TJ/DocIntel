@@ -50,8 +50,8 @@ def parse_date(raw: str) -> DateResult:
 
     m = _MONTH_NAME.match(raw)
     if m:
-        month = _MONTHS.get(m.group(1).lower())
-        if month is not None:
-            return _ok(raw, int(m.group(3)), month, int(m.group(2)), False)
+        month_num: int | None = _MONTHS.get(m.group(1).lower())
+        if month_num is not None:
+            return _ok(raw, int(m.group(3)), month_num, int(m.group(2)), False)
 
     return DateResult(raw=raw, iso=None, parsed=False, ambiguous_two_digit_year=False)

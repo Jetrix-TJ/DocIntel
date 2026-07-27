@@ -1,10 +1,8 @@
 from decimal import Decimal
 import pytest
 from docintel.core.models import (
-    DerivedFields, ExtractedFields, PageText, ReferenceHit, Word, new_context,
+    DERIVED_ONLY, DerivedFields, ExtractedFields, PageText, ReferenceHit, Word, new_context,
 )
-
-DERIVED_ONLY = {"amount_payable", "payable_basis", "document_identity", "identity_basis"}
 
 
 def test_extracted_fields_refuse_derived_only_names():
@@ -61,3 +59,40 @@ def test_reference_hit_carries_provenance():
     """F11: reference_list is objects, not strings, so annotation-sourced keys stay identifiable."""
     hit = ReferenceHit(value="2436687", source_field="Reference", page=1, pattern_id="ref_column")
     assert hit.source_field == "Reference"
+
+
+def test_extracted_fields_blocks_direct_assignment():
+    """V10: Direct dict assignment cannot bypass the guard."""
+    ef = ExtractedFields()
+    with pytest.raises(ValueError, match="derived_only"):
+        ef.values['amount_payable'] = Decimal("13752.60")
+
+
+def test_extracted_fields_blocks_constructor_with_dict():
+    """V10: Construction with a dict containing a derived name is rejected."""
+    with pytest.raises(ValueError, match="derived_only"):
+        ExtractedFields(values={'amount_payable': Decimal("13752.60")})
+
+
+def test_extracted_fields_blocks_update():
+    """V10: Using update() to insert a derived name is rejected."""
+    ef = ExtractedFields()
+    with pytest.raises(ValueError, match="derived_only"):
+        ef.values.update({'amount_payable': Decimal("13752.60")})
+
+
+def test_extracted_fields_legitimate_field_all_paths():
+    """Verify legitimate fields work through direct assignment, constructor, and update."""
+    # Path 1: Direct assignment via __setitem__
+    ef1 = ExtractedFields()
+    ef1.values['total_printed'] = Decimal("100.00")
+    assert ef1.values['total_printed'] == Decimal("100.00")
+
+    # Path 2: Constructor with dict
+    ef2 = ExtractedFields(values={'total_printed': Decimal("200.00")})
+    assert ef2.values['total_printed'] == Decimal("200.00")
+
+    # Path 3: Using update()
+    ef3 = ExtractedFields()
+    ef3.values.update({'total_printed': Decimal("300.00")})
+    assert ef3.values['total_printed'] == Decimal("300.00")
