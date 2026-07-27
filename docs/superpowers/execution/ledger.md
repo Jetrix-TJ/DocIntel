@@ -1,0 +1,646 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-07-27-pipeline-implementation.md
+
+Branch: feat/pipeline
+Merge base (main): c82eb76
+
+Pre-flight scan of the plan found 5 defects in the plan's own test code, all
+fixed in the plan before Task A1 was dispatched (no user adjudication needed —
+each contradicted the plan's own Global Constraints or asserted something other
+than its name claimed):
+1. scorecard._money compared money via float() — violates "Money is Decimal,
+   never float". Replaced with a Decimal-valued `matches(expected, actual, kind)`.
+2. test_skeleton_fails_most_assertions pinned summary.failed == 10 — would fail
+   on every successful loop iteration. Reframed to guard the instrument.
+3. test_all_eight_stages_appear_in_the_event_log never read the event log.
+   Split into a sequence test and a real event-log test using a Spy stage.
+4. test_invariant_holds_when_a_pack_hook_throws did not test the invariant.
+   Renamed; notes that cluster C5 must add the end-to-end case.
+5. s3_classify.py contained a `ctx = ctx` no-op. Replaced with a comment.
+
+Plan erratum (fixed): Task A1 step 5 stated "Expected: PASS, 25 tests"; the
+brief's own test code specifies 24 (15 parse_money params + 7 not_money params
++ 2 plain tests). Implementation was faithful at 24; the plan's number was
+wrong and has been corrected. No implementation defect.
+
+Task A1: implemented (commit eb5fce1) — scaffold + Decimal money parsing, 24/24
+  money tests pass, full suite green, validate_gold.py 95 checks green, ruff
+  clean. Review dispatched.
+Task A1: review clean — spec COMPLIANT, quality APPROVED. Reviewer confirmed by
+  live execution: all 15 positive cases parse to exact Decimals, all 7 reject
+  cases return None, no float, no abs(), no scope creep.
+Task A1: minor (deferred): is_money() is never asserted True for a valid money
+  string — only False for the reject list. Coverage gap inherited from the brief.
+Task A1: minor (deferred): implementer report said "Deviations: None" without
+  noting the 25-vs-24 test-count discrepancy it had itself recorded.
+Task A1: ESCALATED to human — plan contradiction, not a code defect. The plan's
+  Global Constraints hoisted selector-grammar.md 3.2's regex limits (max 1
+  capture group, max 200 chars) as binding "every task", but that section
+  governs AGENT-AUTHORED selector patterns. money.py's hand-written MONEY_RE has
+  5 named groups and ~436 chars. Awaiting ruling on whether the constraint is
+  scoped to selector regexes (affects cluster C2's validator scope).
+Task A1: complete (commits c82eb76..eb5fce1, review clean, 2 minors deferred,
+  1 escalation pending)
+RULING (human, 2026-07-27): regex limits are scoped to AGENT-AUTHORED selector
+  patterns only (persona `pattern` fields, grammar V4). Hand-written regexes in
+  core/ and extract/ are exempt; money.MONEY_RE stands as written. Cluster C2's
+  validator must enforce the limits on persona patterns and nowhere else. Plan
+  Global Constraints reworded; briefs A3-A11 and C1-C7 regenerated to carry it.
+  Task A1's Important finding is resolved with NO code change.
+
+Task A2: implemented (commit 460f08c) — date parse ladder, 15/15 date tests,
+  full suite 39/39, validate_gold.py 95 green, ruff clean. Review dispatched.
+Task A2: review clean — spec COMPLIANT, quality APPROVED, no Critical/Important.
+  Reviewer verified live: all corpus formats, all 5 never-invent cases, and
+  invalid calendar dates (13/45/2025, 02/30/2025) correctly rejected. Only the
+  two permitted files touched.
+Task A2: minor (deferred): on the invalid-calendar-date path, _ok() resets
+  ambiguous_two_digit_year to False even when the year was 2-digit. Inherited
+  from the brief's reference implementation, not an implementer choice.
+Task A2: complete (commits eb5fce1..460f08c, review clean, 1 minor deferred)
+Task A3: implemented (commit d6e4157) — core models with structural
+  extracted/derived split, 7/7 task tests, suite 46/46, gold 95 green, ruff
+  clean, mypy clean inside core/ (only the expected missing-grammar-dir error).
+  Review dispatched.
+Task A3: review 1 — spec COMPLIANT, but CRITICAL finding: the V10 separation was
+  bypassable via `ef.values[k]=v` and `ExtractedFields(values={...})`. Inherited
+  from the brief (plan defect), not an implementer deviation. Data path via set()
+  was closed; code path was not, so the design doc's "structurally impossible"
+  claim was false as implemented.
+RULING (human, 2026-07-27): harden it so the claim is true.
+Task A3: fix round 1/5 (1 critical + 1 minor addressed, 0 open; commits
+  d6e4157..10dc735) — _GuardedDict rejects derived_only keys on __setitem__ and
+  update(); __post_init__ re-wraps caller dicts; test now imports DERIVED_ONLY
+  from source so it cannot drift (previously omitted carried_balance). Also fixed
+  a pre-existing mypy strict error at dates.py:53 that Task A2's review missed
+  because mypy was not in A2's verification list. mypy strict now 0 errors.
+  Controller verified all 4 bypass paths raise; suite 50/50; gold 95 green.
+PROCESS FIX: mypy strict is now in the verification list for every remaining task.
+Task A3: re-review 1 — finding #1 NOT ADDRESSED. `_GuardedDict` closed
+  __setitem__/update/ctor but setdefault and |= stayed open: CPython implements
+  both in C and neither dispatches to an overridden __setitem__. Findings #2 and
+  #3 confirmed ADDRESSED. Controller's own round-1 verification also missed these
+  two, having tested only the paths it specified rather than probing the surface.
+Task A3: fix round 2/5 (1 critical addressed, 0 open; commits 10dc735..6d8aa81)
+  — abandoned dict subclassing for composition: private _values/_match_quality,
+  exposed as read-only MappingProxyType views, set() the sole insertion path.
+  Controller enumerated the proxy's whole public surface (copy/get/items/keys/
+  values) and confirmed all 12 mutation paths blocked; suite 57/57; mypy strict
+  0 errors; gold 95 green.
+  Residual, by design: `e._values[k]=v` reaches the private name. That is
+  Python's universal limit, not an accidental path; flagged to the re-reviewer.
+PLAN CHANGE (consequence): A5's contract._serialize must test isinstance(value,
+  Mapping) not dict, because .values is now a MappingProxyType. A dict check
+  would pass the proxy through unserialized and leak Decimal into records. Plan
+  and briefs updated before A5 runs.
+Task A3: re-review 2 — finding #1 ADDRESSED. All mutators blocked on both views;
+  _GuardedDict fully removed (grep clean); legitimate set/get/items work;
+  DerivedFields still unguarded; mypy strict clean; no source caller relied on
+  mutating .values. New breakage: none. Deferred: none.
+Task A3: RULING on residual `e._values[k]=v` — reviewer independently agreed it
+  is unclosable and acceptable: __slots__ does not stop mutating a mutable
+  attribute's contents, name mangling is still reachable as
+  _ExtractedFields__values, and a frozen dataclass blocks rebinding not mutation.
+  Design claim is therefore "no accidental path, one intended writer" — NOT
+  "structurally impossible". Design doc wording must be corrected to match.
+Task A3: complete (commits 460f08c..6d8aa81, review clean after 2 fix rounds)
+Task A4: implemented (commit e2b361f). Controller verified all 16 MODIFIERS
+  values against the authoritative table in selector-grammar.md §5 directly (not
+  just the brief): 16/16 exact, none extra, none missing; 6 error classes all
+  subclass DocIntelError.
+Task A4: review 1 — spec COMPLIANT. CRITICAL: apply_boosts did not clamp when
+  count<=0 (early return skipped it), so apply_boosts(1.5,0)==1.5. IMPORTANT:
+  apply_modifiers had no upper clamp, so apply_modifiers(2.0,[])==2.0. Both are
+  brief defects, not implementer deviations.
+CONTROLLER RULING (no escalation): the plan's Global Constraints state "a field
+  may never exceed 0.99" UNQUALIFIED, whereas selector-grammar.md §5 scopes the
+  ceiling to boosts only. That discrepancy was introduced by the controller when
+  writing the plan. Resolved toward the plan's stricter reading — CEILING is a
+  global invariant on every return path — because it is what implementers are
+  working from, it matches the design's own logic that agreeing OCR renderings do
+  not establish certainty, and every pack threshold is <= 0.97 so nothing breaks.
+  Behavioural consequence, intentional and documented in a test docstring:
+  apply_modifiers(1.0, []) now returns 0.99, not 1.0.
+Task A4: fix round 1/5 (1 critical + 1 important addressed, 0 open; commits
+  e2b361f..d6bc65e) — module-private _clamp() on every return path; 8 new tests
+  including a property-style sweep. Controller ran an exhaustive sweep of 1430
+  base x modifier-combination cases: zero violations of [0, 0.99]. All
+  previously-passing values unchanged (0.765, 0.55, 0.99, 0.81, 0.0, 0.9).
+  Suite 72/72; mypy strict 0 errors; gold 95 green.
+Task A4: re-review 1 — both findings ADDRESSED. _clamp on all 3 return paths; no
+  test assertion removed or loosened (explicitly checked); intentional change
+  apply_modifiers(1.0,[])==0.99 ACCEPTED by reviewer; only the 2 permitted files
+  touched; mypy strict clean. New breakage: none.
+Task A4: complete (commits 6d8aa81..d6bc65e, review clean after 1 fix round)
+PROCESS NOTE: briefs must be regenerated after ANY plan edit. A5's brief was
+  stale — the plan's contract._serialize was changed to test Mapping instead of
+  dict (a consequence of A3's MappingProxyType fix) after the previous
+  regeneration. Caught before dispatch; all remaining briefs re-extracted.
+Task A5: implemented (commit ea7c171) — Stage 8 contract. Controller verified
+  end-to-end: json.dumps round-trips, money crosses as strings ("33876.40"), no
+  float in fields/derived, MappingProxyType genuinely serialized to a real dict
+  (the stale-brief bug did NOT land), skipped and dead_letter records both
+  validate, and the validator rejects all 4 injected mutations (missing key, bad
+  disposition, float money, malformed reference entry). 18 REQUIRED_KEYS.
+  Suite 82/82; mypy strict 0 errors across 7 modules. Review dispatched.
+Task A5: review 1 — spec COMPLIANT (18/18 REQUIRED_KEYS justified against
+  pipeline-v2.md Stage 8 and corpus-analysis §6; deltas 1/2/3 all present and
+  correctly shaped). 4 IMPORTANT + 3 MINOR findings, all validator PERMISSIVENESS
+  (accepting what it should reject), not malformed-input handling.
+Task A5: fix round 1/5 (3 important + 2 minor addressed, 1 important DEFERRED by
+  design, 0 open; commits ea7c171..33832e8) — validate_record now requires
+  non-empty doc_type on processed records, confidence in [0.0, 0.99] excluding
+  bool, strict reference_list value types (page int >= 1, bool excluded), genuine
+  bools on the three flags, non-empty document_id. 21 new tests. Controller
+  verified 12/12 bad records now rejected and 8/8 legitimate records still
+  accepted (no over-tightening): skipped/dead_letter with null doc_type, empty
+  confidence dict, confidence exactly 0.0 and 0.99, int 0, page exactly 1, empty
+  reference_list. Suite 103/103; mypy strict 0 errors; gold 95 green; ruff clean.
+DEFERRED WITH A HOME (not dropped): requiring document_identity/identity_basis in
+  derived on processed records. Cannot be enforced in Part A — those values come
+  from derive ops that do not exist yet, so it would fail every document in the
+  walking skeleton. Written into cluster C3's brief as an explicit carried-over
+  requirement with rationale (finding F6: 3 of 10 corpus docs print no invoice
+  number, so these two fields are the only dedup key downstream has).
+Task A5: re-review 1 — all 6 findings ADDRESSED. All 10 original tests present and
+  unchanged (the single edit to an original test was finding 6's intended added
+  assertion, not a weakening); only the 2 permitted files touched; all 5 new
+  checks raise ContractError naming the offending key; mypy strict clean; the
+  deliberately-deferred document_identity check was correctly NOT added.
+  New breakage: none.
+Task A5: complete (commits d6bc65e..33832e8, review clean after 1 fix round)
+Task A6: implemented (commit 73d430b) — 8 hook sockets, chain dispatch, failure
+  isolation. Controller verified: 8/8 socket names exact; a nested raise names the
+  INNERMOST pack and does not accumulate wrapping (packB, single "hook " in the
+  message); empty socket returns the same object by identity; short-circuit stops
+  the chain; unknown socket rejected at register time. Suite 110/110.
+Task A6: CONTROLLER-FOUND GAP (not from the reviewer): a hook that returns None
+  is not guarded — HookRegistry.run() returns None and it propagates into the
+  pipeline, crashing a later stage far from the cause. `def fn(ctx, nxt):
+  nxt(ctx)` without a return is an easy pack-author mistake and precisely the
+  class of third-party bug PackError isolation exists to convert into a clean
+  dead-letter. Runner (A7) guards stages this way; hooks do not. Brief defect.
+  Flagged to the reviewer as an area of attention without stating the conclusion.
+Task A6: review 1 — spec COMPLIANT. Reviewer independently confirmed the
+  controller-found None gap as CRITICAL, and added: IMPORTANT live-list aliasing
+  (registering mid-dispatch splices into the in-flight chain), IMPORTANT zero test
+  coverage of malformed-pack cases, plus 3 minors.
+Task A6: CONTROLLER ADJUDICATION — 2 findings REJECTED, with reasons:
+  (a) "except Exception misses MemoryError" is FACTUALLY WRONG. Verified
+      issubclass(MemoryError, Exception) is True and the chain already wraps it as
+      PackError. Only KeyboardInterrupt/SystemExit/GeneratorExit propagate raw,
+      which is correct: catching BaseException would make a runaway pack
+      un-interruptible by Ctrl-C and swallow interpreter shutdown. No change.
+  (b) "a hook passing a different context to next() is silently accepted" is not a
+      defect. Verified the substituted context flows through the remaining chain
+      and is returned coherently — a legitimate functional-style transform.
+      No change. Both behaviours are now pinned by tests so no future change can
+      silently reverse them.
+Task A6: fix round 1 dispatched — return-contract validation (PackError naming the
+  pack when a hook returns a non-JobContext), chain snapshot via tuple(), one-shot
+  next() guard, docstring, and 8 new tests covering the malformed-pack surface.
+Task A6: fix round 1/5 (1 critical + 1 important + 2 minor addressed, 2 rejected
+  with rulings, 0 open; commits 73d430b..3f5bafc). Controller verified: all 4
+  malformed returns (None, dict, str, int) raise PackError naming the pack;
+  next() twice raises PackError; mid-dispatch registration does NOT affect the
+  in-flight run but DOES apply to the next run; both rejected findings remain
+  pinned (MemoryError still contained, KeyboardInterrupt still propagates raw,
+  context substitution still works); empty-socket identity and short-circuit
+  behaviour unchanged. Suite 118/118; mypy strict 0 errors; gold 95 green.
+Task A6: re-review 1 — all 4 findings ADDRESSED, both rejected findings respected,
+  no new breakage, mypy clean. Controller additionally confirmed by name that all
+  7 original tests are present and passing (the re-reviewer's answer to that
+  question inferred from the report rather than the diff), that the one-shot
+  next() guard is per-hook not per-chain (3-hook chain does not trip it), and that
+  a malformed return from the MIDDLE of a chain raises PackError naming the
+  correct pack.
+Task A6: complete (commits 33832e8..3f5bafc, review clean after 1 fix round)
+PLAN BUG FOUND BY CONTROLLER, fixed before A7 dispatch: Runner.process() built and
+  validated the record AFTER the finally block that increments _emitted. A
+  ContractError would then propagate to the caller — no record returned — while
+  stats already claimed the document was emitted. The invariant would silently
+  become a lie in exactly the situation it exists to catch. Plan now routes
+  emission through _emit(), which degrades a failed validation into a minimal
+  dead-letter record built from a FRESH context (so no partially-run pipeline
+  state can make the fallback fail too), and increments _emitted only after a
+  record exists. A regression test was added to A7's brief.
+Task A7: BLOCKED on first attempt (correctly — the implementer stopped rather than
+  editing a test to make the suite pass). 8/10 runner tests passed; 2 failed.
+  ROOT CAUSE: A5's fix round added "processed records require a non-empty
+  doc_type", but A7's Ok/Flaky stage doubles never classify, so _emit() correctly
+  degraded them to dead_letter and broke their own "processed" assertions.
+CONTROLLER RULING: the contract rule and runner are both right; A7's test doubles
+  were unrealistically minimal. Verified (a) a processed record with doc_type=None
+  is rejected with a clear message, and (b) the real Classify stage in A8 does set
+  doc_type="standard_invoice", so live runs were never affected — only these
+  doubles. Plan updated: a _classified() helper mirrors stage 3, and Ok/Flaky use
+  it. Contract and runner untouched. Brief regenerated; implementer resumed.
+  Note this is cross-task coupling the per-task reviews could not have caught:
+  A5's tightening was correct in isolation and A7's tests were written before it.
+Task A7: RESOLVED and implemented (commit fd01d10). runner.py unchanged from the
+  original transcription; only the test doubles were updated. Suite 128/128.
+Task A7: controller stress verification — the invariant holds 300/300 under every
+  Exception-class failure shape (RuntimeError, MemoryError, PermanentError,
+  PackError, TransientError, returning None, returning a non-context), at both
+  max_retries=0 and 2, with every returned record passing validate_record.
+  Produced 285-287 dead_letters and 13-15 processed per run.
+Task A7: CONTROLLER FINDING, ruled NOT a defect. A BaseException (KeyboardInterrupt
+  / SystemExit) escapes process(), leaving intaken > emitted. This is correct on
+  both counts: (a) catching BaseException would make a runaway pipeline
+  un-interruptible and swallow interpreter shutdown — the same ruling already made
+  for hooks in A6; (b) the resulting counter gap is the TRUE signal, since a
+  document did enter and produce no record. The invariant's scope is therefore
+  Exception-class failures, which is exactly what A11's test injects. Boundary now
+  pinned by a new test added to A11's brief so no future change can make the
+  runner swallow interrupts.
+Task A7: review 1 — spec COMPLIANT, quality APPROVED with findings. IMPORTANT:
+  self.hooks stored but NEVER invoked anywhere in the pipeline, while the module
+  docstring claimed a throwing pack hook was a guarded escape route — the entire
+  pack-failure-isolation story was unreachable code. Minors: assert used for
+  load-bearing control flow (python -O strips it -> raise None); dead
+  ctx.emitted assignment; one test not asserting stats/validate_record.
+  Reviewer's ⚠️ item (shared mutable defaults in new_context) RESOLVED by
+  controller: every mutable field uses per-call default_factory, fully isolated.
+CONTROLLER DESIGN DECISION (recorded because it binds cluster C5): the runner owns
+  the 6 BOUNDARY sockets, being the only object that can see the seams between
+  stages. classifySignals stays inside stage 3 (a pack injects its ladder there);
+  onRegenTrigger belongs to the rule lifecycle. All 8 sockets now have a declared
+  owner. beforeEmit deliberately fires inside _emit(), NOT at a stage boundary,
+  because skipped and dead-lettered documents break out of _run_stages early yet
+  still emit records — a boundary mapping would have silently skipped exactly the
+  documents most needing pack enrichment.
+Task A7: fix round 1/5 (1 important + 2 minor addressed, 2 rulings, 0 open;
+  commits fd01d10..7313570). Controller verified: all 8 sockets accounted for; all
+  6 runner-owned sockets fire in declared order; beforeEmit reaches a skipped doc;
+  a throwing pack hook yields a dead letter naming the pack with the invariant
+  intact; a hook returning None still emits (A6's guard and A7's catch-all compose
+  correctly); retry exhaustion now behaves under `python -O`. Suite 131/131.
+Task A7: minor (deferred): dead `ctx.emitted = True` assignment retained — the
+  field is asserted in A3's tests, so removing it ripples outside A7's file scope.
+Task A7: re-review 1 — all 3 findings ADDRESSED, both rulings respected, no new
+  breakage, mypy clean. Confirmed: hook dispatch sits inside process()'s failure
+  net so a PackError from any boundary socket is dead-lettered; a throwing
+  beforeEmit hook degrades via _minimal_dead_letter built from a FRESH context so
+  pollution cannot leak; the loop-lambda capture in the boundary test uses an IIFE
+  and would genuinely fail if a socket stopped dispatching (not vacuous).
+Task A7: ACCEPTED TRUST BOUNDARY (recorded, not a defect): because the after-socket
+  runs before the disposition check, a pack hook can reset disposition from
+  "skipped" back to "processed" and the pipeline will continue. This is inherent to
+  hooks being able to mutate the context at all, and the spec's position is that
+  hooks are hand-written PR-reviewed pack modules — the same trust boundary that
+  lets a beforeEmit hook invalidate a record (which validate_record then catches).
+  Noted so a future reader does not mistake it for an oversight.
+Task A7: complete (commits 3f5bafc..7313570, review clean after 1 fix round)
+Task A8: implemented (commit b26f77b) — WALKING SKELETON MILESTONE. 10 stage
+  modules + vision port + FakeVision. Suite 137/137.
+  Controller verified end to end: (1) stage names exactly match the runner's hook
+  contract with zero orphaned hook keys; (2) all 8 stages observably run per the
+  event log (s5a absent by design — no persona, so hard-miss routes to 5b, and 5c
+  also fires on weak confidence); (3) all 6 runner-owned sockets fire during a real
+  corpus run, with classifySignals and onRegenTrigger correctly not firing;
+  (4) all 10 real corpus PDFs emit schema-valid records, intaken==emitted==10;
+  (5) a .txt file and a missing file are both skipped with clear reasons, never
+  dropped. Every document lands processed/low/standard_invoice, which is the
+  correct starting state: no extraction layer and no packs exist yet.
+Plan erratum (fixed): A8 step 5 said "5 tests"; the brief's test file specifies 6.
+Task A8: review 1 (retried after the first reviewer died on an expired OAuth token
+  — nothing lost, commit and ledger were already written) — spec COMPLIANT, 2
+  IMPORTANT + 1 IMPORTANT-coverage + 1 minor.
+  IMPORTANT: s5c set regen_flag on a hard miss. Confirmed against the spec: Part 3
+  "First-time" says a hard miss emits "with the one-shot result and a review flag",
+  and Stage 7 defines regen_flag as "the rules are wrong". Verified the real
+  consequence: all 10 corpus documents emitted regen_flag=True with
+  extraction_rule_version="none" — flagging regeneration of rules that do not
+  exist. IMPORTANT: s5c and s7_gate were both writing regen_flag with nothing
+  clearing a stale True. IMPORTANT: stage 5 — the branch the plan itself calls the
+  one the design turns on — had coverage of ONLY the hard-miss path; 3 of 4 routes
+  were unverified by anyone.
+Task A8: fix round 1/5 (3 important + 1 minor addressed, 0 open; commits
+  b26f77b..245942c). s5c now sets review_flag; Stage 7 is the sole regen_flag
+  writer (grep-confirmed: s7_gate.py:46 is the only write); _collapsed docstring
+  corrected to cover the zero-fields case; 4 routing tests added with _StubStore
+  and _StubExecutor standing in for the Persona DB (C7) and grammar executor (C2).
+  Controller verified all four paths: (a) hit/good -> 5a_cached with ZERO vision
+  calls and rule_version v14 — the architecture's economic claim; (b) hit/collapsed
+  -> 5b_vision, 1 call; (c) soft miss -> 5a_cached; (d) hard miss -> 5b_vision,
+  review=True, regen=False. regen_flag now 0/10, review_flag 10/10. Suite 141/141.
+Task A8: re-review 1 — all 4 findings ADDRESSED, s7_gate.py untouched, no new
+  breakage, mypy clean. All 6 original skeleton tests intact with unchanged
+  assertions. All 4 new tests confirmed falsifiable (FakeVision genuinely records
+  calls, proven by the inverse low-quality test). _StubStore.lookup and
+  _StubExecutor.apply confirmed to match the real component shapes, so the routing
+  tests will not mask a wiring failure in clusters C2/C7.
+  (The 2 doc files appearing in that diff range are the controller's own c0f30d7
+  plan-corrections commit, not an implementer scope violation.)
+Task A8: complete (commits 7313570..245942c, review clean after 1 fix round)
+Task A9: implemented (commit 3fd6ce7) — filesystem intake + CLI. Suite 147/147.
+  Controller verified: `docintel process docs` prints 10 lines and exits 0; --json
+  emits 10 records, every one passing validate_record, 21 keys each; document IDs
+  are identical across two separate FilesystemIntake instances; the CLI invariant
+  guard genuinely returns exit code 2 when a document is dropped (proven by
+  subclassing Runner to decrement the emitted counter — the guard is not
+  decorative); `replay-gold` fails with a clean ModuleNotFoundError, correct until
+  Task A10 lands scorecard.py. Console script entry point works.
+Task A9: review 1 — spec COMPLIANT, 2 IMPORTANT + 2 minor, all confirmed by the
+  reviewer through execution. IMPORTANT: the suffix filter never checked isfile, so
+  a DIRECTORY named archive.pdf was yielded and reported "processed" with fabricated
+  fields while real PDFs inside it were never seen. IMPORTANT: no recursion — a PDF
+  one directory down was invisible: not skipped, not dead-lettered, not counted in
+  intaken. Worse than a crash, and a hole UPSTREAM of where the never-drop promise
+  is enforced. Minor: exit 0 could mislead an operator scripting on it. Minor:
+  _stable_id path+size collision — accepted, it is an acknowledged stand-in for the
+  real mail-message-id key.
+Task A9: fix round 1/5 (2 important + 1 minor addressed, 1 accepted, 0 open;
+  commits 3fd6ce7..05bad8d). os.walk resolves both Important findings at once,
+  since it separates dirnames from filenames. CLI now tallies dispositions and
+  prints a summary; the subparser description states what exit 0 and exit 2 mean.
+  Controller verified against a hostile tree: a directory named archive.pdf is NOT
+  yielded as a document, the PDF inside it IS found, a PDF two levels down IS
+  found, .txt is excluded, traversal is deterministic, and docs/ still yields
+  exactly 10 (no regression). A run where every document dead-letters now prints
+  "10 emitted (10 dead_letter)" rather than silently exiting 0. Suite 150/150.
+CONTROLLER RULING: exit-code semantics unchanged. Overloading exit 2 to mean "a
+  document dead-lettered" would destroy the invariant signal it exists to carry;
+  the summary line and help text fix the ambiguity without that cost.
+Task A9: re-review 1 — all 3 findings ADDRESSED, both must-not-change items held
+  (_stable_id still path+size; exit codes still 0/2), no new breakage, mypy clean.
+  All 6 original tests intact with test_directory_expands_to_its_pdfs byte-identical.
+  Summary line correctly suppressed in --json mode and when nothing was processed.
+  os.walk called WITHOUT followlinks=True, so a symlink loop cannot hang the run.
+Task A9: complete (commits 245942c..05bad8d, review clean after 1 fix round)
+Task A10: implemented (commit 92ae4a9) — gold scorecard. Baseline 0/10 documents
+  green, 27/137 assertions. Gold untouched (byte-compare test + git status clean).
+Task A10: CONTROLLER FINDING (found by asking what the instrument FAILS to measure,
+  not whether it measures correctly — the 0/10 baseline looked perfectly healthy).
+  The scorecard asserted only 12 scalar fields plus 4 flags, and therefore measured
+  NONE of ten documented findings and ZERO of fifteen tags. reference_list and
+  bill_to_name appear in all 10 gold files and were asserted in neither. The
+  convergence loop could have reached "10/10 green" with an empty reference_list,
+  no tags and no carried-balance basis — then STOPPED, because its exit condition
+  was met. An objective function that cannot see the target is worse than none,
+  because it terminates the work.
+Task A10: fix round 1/5 (1 controller finding addressed, 0 open; commits
+  92ae4a9..f88bf36). matches() gained `superset` and `set` kinds; CHECKED_FIELDS
+  grew 12 -> 32, each entry tied to a named finding; tags asserted as superset (a
+  pack may add more than the label enumerates); reference_list asserted as exact
+  set where reference_list_complete is true and superset where false, because 6 of
+  10 golds transcribe page 1 only. Controller verified: 213 assertions (was 137),
+  27 passed, 0/10 green — instrument widened, behaviour untouched; all ten findings
+  now measured; Federal Recycling gets kind=set, so an annotation-sourced
+  reference leaking into the record WOULD now fail (the F3 guard is live).
+DEFERRED WITH A HOME: `line_items`, `charges`, `scanline`, `sub_account` cannot be
+  asserted — no Stage 8 key exists. Four contract additions scheduled into cluster
+  C2's brief with the explicit warning that 10/10 green before they land does NOT
+  mean the corpus is satisfied.
+Task A10: minor (deferred): a gold `reference_list: []` with complete=true (EDCO)
+  generates no assertion, so a record that spuriously invents references there
+  would not fail. Low harm relative to missing references; noted for final review.
+Task A10: re-review 1 — finding ADDRESSED, out-of-scope assertions correctly
+  omitted, no new breakage, mypy clean. Confirmed the F3 guard is live: Federal
+  Recycling has complete=true -> kind=set, so an annotation-sourced reference
+  leaking in WOULD fail; had that flag been false it would silently pass.
+Task A10: minor (deferred): tags use `superset`, which cannot reject a SPURIOUS
+  tag. Partly mitigated — a spurious tag that changes routing is caught by the
+  exact review_flag/regen_flag assertions (verified); an inert spurious tag is
+  unmeasured. Switching to exact-set was rejected for now because a later cluster
+  legitimately adding a tag would then fail all 10 documents as noise.
+Task A10: minor (deferred): a gold `reference_list: []` (EDCO) generates no
+  assertion at all, so invented references there go undetected. EDCO's `teaches`
+  list does not include F11, so no targeted finding is blinded.
+Task A10: controller erratum — the fix dispatch said CHECKED_FIELDS "grew from 12
+  to 32"; the real count is 30 (plus 4 CHECKED_DERIVED). The plan text itself never
+  claimed 32, so nothing in the repo was wrong.
+Task A10: complete (commits 05bad8d..f88bf36, review clean after 1 fix round)
+PLAN FIX before A11 dispatch: A11's brief still carried a placeholder hook test
+  whose docstring said "stages do not dispatch hooks until cluster C5". A7's fix
+  made that stale — the runner now dispatches all 6 boundary sockets. Replaced with
+  a parametrized end-to-end test asserting the invariant holds when a pack hook
+  throws at EACH of the six sockets.
+Task A11: implemented (commit fb1ffa0) — invariant suite, 48 tests, no production
+  code touched (git status --short src/ empty). 40 stage-failure-injection cases
+  (4 exception types x 10 stage positions) + 6 pack-hook sockets end-to-end + 1
+  BaseException boundary + 1 whole-corpus pass. Suite 205/205.
+Plan erratum (fixed): A11 step 2 said "42 tests"; parametrizing the hook test over
+  6 sockets makes it 48.
+
+########## PART A EXIT CHECK — PASSED ##########
+1. `docintel process docs` -> 10 records, "10 emitted (10 processed)", exit 0
+2. `replay-gold --json` -> scorecard: 0/10 documents green, 27/213 assertions
+3. `pytest tests/test_invariant.py` -> 48 passed
+All gates: 205 tests, mypy strict 0 errors, gold validator 95 green, ruff clean.
+Gold files byte-identical to baseline c82eb76 across the whole of Part A.
+20 commits on feat/pipeline. Baseline for the Part B convergence loop is
+0/10 documents green, 27/213 assertions.
+Task A11: review clean — spec COMPLIANT, quality APPROVED, no finding above Minor.
+  The reviewer MUTATION-TESTED the suite: narrowing runner.py's `except Exception`
+  to `except (PermanentError, TransientError)` broke 25 of 48 tests, empirically
+  proving the matrix exercises process()'s catch-all rather than asserting
+  something trivially true. Controller confirmed the mutation was reverted
+  (git diff --stat HEAD -- src/ empty, both `except Exception` lines intact,
+  205 tests still green).
+Task A11: minor (deferred): 30 of the 40 matrix cases are pairwise-redundant —
+  PermanentError, RuntimeError and MemoryError all take the identical path out of
+  _run_one. Only TransientError differs (retry loop). Redundancy is harmless, not
+  gap-hiding.
+Task A11: minor (deferred): _emit()'s own degradation path is covered in
+  test_runner.py, not test_invariant.py — coverage of one guarantee lives in two
+  files. By design, but worth noting.
+Task A11: complete (commits f88bf36..fb1ffa0, review clean, 0 fix rounds)
+
+########## PART B — CONVERGENCE LOOP, ITERATION 1 ##########
+Scorecard read: 0/10 documents green, 27/213 assertions, 39 failing assertion
+types over 186 failing assertions. Ranked by ROOT CAUSE, not by document:
+    136 failing  <- needs selectors that can read a field (C2 + C5)
+     26 failing  <- needs adjust ops (C3)
+     15 failing  <- needs pack ladders: doc_type, tags (C5)
+      7 failing  <- routing (review_flag)
+      2 failing  <- text_source on the 2 image-only PDFs (C1)
+CLUSTER CHOSEN: C1, the extract layer. Tier 1 — a whole layer is missing, and all
+136 top-group assertions are unreachable while ctx.pages is empty. This confirms
+by measurement what the plan predicted by reasoning.
+DE-RISKED FIRST: verified in this environment that pdfplumber.to_image works (via
+pypdfium2) and tesseract reads the image-only Federal Recycling PDF — finding
+1330123, 481.20 and HAUL, with 261 word rows carrying bboxes. The OCR path is
+viable, so C1 is not a research task.
+C1 SPLIT into C1a (pdf + ocr + normalize, the seam that makes ctx.pages real) and
+C1b (pageroles + annotations + scanline, the detectors), because six modules in one
+dispatch is too large to review as a unit.
+Cluster C1a: implemented (commit c9194d3) — extract seam: pdf.py, ocr.py,
+  normalize.py, wired into s2_filter. 13 new tests, suite 218/218.
+  Controller verified the seam is correct: OCR reports 609x791 POINTS (not
+  1692x2199 pixels), so the pixel->point scaling that would have silently broken
+  PageText.lines() grouping is right; EDCO's CURRENT CHARGES / 69.62 / 298.34 /
+  367.96 and Centracom's 13,752.60 / 20,123.80 / 33,876.40 are all reachable in
+  extracted text; OCR recovered 1330123, 481.20, HAUL, OCC from the image-only
+  contra invoice; U-Pak's 14740.85 is on the LAST page and absent from page 1 (F9).
+  Scorecard 27/213 -> 29/213 assertions, still 0/10 documents — correct, since no
+  selector exists yet to consume ctx.pages.
+Cluster C1a: PERFORMANCE DEFECT found by controller. Suite went 0.16s -> 210.49s.
+  CONTROLLER MISDIAGNOSIS, corrected: the first measurement claimed a single OCR
+  page took >110s. That was invalid — it was taken while a 210s pytest run was
+  executing in the background, so the two competed for CPU. The agent was told the
+  wrong hotspot and then promptly corrected.
+  TRUE UNCONTENDED FIGURES: load_document on the 1-page OCR doc 0.89s; replay-gold
+  over all 10 docs including 5 OCR pages 7.68s (acceptable); full suite 210.49s;
+  tests/test_invariant.py alone 156.62s of that, with the slowest matrix cases at
+  ~4.6s each.
+  ROOT CAUSE: repeated NATIVE parsing, not OCR. The 40-case invariant matrix
+  processes 10 documents per case, so the same 6-page PDF is parsed ~400 times at
+  ~0.46s each. Primary fix redirected to in-process memoization of load_document
+  keyed on (abspath, st_size, st_mtime_ns); the disk OCR cache is retained as a
+  secondary win for cold cross-process runs. Target: full suite under 30s, with an
+  explicit instruction NOT to lower RESOLUTION or thin the invariant matrix (a
+  reviewer mutation-tested those 40 cases to prove they are load-bearing).
+Cluster C1a: fix round 1 (performance defect addressed; commits c9194d3..68b763f).
+  In-process lru_cache memo on load_document + disk-backed OCR cache under var/.
+  MEASURED, idle machine: full suite 210.49s -> 4.28s (223 tests, 5 new);
+  test_invariant.py >120s -> 3.70s; replay-gold cold 7.54s / warm 3.8s;
+  load_document on the 4-page OCR doc cold 3.35s / warm 0.37s. A cold clone pays
+  only a few seconds of OCR total, so committed OCR fixtures are NOT needed.
+  Controller confirmed caching changed no behaviour: EDCO trap values, Federal
+  OCR values (1330123/481.20/HAUL), U-Pak's page-5 total, and the 609x791-point
+  box are all unchanged; var/ has 0 tracked files and is gitignored; scorecard
+  still 0/10. RESOLUTION was not lowered and the invariant matrix was not thinned.
+  NOTE for cluster C1b: the memo returns the SAME tuple object on repeat calls.
+  That is safe only because PageText, Word and PageMeta are frozen dataclasses and
+  pages/meta are tuples. C1b's pageroles.assign() must RETURN A NEW TUPLE rather
+  than mutate, or cached page metadata will leak between documents and tests.
+  ACCEPTED: native parsing is still re-done per process (the memo is
+  process-lifetime; only OCR is cached across processes). replay-gold cold 7.5s is
+  acceptable, so a disk cache for native parsing is not worth the complexity.
+Cluster C1a: review 1 — spec COMPLIANT. 1 CRITICAL + 2 IMPORTANT + 2 minor, all
+  found in the caching layer added by fix round 1.
+  CRITICAL (reproduced by the reviewer): the memo key (abspath, size, mtime_ns)
+  served a stale WRONG-DOCUMENT result when a file is overwritten in place at
+  identical byte size with mtime restored — real triggers being rsync -t, cp
+  --preserve=timestamps and timestamp-preserving archive extraction.
+  IMPORTANT: DOCINTEL_OCR_CACHE=0 bypassed the disk cache but NOT the memo, so via
+  the real production path a repeat call never re-ran OCR — a debugging escape
+  hatch that silently did nothing, which is worse than none since someone trusts
+  it. IMPORTANT: var/ocr-cache/ had no eviction, TTL or cap.
+  Minors: one cache test could not distinguish a hit from a recompute; one memo
+  test was structurally unable to fail (different abspaths guarantee different
+  keys, so it never probed the same-path hazard).
+CONTROLLER NOTE ON PROCESS: the instinct was to argue the Critical's trigger was too
+  unlikely to be worth the hashing cost. Measured instead: hashing the entire
+  6.98MB corpus takes 9ms, and the 400 hashes the invariant matrix performs cost
+  0.16s. A 4% suite cost to remove a class of silently-wrong results is not a
+  trade-off. Reasoning about probability is how correctness holes survive; the
+  measurement took seconds and made the argument unnecessary.
+Cluster C1a: fix round 2 (1 critical + 2 important + 2 minor addressed, 0 open;
+  commits 68b763f..04d0adf). blake2b content hash added to BOTH cache keys;
+  DOCINTEL_OCR_CACHE=0 now bypasses memo and disk; disk cache capped at 512 entries
+  with oldest-first eviction; both weak tests replaced, and the new same-path
+  collision test was proven to FAIL pre-fix before passing post-fix.
+  Controller independently reproduced the exact attack: same path, identical byte
+  size, mtime restored via os.utime — the second load now correctly returns Veritiv
+  content rather than stale D.T.S.S. content. Suite 223/223 in 5.29s (was 210.49s
+  pre-cache, 4.15s pre-hash); trap values and the 609x791-point box unchanged;
+  var/ still untracked; scorecard still 0/10, 29/213.
+  ACCEPTED residual: every cache lookup re-hashes full file content. Fine at
+  single-digit ms for this corpus; would need revisiting at orders-of-magnitude
+  scale.
+Cluster C1a: re-review 2 — all 5 findings ADDRESSED, no new breakage, mypy clean.
+  Content hash confirmed present in BOTH the memo key and the disk-cache key (a
+  hash on only one would have left the other exploitable). Eviction wrapped at two
+  levels and provably cannot delete the entry it just wrote. RESOLUTION still 200,
+  invariant matrix still 40 cases. Both test replacements were the intended ones;
+  the original 13 tests are untouched.
+Cluster C1a: COMPLETE (commits 40be4e2..04d0adf, review clean after 2 fix rounds).
+  Three rounds total, and each earned its place: round 1 was a 50x speedup that
+  made the convergence loop viable at all; round 2 closed a wrong-document cache
+  hit. Neither was cosmetic.
+CONTROLLER FINDING carried into C1b: `page_roles` is on the emitted record and in
+  every gold file's classification block, but the scorecard does NOT assert it —
+  the same blind-spot class as the A10 defect. C1b produces page roles, so C1b will
+  add the assertion. Adding it will raise the assertion denominator; that is an
+  instrument change, not a behaviour change, and must be reported as such.
+Cluster C1b: implemented (commit ac02966) — pageroles, annotations, scanline +
+  s2_filter wiring + the page_roles scorecard assertion. Suite 255/255 in 6.22s
+  (+32 tests). Scorecard 29/213 -> 39/223: the +10/+10 delta is exactly the new
+  page_roles assertion, all 10 passing. Documents-green still 0/10 (correct — no
+  selectors exist). Controller verified independently: page_roles match gold on
+  10/10 documents; F3 flags ONLY Federal Recycling; F7 returns a scanline on
+  exactly the 5 expected documents and None on the other 5; the scanline module
+  documents the 4-field-only constraint; pageroles.assign does NOT corrupt the
+  memoized PageMeta.
+Cluster C1b: NOTABLE BUG the agent found and fixed unprompted — `from __future__
+  import annotations` in extract/__init__.py bound the package attribute
+  `annotations` to a __future__._Feature object, so `from docintel.extract import
+  annotations` silently resolved to the feature flag rather than the new
+  annotations.py submodule. An explicit dotted import fixes it, and the hazard is
+  documented at length in both files so it is not "tidied" back.
+Cluster C1b: minor (known, one-line): Pillow DeprecationWarning at
+  annotations.py:167 — Image.getdata() is removed in Pillow 14 (2027-10). Verified
+  get_flattened_data() exists in the installed Pillow 12.1.1, so the swap is cheap.
+CARRIED FORWARD to cluster C4 (the gate): s7_gate does not consume ctx.tags, so
+  `has_flattened_annotations` is set but not yet wired to forced review. Finding F3
+  requires that tag to force review regardless of confidence. Not a C1b defect —
+  C1b's scope ends at setting the tag — but it must land in C4 or Federal Recycling
+  can never reach its gold routing.
+Cluster C1b: review 1 — spec COMPLIANT. 1 CRITICAL + 3 IMPORTANT + 1 minor.
+  CRITICAL: pageroles.assign hardcoded `role = primary if (i == 0 or
+  every_page_primary)`, so a page's own signals never decided its role. A 3-page
+  invoice with a cover page and totals on page 2 would mark page 1 primary and
+  page 2 supporting — and since field capture reads only primary pages, the total
+  would be MISSED ENTIRELY. every_page_primary existed solely to fit U-PAK.
+  The reviewer's diagnosis of WHY nothing caught it is the more valuable half: all
+  32 tests ran against the 10 real corpus documents with zero synthetic fixtures,
+  so the suite could confirm corpus-FIT but was structurally unable to detect
+  corpus-OVERFIT. That is a methodological gap affecting every remaining cluster,
+  not a one-off bug. Synthetic generalization tests are now a standing expectation.
+  IMPORTANT: scanline.corroborates had no field parameter, so the grammar's
+  four-field restriction was docstring-only and unenforceable — and Centracom's
+  scanline encodes the trap value. IMPORTANT: annotation detection is entirely
+  saturation-based, so greyscale or black-pen annotations are silently undetected.
+  IMPORTANT: zero synthetic tests (per above).
+Cluster C1b: fix round 1 (1 critical + 3 important + 1 minor addressed, 0 open;
+  commits ac02966..0adba24). Role rule is now per-page: primary = has_anchor AND
+  has_totals, no index logic, with a two-tier LOGGED fallback (totals-only page,
+  then page 1 as last resort) so every document still has a primary page, and
+  "unknown" is now reachable. The agent verified rather than trusted the
+  controller's hypothesis and found it directionally right but incomplete — bare
+  `AMOUNT DUE` / `CURRENT CHARGES` would have false-positived Lumen and Windstream
+  page 3 once the page-1 collapse was dropped, so _TOTALS_RE was tightened to 6
+  precise phrases with an 8-word line cap on the anchor. corroborates() now takes a
+  required field and enforces CORROBORATABLE_FIELDS. Greyscale blind spot is
+  documented AND pinned by a synthetic desaturated test. Pillow deprecation fixed.
+  Controller verified: gold page_roles still 10/10; the generalization case (cover
+  page 1, totals page 2) now yields ['supporting','primary','supporting'];
+  corroborates allows exactly the 4 permitted fields and rejects amount_payable,
+  current_charges and balance_due with clear messages. Suite 267/267 in 6.21s.
+  Scorecard unchanged: 0/10 documents, 39/223 assertions.
+CONTROLLER ERRATUM: initially claimed the new fallback log lines pollute stdout and
+  would corrupt `replay-gold --json`. Wrong — they go to stderr; the JSON parses
+  cleanly from byte 0. They merely interleave in a terminal, which renders both
+  streams. No defect, no action.
+Cluster C1b: re-review 1 — all 5 findings ADDRESSED. Synthetic tests confirmed to
+  genuinely probe generalization (the page-2-primary test would have FAILED against
+  the pre-fix code, verified by reading it). RESIDUAL flagged honestly by the
+  reviewer: _TOTALS_RE is a 6-phrase enumeration, so novel wording like "Balance
+  Payable" cascades to the tier-2 page-1 last resort — the overfitting moved out of
+  the index logic and into the regex rather than disappearing.
+CONTROLLER RULING on that residual: do NOT chase a general totals regex. That trades
+  a KNOWN gap for UNKNOWN false positives on documents this corpus cannot show us,
+  and the next unusual invoice defeats any enumeration anyway. Structural fix
+  instead — make the tier-2 guess VISIBLE IN THE DATA as a page_role_fallback tag,
+  because field capture reads only primary pages, so a wrong primary silently loses
+  the total, and this design refuses silent failure. Plus the two obvious phrase
+  additions (BALANCE PAYABLE, NOW DUE) and nothing more.
+Cluster C1b: fix round 2 (commits 0adba24..0a736b2). assign() now returns
+  (meta, used_last_resort: bool) — a plain 2-tuple matching load_document's existing
+  convention rather than a new dataclass; s2_filter turns True into the tag, tier 1
+  stays untagged. PageMeta's shape untouched. Suite 275/275 in 6.31s.
+  Controller verified: the tag fires for EDCO (the only tier-2 corpus document) and
+  not for Lumen; gold page_roles still 10/10; the two new phrases appear nowhere in
+  the real corpus so they changed nothing; scorecard unchanged at 0/10 and 39/223.
+  EDCO's `tags` assertion still fails, and was verified NOT newly broken — its gold
+  expects `past_due`, which no pack signal ladder exists to emit yet (cluster C5).
+Cluster C1b: COMPLETE (commits 04d0adf..0a736b2, 2 fix rounds).
+PROCESS CORRECTION (user): the C1b implementer reached ~390k tokens over three
+  rounds; the user directed swapping to a fresh subagent rather than resuming a
+  bloated one. Correct, and the skill's own guidance says escalate to a fresh
+  implementer at round 4. The handoff was cheap ONLY because each implementer writes
+  its full reasoning to task-*-report.md, which is the persistent memory a fresh
+  agent reads. NEW STANDING RULE: fresh implementer per cluster, and swap on the
+  SECOND fix round rather than the third. A redundant handoff agent was dispatched
+  and stood down cleanly when the original committed first.

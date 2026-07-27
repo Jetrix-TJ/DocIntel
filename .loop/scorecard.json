@@ -13,8 +13,8 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 25,
+      "passed_count": 3,
+      "total_count": 26,
       "assertions": [
         {
           "name": "doc_type",
@@ -42,6 +42,35 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
+          "actual": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
           "passed": true
         },
         {
@@ -213,8 +242,8 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 25,
+      "passed_count": 3,
+      "total_count": 26,
       "assertions": [
         {
           "name": "doc_type",
@@ -242,6 +271,27 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
+          "actual": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
           "passed": true
         },
         {
@@ -411,8 +461,8 @@
         "F12"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 24,
+      "passed_count": 3,
+      "total_count": 25,
       "assertions": [
         {
           "name": "doc_type",
@@ -440,6 +490,27 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
+          "actual": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
           "passed": true
         },
         {
@@ -603,8 +674,8 @@
         "F9"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 24,
+      "passed_count": 3,
+      "total_count": 25,
       "assertions": [
         {
           "name": "doc_type",
@@ -632,6 +703,23 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
+          "actual": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
           "passed": true
         },
         {
@@ -797,8 +885,8 @@
         "F15"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 19,
+      "passed_count": 4,
+      "total_count": 20,
       "assertions": [
         {
           "name": "doc_type",
@@ -811,8 +899,8 @@
           "name": "text_source",
           "kind": "exact",
           "expected": "ocr",
-          "actual": "native",
-          "passed": false
+          "actual": "ocr",
+          "passed": true
         },
         {
           "name": "review_flag",
@@ -826,6 +914,23 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
+          "actual": [
+            "primary",
+            "supporting",
+            "supporting",
+            "supporting"
+          ],
           "passed": true
         },
         {
@@ -953,8 +1058,8 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 3,
-      "total_count": 16,
+      "passed_count": 4,
+      "total_count": 17,
       "assertions": [
         {
           "name": "doc_type",
@@ -982,6 +1087,17 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary"
+          ],
+          "actual": [
+            "primary"
+          ],
           "passed": true
         },
         {
@@ -1085,8 +1201,8 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 3,
-      "total_count": 19,
+      "passed_count": 4,
+      "total_count": 20,
       "assertions": [
         {
           "name": "doc_type",
@@ -1114,6 +1230,17 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary"
+          ],
+          "actual": [
+            "primary"
+          ],
           "passed": true
         },
         {
@@ -1220,7 +1347,9 @@
           "expected": [
             "past_due"
           ],
-          "actual": [],
+          "actual": [
+            "page_role_fallback"
+          ],
           "passed": false
         }
       ]
@@ -1238,8 +1367,8 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 2,
-      "total_count": 17,
+      "passed_count": 4,
+      "total_count": 18,
       "assertions": [
         {
           "name": "doc_type",
@@ -1252,8 +1381,8 @@
           "name": "text_source",
           "kind": "exact",
           "expected": "ocr",
-          "actual": "native",
-          "passed": false
+          "actual": "ocr",
+          "passed": true
         },
         {
           "name": "review_flag",
@@ -1267,6 +1396,17 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary"
+          ],
+          "actual": [
+            "primary"
+          ],
           "passed": true
         },
         {
@@ -1354,7 +1494,9 @@
             "mixed_sign",
             "ocr_only"
           ],
-          "actual": [],
+          "actual": [
+            "has_flattened_annotations"
+          ],
           "passed": false
         },
         {
@@ -1386,8 +1528,8 @@
         "F20"
       ],
       "passed": false,
-      "passed_count": 6,
-      "total_count": 20,
+      "passed_count": 7,
+      "total_count": 21,
       "assertions": [
         {
           "name": "doc_type",
@@ -1415,6 +1557,25 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary",
+            "primary",
+            "primary",
+            "primary",
+            "primary"
+          ],
+          "actual": [
+            "primary",
+            "primary",
+            "primary",
+            "primary",
+            "primary"
+          ],
           "passed": true
         },
         {
@@ -1555,8 +1716,8 @@
         "F19"
       ],
       "passed": false,
-      "passed_count": 3,
-      "total_count": 24,
+      "passed_count": 4,
+      "total_count": 25,
       "assertions": [
         {
           "name": "doc_type",
@@ -1584,6 +1745,17 @@
           "kind": "exact",
           "expected": false,
           "actual": false,
+          "passed": true
+        },
+        {
+          "name": "page_roles",
+          "kind": "exact",
+          "expected": [
+            "primary"
+          ],
+          "actual": [
+            "primary"
+          ],
           "passed": true
         },
         {
@@ -1739,7 +1911,7 @@
     "total": 10,
     "passed": 0,
     "failed": 10,
-    "assertions_passed": 27,
-    "assertions_total": 213
+    "assertions_passed": 39,
+    "assertions_total": 223
   }
 }
