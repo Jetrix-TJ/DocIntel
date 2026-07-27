@@ -1,3 +1,5 @@
+import os
+
 from docintel.adapters.intake.filesystem import FilesystemIntake
 
 CORPUS = "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf"
@@ -16,6 +18,42 @@ def test_ids_differ_between_documents():
         "docs/EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf",
     ]).items())
     assert len({i.document_id for i in items}) == 2
+
+
+def test_a_directory_named_like_a_pdf_is_not_mistaken_for_a_document(tmp_path):
+    """os.walk separates directories from files, so `archive.pdf/` is walked into."""
+    fake_dir = tmp_path / "archive.pdf"
+    fake_dir.mkdir()
+    (fake_dir / "real.pdf").write_bytes(b"%PDF-1.4 stub")
+    items = list(FilesystemIntake([str(tmp_path)]).items())
+    paths = [i.source_path for i in items]
+    assert str(fake_dir) not in paths, "a directory must never be yielded as a document"
+    assert str(fake_dir / "real.pdf") in paths, "the PDF inside it must be found"
+
+
+def test_nested_pdfs_are_found_not_silently_ignored(tmp_path):
+    """Spec Stage 1: nothing is discarded at intake.
+
+    A flat listing leaves a PDF one directory down invisible — not skipped, not
+    dead-lettered, not even counted. That is the one failure mode this design
+    refuses, so intake recurses.
+    """
+    (tmp_path / "top.pdf").write_bytes(b"%PDF-1.4")
+    deep = tmp_path / "a" / "b"
+    deep.mkdir(parents=True)
+    (deep / "buried.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "ignore.txt").write_text("not a pdf")
+
+    found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
+    assert found == {"top.pdf", "buried.pdf"}
+
+
+def test_traversal_order_is_deterministic(tmp_path):
+    for name in ("c.pdf", "a.pdf", "b.pdf"):
+        (tmp_path / name).write_bytes(b"%PDF-1.4")
+    first = [i.source_path for i in FilesystemIntake([str(tmp_path)]).items()]
+    second = [i.source_path for i in FilesystemIntake([str(tmp_path)]).items()]
+    assert first == second == sorted(first)
 
 
 def test_directory_expands_to_its_pdfs():

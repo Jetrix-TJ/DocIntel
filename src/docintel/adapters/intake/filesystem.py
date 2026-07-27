@@ -28,9 +28,28 @@ class FilesystemIntake:
     def items(self) -> Iterator[IntakeItem]:
         for path in self.paths:
             if os.path.isdir(path):
-                for name in sorted(os.listdir(path)):
-                    if name.lower().endswith(".pdf"):
-                        full = os.path.join(path, name)
-                        yield IntakeItem(_stable_id(full), full)
+                yield from self._walk(path)
             else:
+                # A missing or unreadable path is still yielded: the filter stage
+                # skips it with a reason. Spec Stage 1 - nothing is discarded at
+                # intake, and a path nobody looked at is not even counted.
                 yield IntakeItem(_stable_id(path), path)
+
+    @staticmethod
+    def _walk(root: str) -> Iterator[IntakeItem]:
+        """Walk a directory tree, deepest paths included.
+
+        Recursion is deliberate. A flat listdir leaves a PDF one directory down
+        completely invisible - not skipped, not dead-lettered, not counted in
+        `intaken` - which is the one failure mode this pipeline refuses. os.walk
+        also separates directories from files, so a *directory* named
+        `archive.pdf` is walked into rather than mistaken for a document.
+        """
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames.sort()  # deterministic traversal order
+            for name in sorted(filenames):
+                if name.lower().endswith(".pdf"):
+                    yield IntakeItem(
+                        _stable_id(os.path.join(dirpath, name)),
+                        os.path.join(dirpath, name),
+                    )
