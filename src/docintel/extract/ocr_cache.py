@@ -9,12 +9,24 @@ to skip. This module makes repeat OCR of the same file, at the same OCR
 settings, effectively free — without changing what `ocr.ocr_pages` returns.
 
 Correctness rests entirely on the cache key: absolute path, file size,
-`st_mtime_ns`, the rasterization resolution, the tesseract binary's version
-string, and the exact set of page numbers requested. Any of those changing —
-edit the PDF, bump `RESOLUTION`, upgrade tesseract, ask for a different page
-range — produces a new key and a fresh OCR run rather than stale or partial
-words served from disk. Entries are JSON, not pickle: a cache file is
-inspectable by hand and cannot execute anything on load.
+`st_mtime_ns`, a **content hash**, the rasterization resolution, the
+tesseract binary's version string, and the exact set of page numbers
+requested. Path/size/mtime alone are not enough — a file overwritten in
+place at the same path, padded to the same byte size, with its mtime
+restored (a real `rsync -t` / `cp --preserve=timestamps` / archive-extraction
+outcome, not a contrived one) collides on all three and would serve a
+different document's OCR result. The content hash (`blake2b`, 16-byte
+digest) is what actually makes the key correct; size and mtime stay in the
+key too because they're free and make a cache filename self-documenting, but
+they are not load-bearing on their own. Entries are JSON, not pickle: a
+cache file is inspectable by hand and cannot execute anything on load.
+
+`DOCINTEL_OCR_CACHE=0` bypasses this cache. It is honoured by both `load`
+and `save` here *and* by `normalize.load_document`'s in-process memo (see
+`normalize.py`) — the env var means "give me a real, uncached answer",
+and a bypass that only cleared one of two cache layers would silently do
+nothing for a repeat call within one process, which is worse than no
+escape hatch at all.
 """
 
 from __future__ import annotations
@@ -28,11 +40,24 @@ from docintel.core.models import PageText, Word
 
 CACHE_DIR = Path("var") / "ocr-cache"
 ENV_DISABLE = "DOCINTEL_OCR_CACHE"
+MAX_ENTRIES = 512  # eviction cap: oldest-by-mtime entries are pruned past this
 
 
 def enabled() -> bool:
     """DOCINTEL_OCR_CACHE=0 bypasses the cache entirely; default is on."""
     return os.environ.get(ENV_DISABLE, "1") != "0"
+
+
+def content_hash(path: str) -> str:
+    """A short, collision-resistant fingerprint of a file's actual bytes.
+
+    Cheap in practice: hashing the whole 10-document corpus (~7MB) takes
+    single-digit milliseconds, which is what makes it affordable to fold
+    into every cache key rather than trusting size+mtime alone.
+    """
+    with open(path, "rb") as fh:
+        data = fh.read()
+    return hashlib.blake2b(data, digest_size=16).hexdigest()
 
 
 def cache_key(
@@ -43,20 +68,21 @@ def cache_key(
 ) -> str:
     """Hash the inputs that make a cached OCR result valid to reuse.
 
-    `page_numbers` is included alongside the brief's five required
-    components (path, size, mtime, resolution, tesseract version) so that a
-    cache entry can never be served for a page range it does not actually
-    cover — the only caller today (`normalize.load_document`) always
-    requests every page, but nothing here should silently return a partial
-    document if that ever changes.
+    Includes path, size, mtime, a content hash, resolution, tesseract
+    version, and the requested page range — see the module docstring for
+    why the content hash is the load-bearing part, and why `page_numbers`
+    is folded in beyond the brief's original five components (so a cache
+    entry can never be served for a page range it does not actually cover).
     """
     abs_path = os.path.abspath(path)
     stat = os.stat(abs_path)
+    digest = content_hash(abs_path)
     payload = "|".join(
         [
             abs_path,
             str(stat.st_size),
             str(stat.st_mtime_ns),
+            digest,
             str(resolution),
             tesseract_version,
             ",".join(str(n) for n in sorted(page_numbers)),
@@ -103,7 +129,11 @@ def save(key: str, pages: tuple[PageText, ...]) -> None:
     """Persist `pages` under `key`. Best-effort: a write failure is silent.
 
     Written atomically (temp file + rename) so a crash mid-write can never
-    leave behind a truncated entry for `load` to trip over.
+    leave behind a truncated entry for `load` to trip over. After a
+    successful write, prunes the cache back down to `MAX_ENTRIES` so it
+    cannot grow without bound over a long-running process or many pipeline
+    runs; eviction failures are swallowed the same way a write failure is —
+    an optimization must never break the OCR run that triggered it.
     """
     if not enabled():
         return
@@ -123,5 +153,19 @@ def save(key: str, pages: tuple[PageText, ...]) -> None:
         with open(tmp_path, "w", encoding="utf-8") as fh:
             json.dump(raw, fh)
         os.replace(tmp_path, cache_path)
+    except OSError:
+        pass
+    _evict_oldest_past_cap()
+
+
+def _evict_oldest_past_cap() -> None:
+    try:
+        entries = sorted(CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        excess = len(entries) - MAX_ENTRIES
+        for stale in entries[:excess]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
     except OSError:
         pass
