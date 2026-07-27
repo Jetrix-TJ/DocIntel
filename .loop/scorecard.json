@@ -1,0 +1,1143 @@
+{
+  "documents": [
+    {
+      "gold_id": "digitaldirection-centracom-0384043574",
+      "source_file": "Centracom_0384043574_01012026_BILL.pdf",
+      "priority": "critical",
+      "teaches": [
+        "F1",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F11"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 15,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "telecom_bill",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 33876.4,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.current_charges",
+          "kind": "money",
+          "expected": 13752.6,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.prior_balance",
+          "kind": "money",
+          "expected": 20123.8,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "CentraCom",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_number",
+          "kind": "exact",
+          "expected": "0384043574",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_date",
+          "kind": "exact",
+          "expected": "2026-01-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 13752.6,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "current_charges",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.document_identity",
+          "kind": "exact",
+          "expected": "0384043574|2026-01-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.identity_basis",
+          "kind": "exact",
+          "expected": "account_period",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "digitaldirection-comcast-8495444620365242",
+      "source_file": "Comcast_8495 44 462 0365242_12092025_BILL.pdf",
+      "priority": null,
+      "teaches": [
+        "F4",
+        "F6",
+        "F7",
+        "F8",
+        "F13"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 16,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "telecom_bill",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 221.11,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.current_charges",
+          "kind": "money",
+          "expected": 221.11,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.prior_balance",
+          "kind": "money",
+          "expected": 212.87,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Comcast Business",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_number",
+          "kind": "exact",
+          "expected": "8495 44 462 0365242",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_date",
+          "kind": "exact",
+          "expected": "2025-12-09",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "387 S 520 W STE 210, Lindon, UT 84042-1960",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 221.11,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.document_identity",
+          "kind": "exact",
+          "expected": "8495444620365242|2025-12-09",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.identity_basis",
+          "kind": "exact",
+          "expected": "account_period",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "digitaldirection-lumen-5-QXH7QKM7",
+      "source_file": "Lumen - 5-QXH7QKM7.pdf",
+      "priority": null,
+      "teaches": [
+        "F4",
+        "F5",
+        "F7",
+        "F8",
+        "F12"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 16,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "telecom_bill",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 248.09,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.current_charges",
+          "kind": "money",
+          "expected": 248.09,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.prior_balance",
+          "kind": "money",
+          "expected": 249.84,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "752233001",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Lumen",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_number",
+          "kind": "exact",
+          "expected": "5-QXH7QKM7",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_date",
+          "kind": "exact",
+          "expected": "2025-09-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 248.09,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.document_identity",
+          "kind": "exact",
+          "expected": "752233001",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.identity_basis",
+          "kind": "exact",
+          "expected": "invoice_number",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "digitaldirection-windstream-041069076",
+      "source_file": "Windstream_041069076_07222025_BILL.pdf",
+      "priority": null,
+      "teaches": [
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 15,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "telecom_bill",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 1230.14,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.current_charges",
+          "kind": "money",
+          "expected": 1230.14,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.prior_balance",
+          "kind": "money",
+          "expected": 1231.74,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Kinetic Business by Windstream",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_number",
+          "kind": "exact",
+          "expected": "041069076",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_date",
+          "kind": "exact",
+          "expected": "2025-07-22",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 1230.14,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.document_identity",
+          "kind": "exact",
+          "expected": "041069076|2025-07-22",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.identity_basis",
+          "kind": "exact",
+          "expected": "account_period",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-complete-beverage-32930",
+      "source_file": "_AP Invoice 32930 Complete Beverage Destruction 1177.70000.pdf",
+      "priority": null,
+      "teaches": [
+        "F2",
+        "F4",
+        "F8",
+        "F10",
+        "F15"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 11,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "invoice_with_attachment",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "ocr",
+          "actual": "native",
+          "passed": false
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 1177.7,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "32930",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-10-24",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Complete Beverage Destruction, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 1177.7,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-dtss-6060",
+      "source_file": "_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf",
+      "priority": null,
+      "teaches": [
+        "F11",
+        "F17"
+      ],
+      "passed": false,
+      "passed_count": 3,
+      "total_count": 11,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "standard_invoice",
+          "actual": "standard_invoice",
+          "passed": true
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 699.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "6060",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-09-15",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "D.T.S.S., Inc.",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 699.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-edco-077087",
+      "source_file": "EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf",
+      "priority": null,
+      "teaches": [
+        "F1",
+        "F7",
+        "F8",
+        "F13",
+        "F16",
+        "F17"
+      ],
+      "passed": false,
+      "passed_count": 3,
+      "total_count": 13,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "standard_invoice",
+          "actual": "standard_invoice",
+          "passed": true
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 367.96,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.current_charges",
+          "kind": "money",
+          "expected": 69.62,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.prior_balance",
+          "kind": "money",
+          "expected": 298.34,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "EDCO Waste & Recycling Service",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_date",
+          "kind": "exact",
+          "expected": "2025-04-30",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "Hunter Industries, 260 S Pacific St, San Marcos, CA 92078",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 69.62,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "current_charges",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-federal-recycling-1330123",
+      "source_file": "CONTRA ONLY Everything already on AR Federal Recycling 1330123.pdf",
+      "priority": null,
+      "teaches": [
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F8",
+        "F11"
+      ],
+      "passed": false,
+      "passed_count": 2,
+      "total_count": 12,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "contra_invoice",
+          "actual": "standard_invoice",
+          "passed": false
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "ocr",
+          "actual": "native",
+          "passed": false
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 481.2,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "1330123",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-05-31",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Federal Recycling & Waste Solutions",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01028",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 481.2,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-upak-4378107",
+      "source_file": "CANADIAN WITHOUT NOTES U- PAK 4378107 (1).pdf",
+      "priority": null,
+      "teaches": [
+        "F4",
+        "F8",
+        "F9",
+        "F13",
+        "F14",
+        "F15",
+        "F19",
+        "F20"
+      ],
+      "passed": false,
+      "passed_count": 6,
+      "total_count": 14,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "standard_invoice",
+          "actual": "standard_invoice",
+          "passed": true
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 14789.77,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.subtotal",
+          "kind": "money",
+          "expected": 8119.44,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.tax_amount",
+          "kind": "money",
+          "expected": 2325.69,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "4378107",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-03-31",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "U-Pak Disposals (1989) Ltd",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "CAD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": null,
+          "actual": null,
+          "passed": true
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": null,
+          "actual": null,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "gold_id": "northstar-veritiv-715-33905296",
+      "source_file": "_AP Invoice 715-33905296    Veritiv Operating Company 4908.00000.pdf",
+      "priority": null,
+      "teaches": [
+        "F11",
+        "F12",
+        "F13",
+        "F18",
+        "F19"
+      ],
+      "passed": false,
+      "passed_count": 3,
+      "total_count": 14,
+      "assertions": [
+        {
+          "name": "doc_type",
+          "kind": "exact",
+          "expected": "standard_invoice",
+          "actual": "standard_invoice",
+          "passed": true
+        },
+        {
+          "name": "text_source",
+          "kind": "exact",
+          "expected": "native",
+          "actual": "native",
+          "passed": true
+        },
+        {
+          "name": "review_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": true,
+          "passed": false
+        },
+        {
+          "name": "regen_flag",
+          "kind": "exact",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "fields.total_printed",
+          "kind": "money",
+          "expected": 4908.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.subtotal",
+          "kind": "money",
+          "expected": 4608.45,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.tax_amount",
+          "kind": "money",
+          "expected": 299.55,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_number",
+          "kind": "exact",
+          "expected": "715-33905296",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-08-14",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Veritiv Operating Company",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.amount_payable",
+          "kind": "money",
+          "expected": 4908.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "derived.payable_basis",
+          "kind": "exact",
+          "expected": "total_printed",
+          "actual": null,
+          "passed": false
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total": 10,
+    "passed": 0,
+    "failed": 10,
+    "assertions_passed": 27,
+    "assertions_total": 137
+  }
+}
