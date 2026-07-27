@@ -1,9 +1,10 @@
 """The 8 hook sockets.
 
-Middleware chains, same shape as Express.js: each function receives the context
-and a next(). It can transform and pass along, stop the chain by not calling
-next(), or throw - in which case the document goes to the dead-letter queue and
-the run continues (spec Part 4).
+A domain pack must be able to customize every pipeline stage without forking the
+pipeline. A bug in pack code must never take down the run. Middleware chains work
+like Express.js: each hook receives the context and a next(). It can transform
+and pass along, stop the chain by not calling next(), or throw — in which case
+the document goes to the dead-letter queue and the run continues (spec Part 4).
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ class HookRegistry:
         return [f"{pack}.{fn.__name__}" for pack, fn in self._chains[socket]]
 
     def run(self, socket: str, ctx: JobContext) -> JobContext:
-        chain = self._chains[socket]
+        chain = tuple(self._chains[socket])
         if not chain:
             return ctx
 
@@ -49,9 +50,26 @@ class HookRegistry:
             def call(c: JobContext) -> JobContext:
                 if index >= len(chain):
                     return c
+
                 pack, fn = chain[index]
+                next_fn = step(index + 1)
+                called = [False]  # Use list for mutability in closure
+
+                def tracked_next(c2: JobContext) -> JobContext:
+                    if called[0]:
+                        raise PackError(
+                            f"hook {pack}.{fn.__name__} at socket {socket!r} called next() more than once"
+                        )
+                    called[0] = True
+                    return next_fn(c2)
+
                 try:
-                    return fn(c, step(index + 1))
+                    result = fn(c, tracked_next)
+                    if not isinstance(result, JobContext):
+                        raise PackError(
+                            f"hook {pack}.{fn.__name__} at socket {socket!r} returned {type(result).__name__!r}, expected JobContext"
+                        )
+                    return result
                 except PackError:
                     raise
                 except Exception as exc:
