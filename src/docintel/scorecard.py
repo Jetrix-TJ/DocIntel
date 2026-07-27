@@ -110,6 +110,13 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         Assertion("text_source", cls["text_source"], lambda r: r["text_source"]),
         Assertion("review_flag", routing["review_flag"], lambda r: r["review_flag"]),
         Assertion("regen_flag", routing["regen_flag"], lambda r: r["regen_flag"]),
+        # F10 / page_roles: this appears on every emitted record and in every
+        # gold file, but was never asserted here - the same blind-spot class
+        # as the tags/reference_list gap noted above. kind="exact" (not
+        # "set") because order and page count both matter: U-PAK's five
+        # primary pages and Complete Beverage's primary+3 supporting are
+        # only distinguishable if position is checked, not just membership.
+        Assertion("page_roles", cls["page_roles"], lambda r: r.get("page_roles"), kind="exact"),
     ]
 
     for name in CHECKED_FIELDS:
