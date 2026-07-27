@@ -83,6 +83,19 @@ def validate_record(rec: dict[str, Any]) -> None:
             f"disposition must be one of {sorted(_DISPOSITIONS)}, got {rec['disposition']!r}"
         )
 
+    # FINDING 1: if disposition is "processed", doc_type must be a non-empty string
+    if rec["disposition"] == "processed":
+        if not isinstance(rec["doc_type"], str) or not rec["doc_type"]:
+            raise ContractError(
+                f"doc_type must be a non-empty string for processed records, got {rec['doc_type']!r}"
+            )
+
+    # FINDING 5: document_id must be a non-empty string
+    if not isinstance(rec["document_id"], str) or not rec["document_id"]:
+        raise ContractError(
+            f"document_id must be a non-empty string, got {rec['document_id']!r}"
+        )
+
     for bucket in ("fields", "derived"):
         for name, value in rec[bucket].items():
             if isinstance(value, float):
@@ -90,6 +103,48 @@ def validate_record(rec: dict[str, Any]) -> None:
                     f"{bucket}.{name} is a float; money must cross the contract as a string"
                 )
 
+    # FINDING 2: confidence values must be int/float (not bool) within [0.0, 0.99]
+    for name, value in rec["confidence"].items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ContractError(
+                f"confidence.{name} must be int or float, got {type(value).__name__}"
+            )
+        if not (0.0 <= value <= 0.99):
+            raise ContractError(
+                f"confidence.{name} must be in [0.0, 0.99], got {value}"
+            )
+
+    # FINDING 3: reference_list entries must have correct key set and value types
     for entry in rec["reference_list"]:
         if set(entry) != {"value", "source_field", "page", "pattern_id"}:
             raise ContractError(f"reference_list entry has wrong shape: {entry!r}")
+
+        # Check value types
+        if not isinstance(entry["value"], str):
+            raise ContractError(
+                f"reference_list entry value must be str, got {type(entry['value']).__name__}"
+            )
+        if not isinstance(entry["source_field"], str):
+            raise ContractError(
+                f"reference_list entry source_field must be str, got {type(entry['source_field']).__name__}"
+            )
+        if not isinstance(entry["pattern_id"], str):
+            raise ContractError(
+                f"reference_list entry pattern_id must be str, got {type(entry['pattern_id']).__name__}"
+            )
+        # page must be int (not bool) and >= 1
+        if type(entry["page"]) is not int or isinstance(entry["page"], bool):
+            raise ContractError(
+                f"reference_list entry page must be int (not bool), got {type(entry['page']).__name__}"
+            )
+        if entry["page"] < 1:
+            raise ContractError(
+                f"reference_list entry page must be >= 1, got {entry['page']}"
+            )
+
+    # FINDING 4: review_flag, regen_flag, audit_sample must be genuine bool
+    for flag_name in ("review_flag", "regen_flag", "audit_sample"):
+        if not isinstance(rec[flag_name], bool):
+            raise ContractError(
+                f"{flag_name} must be bool, got {type(rec[flag_name]).__name__}"
+            )

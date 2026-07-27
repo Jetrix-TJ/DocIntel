@@ -73,6 +73,7 @@ def test_dead_letter_still_produces_a_valid_record():
     rec = build_record(ctx)
     validate_record(rec)
     assert rec["disposition"] == "dead_letter"
+    assert rec["reason"] == "corrupt PDF"
 
 
 def test_validate_rejects_missing_key():
@@ -93,4 +94,175 @@ def test_validate_rejects_float_money():
     rec = build_record(_ctx())
     rec["fields"]["total_printed"] = 33876.40
     with pytest.raises(ContractError, match="string"):
+        validate_record(rec)
+
+
+# Fix Round 1: Tightened validation tests
+
+
+def test_finding_1_rejects_null_doc_type_on_processed():
+    """FINDING 1: processed records require non-empty doc_type."""
+    rec = build_record(_ctx())
+    rec["doc_type"] = None
+    with pytest.raises(ContractError, match="doc_type"):
+        validate_record(rec)
+
+
+def test_finding_1_allows_null_doc_type_on_skipped():
+    """FINDING 1: skipped records can have null doc_type."""
+    ctx = new_context(document_id="d4", source_path="/tmp/d.pdf")
+    ctx.disposition = "skipped"
+    ctx.skip_reason = "reason"
+    rec = build_record(ctx)
+    assert rec["doc_type"] is None
+    validate_record(rec)
+
+
+def test_finding_1_allows_null_doc_type_on_dead_letter():
+    """FINDING 1: dead_letter records can have null doc_type."""
+    ctx = new_context(document_id="d5", source_path="/tmp/e.pdf")
+    ctx.disposition = "dead_letter"
+    ctx.skip_reason = "reason"
+    rec = build_record(ctx)
+    assert rec["doc_type"] is None
+    validate_record(rec)
+
+
+def test_finding_1_rejects_empty_doc_type_on_processed():
+    """FINDING 1: processed records reject empty string doc_type."""
+    rec = build_record(_ctx())
+    rec["doc_type"] = ""
+    with pytest.raises(ContractError, match="doc_type"):
+        validate_record(rec)
+
+
+def test_finding_2_rejects_bool_in_confidence():
+    """FINDING 2: confidence values cannot be bool."""
+    rec = build_record(_ctx())
+    rec["confidence"]["total_printed"] = True
+    with pytest.raises(ContractError, match="confidence"):
+        validate_record(rec)
+
+
+def test_finding_2_rejects_confidence_below_zero():
+    """FINDING 2: confidence values must be >= 0.0."""
+    rec = build_record(_ctx())
+    rec["confidence"]["total_printed"] = -0.01
+    with pytest.raises(ContractError, match="confidence"):
+        validate_record(rec)
+
+
+def test_finding_2_rejects_confidence_above_0_99():
+    """FINDING 2: confidence values must be <= 0.99."""
+    rec = build_record(_ctx())
+    rec["confidence"]["total_printed"] = 1.0
+    with pytest.raises(ContractError, match="confidence"):
+        validate_record(rec)
+
+
+def test_finding_2_allows_empty_confidence():
+    """FINDING 2: empty confidence dict is legal."""
+    rec = build_record(_ctx())
+    rec["confidence"] = {}
+    validate_record(rec)
+
+
+def test_finding_2_allows_exactly_0_0():
+    """FINDING 2: confidence can be exactly 0.0."""
+    rec = build_record(_ctx())
+    rec["confidence"]["test"] = 0.0
+    validate_record(rec)
+
+
+def test_finding_2_allows_exactly_0_99():
+    """FINDING 2: confidence can be exactly 0.99."""
+    rec = build_record(_ctx())
+    rec["confidence"]["test"] = 0.99
+    validate_record(rec)
+
+
+def test_finding_3_rejects_non_string_value():
+    """FINDING 3: reference_list value must be str."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["value"] = 123
+    with pytest.raises(ContractError, match="value"):
+        validate_record(rec)
+
+
+def test_finding_3_rejects_non_string_source_field():
+    """FINDING 3: reference_list source_field must be str."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["source_field"] = 123
+    with pytest.raises(ContractError, match="source_field"):
+        validate_record(rec)
+
+
+def test_finding_3_rejects_non_string_pattern_id():
+    """FINDING 3: reference_list pattern_id must be str."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["pattern_id"] = 123
+    with pytest.raises(ContractError, match="pattern_id"):
+        validate_record(rec)
+
+
+def test_finding_3_rejects_bool_page():
+    """FINDING 3: reference_list page must be int, not bool."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["page"] = True
+    with pytest.raises(ContractError, match="page"):
+        validate_record(rec)
+
+
+def test_finding_3_rejects_page_below_1():
+    """FINDING 3: reference_list page must be >= 1."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["page"] = 0
+    with pytest.raises(ContractError, match="page"):
+        validate_record(rec)
+
+
+def test_finding_3_allows_page_1():
+    """FINDING 3: reference_list page=1 validates."""
+    rec = build_record(_ctx())
+    rec["reference_list"][0]["page"] = 1
+    validate_record(rec)
+
+
+def test_finding_4_rejects_non_bool_review_flag():
+    """FINDING 4: review_flag must be bool."""
+    rec = build_record(_ctx())
+    rec["review_flag"] = 1
+    with pytest.raises(ContractError, match="review_flag"):
+        validate_record(rec)
+
+
+def test_finding_4_rejects_non_bool_regen_flag():
+    """FINDING 4: regen_flag must be bool."""
+    rec = build_record(_ctx())
+    rec["regen_flag"] = "true"
+    with pytest.raises(ContractError, match="regen_flag"):
+        validate_record(rec)
+
+
+def test_finding_4_rejects_non_bool_audit_sample():
+    """FINDING 4: audit_sample must be bool."""
+    rec = build_record(_ctx())
+    rec["audit_sample"] = None
+    with pytest.raises(ContractError, match="audit_sample"):
+        validate_record(rec)
+
+
+def test_finding_5_rejects_empty_document_id():
+    """FINDING 5: document_id must be non-empty string."""
+    rec = build_record(_ctx())
+    rec["document_id"] = ""
+    with pytest.raises(ContractError, match="document_id"):
+        validate_record(rec)
+
+
+def test_finding_5_rejects_non_string_document_id():
+    """FINDING 5: document_id must be string."""
+    rec = build_record(_ctx())
+    rec["document_id"] = 123
+    with pytest.raises(ContractError, match="document_id"):
         validate_record(rec)
