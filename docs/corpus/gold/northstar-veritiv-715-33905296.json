@@ -1,0 +1,113 @@
+{
+  "gold_id": "northstar-veritiv-715-33905296",
+  "source_file": "_AP Invoice 715-33905296    Veritiv Operating Company 4908.00000.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F11",
+    "F12",
+    "F13",
+    "F18",
+    "F19"
+  ],
+  "notes": "Three parties (SOLD TO Northstar, SHIP TO Shearer's Brewster). Match key lives in the Customer P.O. field. Two identically-labelled 'Unit Meas.' columns force header-text column matching over index.",
+  "classification": {
+    "doc_type": "standard_invoice",
+    "tags": [
+      "has_tax",
+      "early_pay_discount"
+    ],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Veritiv Operating Company",
+    "vendor_address": "6120 South Gilmore Road, Fairfield, OH 45014",
+    "remit_payee": "Veritiv Operating Company",
+    "remit_address": "P.O. Box 409884, Atlanta, GA 30384-9884",
+    "invoice_number": "715-33905296",
+    "invoice_date": "2025-08-14",
+    "vendor_account_number": "068753",
+    "due_date": "2025-09-14",
+    "order_date": "2025-08-08",
+    "payment_terms": "1 % 30 DAYS, NET 31 DAYS",
+    "discount_date": "2025-09-13",
+    "discount_amount": 46.08,
+    "customer_po": "Northstar# 2542693",
+    "bill_to_name": "Northstar Recycling Company LLC",
+    "bill_to_address": "94 Maple St, East Longmeadow, MA 01028-2744",
+    "service_location": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
+    "sale_type": "DIRECT",
+    "subtotal": 4608.45,
+    "tax_amount": 299.55,
+    "total_printed": 4908.0,
+    "total_weight": 2568.49,
+    "currency": "USD",
+    "currency_basis": "pack_default"
+  },
+  "line_items": [
+    {
+      "item_code": "20120120",
+      "description": "MOD500913 BAG 44X40X76 .75MIL LDPE/LLDPE CLEAR 130/RL",
+      "weight": 2568.49,
+      "quantity_ordered": 55,
+      "quantity_shipped": 55,
+      "unit_of_measure": "RL",
+      "unit_price": 83.79,
+      "amount": 4608.45,
+      "taxable": "Y"
+    }
+  ],
+  "reference_list": [
+    {
+      "value": "2542693",
+      "source_field": "Customer P.O.",
+      "page": 1,
+      "pattern_id": "northstar_hash"
+    },
+    {
+      "value": "33905296",
+      "source_field": "line_item_description",
+      "page": 1,
+      "pattern_id": "sales_order"
+    }
+  ],
+  "reference_list_complete": true,
+  "derived": {
+    "amount_payable": 4908.0,
+    "payable_basis": "total_printed"
+  },
+  "assertions": [
+    {
+      "check": "line_extended",
+      "expr": "55 * 83.7900",
+      "equals": 4608.45
+    },
+    {
+      "check": "total_composition",
+      "expr": "4608.45 + 299.55",
+      "equals": 4908.0
+    },
+    {
+      "check": "discount_is_one_percent",
+      "expr": "round(0.01 * 4608.45, 2)",
+      "equals": 46.08
+    },
+    {
+      "check": "duplicate_anchor_agrees",
+      "note": "Invoice No. and Invoice Date each appear in the remittance block and the body table; both must agree"
+    },
+    {
+      "check": "payable_is_date_dependent",
+      "note": "4861.92 if paid by 2025-09-13. Extraction must NOT compute this; surface the four inputs only (F18)"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

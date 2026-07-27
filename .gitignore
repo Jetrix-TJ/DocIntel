@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime state (regenerated; not source)
+var/
+*.sqlite3
+*.sqlite3-journal
+
+# Secrets
+.env
+
+# OS
+.DS_Store

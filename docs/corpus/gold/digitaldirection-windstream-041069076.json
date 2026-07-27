@@ -1,0 +1,126 @@
+{
+  "gold_id": "digitaldirection-windstream-041069076",
+  "source_file": "Windstream_041069076_07222025_BILL.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9"
+  ],
+  "notes": "Two printed brand names (Kinetic Business by Windstream / Oklahoma Windstream, LLC) plus a state-specific operating entity. Half of page 1 is an advertisement.",
+  "classification": {
+    "doc_type": "telecom_bill",
+    "tags": [
+      "prior_balance_cleared",
+      "no_invoice_number",
+      "multi_brand_sender",
+      "promo_content",
+      "has_scanline"
+    ],
+    "text_source": "native",
+    "page_count": 4,
+    "page_roles": [
+      "primary",
+      "supporting",
+      "supporting",
+      "supporting"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Kinetic Business by Windstream",
+    "carrier_canonical": "windstream",
+    "remit_payee": "Oklahoma Windstream, LLC",
+    "remit_address": "PO Box 9001908, Louisville, KY 40290-1908",
+    "return_address": "ATTN: Support Services, 131 W Matthews St, Matthews, NC 28105",
+    "vendor_phone": "1-833-241-0100",
+    "vendor_website": "kineticbusiness.com",
+    "account_number": "041069076",
+    "telephone_number": "918-653-3103",
+    "invoice_number": null,
+    "bill_date": "2025-07-22",
+    "due_date": "2025-08-11",
+    "bill_to_name": "Choctaw Travel Mart",
+    "bill_to_address": "PO Box 1550, Durant, OK 74702-1550",
+    "prior_balance": 1231.74,
+    "payments_credits": -1231.74,
+    "amount_previously_due": 0.0,
+    "current_charges": 1230.14,
+    "total_printed": 1230.14,
+    "currency": "USD",
+    "currency_basis": "pack_default",
+    "prior_balance_basis": "gross",
+    "prior_balance_basis_note": "Prior balance is printed gross; 'Payments/Adjustments thru 07/18  $1,231.74 CR' is a separate signed credit. Carried balance = prior_balance + payments_credits."
+  },
+  "reference_list": [
+    {
+      "value": "041069076",
+      "source_field": "Account number",
+      "page": 1,
+      "pattern_id": "account"
+    },
+    {
+      "value": "918-653-3103",
+      "source_field": "Telephone number",
+      "page": 1,
+      "pattern_id": "telephone"
+    }
+  ],
+  "reference_list_complete": false,
+  "reference_list_note": "Pages 2-4 carry per-line detail, not transcribed in this pass.",
+  "scanline": {
+    "raw": "7000444000000004106907622507190000012301446",
+    "encodes_account": "041069076",
+    "encodes_amount": 1230.14,
+    "binds_to": [
+      "total_printed",
+      "account_number"
+    ]
+  },
+  "derived": {
+    "amount_payable": 1230.14,
+    "payable_basis": "total_printed",
+    "document_identity": "041069076|2025-07-22",
+    "identity_basis": "account_period"
+  },
+  "assertions": [
+    {
+      "check": "balance_composition",
+      "expr": "1231.74 - 1231.74 + 1230.14",
+      "equals": 1230.14
+    },
+    {
+      "check": "amount_previously_due_is_zero",
+      "equals": 0.0,
+      "note": "printed as '$.00' - must parse"
+    },
+    {
+      "check": "credit_suffix_parsed",
+      "note": "'$1,231.74 CR' must parse to -1231.74 (F4)"
+    },
+    {
+      "check": "alias_collapse",
+      "equals": "windstream",
+      "note": "letterhead 'Kinetic Business by Windstream' and payee 'OKLAHOMA WINDSTREAM, LLC' must resolve to ONE persona (F5)"
+    },
+    {
+      "check": "state_entity_pattern",
+      "note": "'{STATE} WINDSTREAM, LLC' must match as a pattern, not a literal, or every state becomes a new persona"
+    },
+    {
+      "check": "promo_block_ignored",
+      "note": "'Do More with Go Kinetic Business' ad occupies the left half of page 1; keyword scan must be region-limited (F9)"
+    },
+    {
+      "check": "identity_fallback",
+      "equals": "account_period"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

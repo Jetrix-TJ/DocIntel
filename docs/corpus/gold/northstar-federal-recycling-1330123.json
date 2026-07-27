@@ -1,0 +1,225 @@
+{
+  "gold_id": "northstar-federal-recycling-1330123",
+  "source_file": "CONTRA ONLY Everything already on AR Federal Recycling 1330123.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F8",
+    "F11"
+  ],
+  "notes": "The hardest document in the corpus. Zero text layer AND flattened human annotations that contradict printed reference numbers. EXCLUDED from draft-to-stable promotion evidence per F3.",
+  "excluded_from_promotion": true,
+  "classification": {
+    "doc_type": "contra_invoice",
+    "tags": [
+      "mixed_sign",
+      "ocr_only",
+      "has_flattened_annotations"
+    ],
+    "text_source": "ocr",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Federal Recycling & Waste Solutions",
+    "vendor_address": "7935 Clayton Rd, St. Louis, MO 63117",
+    "vendor_phone": "281-580-1242",
+    "remit_payee": "Federal International Recycling and Waste Solutions, LLC",
+    "remit_address": "Post Office Box 203505, Dallas, TX 75320-3505",
+    "invoice_number": "1330123",
+    "invoice_date": "2025-05-31",
+    "payment_terms": "EOM plus 15",
+    "bill_to_name": "Northstar-Bimbo-Market Street",
+    "bill_to_address": "PO Box 188, East Longmeadow, MA 01028, UNITED STATES",
+    "bill_to_email": "apayable@nsrecycle.com",
+    "service_location": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01028",
+    "total_printed": 481.2,
+    "currency": "USD",
+    "currency_basis": "explicit_iso_code"
+  },
+  "line_items": [
+    {
+      "date": "2025-05-06",
+      "trans_no": "380357",
+      "reference": "2436687",
+      "description": "OCC",
+      "quantity": 2.495,
+      "unit_of_measure": "ST",
+      "unit_price": -40.0,
+      "amount": -99.8
+    },
+    {
+      "date": "2025-05-06",
+      "trans_no": "380357",
+      "reference": "2436687",
+      "description": "HAUL FEE",
+      "unit_price": 200.0,
+      "amount": 200.0
+    },
+    {
+      "date": "2025-05-13",
+      "trans_no": "381761",
+      "reference": "2436820",
+      "description": "OCC",
+      "quantity": 2.015,
+      "unit_of_measure": "ST",
+      "unit_price": -40.0,
+      "amount": -80.6
+    },
+    {
+      "date": "2025-05-13",
+      "trans_no": "381761",
+      "reference": "2436820",
+      "description": "HAUL FEE",
+      "unit_price": 200.0,
+      "amount": 200.0
+    },
+    {
+      "date": "2025-05-22",
+      "trans_no": "383303",
+      "reference": "2436821",
+      "description": "OCC",
+      "quantity": 3.425,
+      "unit_of_measure": "ST",
+      "unit_price": -40.0,
+      "amount": -137.0
+    },
+    {
+      "date": "2025-05-22",
+      "trans_no": "383303",
+      "reference": "2436821",
+      "description": "Baling Wire Sales",
+      "unit_price": 75.0,
+      "amount": 75.0
+    },
+    {
+      "date": "2025-05-22",
+      "trans_no": "383303",
+      "reference": "2436821",
+      "description": "Baling Wire Sales",
+      "unit_price": 75.0,
+      "amount": 75.0
+    },
+    {
+      "date": "2025-05-22",
+      "trans_no": "383303",
+      "reference": "2436821",
+      "description": "HAUL FEE",
+      "unit_price": 200.0,
+      "amount": 200.0
+    },
+    {
+      "date": "2025-05-28",
+      "trans_no": "383618",
+      "reference": "2436823",
+      "description": "OCC",
+      "quantity": 3.785,
+      "unit_of_measure": "ST",
+      "unit_price": -40.0,
+      "amount": -151.4
+    },
+    {
+      "date": "2025-05-28",
+      "trans_no": "383618",
+      "reference": "2436823",
+      "description": "HAUL FEE",
+      "unit_price": 200.0,
+      "amount": 200.0
+    }
+  ],
+  "reference_list": [
+    {
+      "value": "2436687",
+      "source_field": "Reference",
+      "page": 1,
+      "pattern_id": "ref_column"
+    },
+    {
+      "value": "2436820",
+      "source_field": "Reference",
+      "page": 1,
+      "pattern_id": "ref_column"
+    },
+    {
+      "value": "2436821",
+      "source_field": "Reference",
+      "page": 1,
+      "pattern_id": "ref_column"
+    },
+    {
+      "value": "2436823",
+      "source_field": "Reference",
+      "page": 1,
+      "pattern_id": "ref_column"
+    }
+  ],
+  "reference_list_complete": true,
+  "annotation_overlays": {
+    "detected": true,
+    "pdf_annots_objects": 0,
+    "note": "Flattened into the page image. No annotation layer exists to strip. OCR cannot distinguish these from printed values.",
+    "reference_values": [
+      "2436818",
+      "2436820",
+      "2436821",
+      "2469435",
+      "2469427"
+    ],
+    "comments": [
+      "Hi Chloe, appears you need for your b/s updates. TY DDarling 6/6",
+      "Yes and I added a few to update what you had, thanks! - CGS 6/9"
+    ],
+    "highlighted_regions": [
+      "bill_to block",
+      "amount column",
+      "quantity column"
+    ]
+  },
+  "derived": {
+    "amount_payable": 481.2,
+    "payable_basis": "total_printed"
+  },
+  "assertions": [
+    {
+      "check": "line_sum",
+      "expr": "-99.80 +200 -80.60 +200 -137.00 +75 +75 +200 -151.40 +200",
+      "equals": 481.2
+    },
+    {
+      "check": "occ_line_math",
+      "note": "all four OCC rows: quantity * -40.00 == amount"
+    },
+    {
+      "check": "total_is_positive_despite_contra",
+      "note": "contra classification must NOT depend on a negative grand total; this total is +481.20"
+    },
+    {
+      "check": "annotation_values_excluded",
+      "note": "2436818, 2469435, 2469427 must NOT appear in reference_list unmarked"
+    },
+    {
+      "check": "annotation_dates_not_captured",
+      "note": "'6/6' and '6/9' in comment text must not be captured as invoice dates"
+    },
+    {
+      "check": "review_forced",
+      "note": "has_flattened_annotations forces review regardless of confidence"
+    },
+    {
+      "check": "vendor_alias",
+      "note": "letterhead name and remittance payee differ; both collapse to federal_recycling"
+    }
+  ],
+  "expected_routing": {
+    "lane": "review",
+    "review_flag": true,
+    "regen_flag": false,
+    "reason": "has_flattened_annotations forces review unconditionally (F3)"
+  }
+}

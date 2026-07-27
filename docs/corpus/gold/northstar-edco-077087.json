@@ -1,0 +1,137 @@
+{
+  "gold_id": "northstar-edco-077087",
+  "source_file": "EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F1",
+    "F7",
+    "F8",
+    "F13",
+    "F16",
+    "F17"
+  ],
+  "notes": "THE F1 TRAP, small-dollar version. Amount Due 367.96 is printed in the largest box on the page; the payable is 69.62. The filename states this outright.",
+  "classification": {
+    "doc_type": "standard_invoice",
+    "tags": [
+      "past_due"
+    ],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "EDCO Waste & Recycling Service",
+    "vendor_address": "224 S Las Posas Rd, San Marcos, CA 92078",
+    "vendor_phone": "(760) 744-2700",
+    "remit_payee": "EDCO Waste & Recycling Service",
+    "remit_address": "P.O. Box 5488, Buena Park, CA 90622-5488",
+    "vendor_account_number": "25-3A 077087",
+    "vendor_account_number_normalized": "253A077087",
+    "bill_date": "2025-04-30",
+    "bill_to_name": "Northstar Recycling",
+    "bill_to_attention": "Hunter Indust",
+    "bill_to_address": "PO Box 188, East Longmeadow, MA 01028",
+    "service_location": "Hunter Industries, 260 S Pacific St, San Marcos, CA 92078",
+    "prior_balance": 298.34,
+    "current_charges": 69.62,
+    "total_printed": 367.96,
+    "payments_included_through": "2025-04-23",
+    "currency": "USD",
+    "currency_basis": "pack_default",
+    "payments_credits": 0.0,
+    "prior_balance_basis": "gross",
+    "prior_balance_basis_note": "BALANCE FORWARD 298.34 is carried in full; payments received through 2025-04-23 are already reflected in it, and no separate payment line is printed."
+  },
+  "line_items": [
+    {
+      "date": "04 08",
+      "description": "BALANCE FORWARD",
+      "balance": 298.34
+    },
+    {
+      "date": "04 08",
+      "description": "CANCEL SERVICE APR 08",
+      "charges": 69.62
+    },
+    {
+      "date": "04 08",
+      "description": "941161 NO RET/LF"
+    },
+    {
+      "date": "04 08",
+      "description": "941162 NO RET/LF"
+    },
+    {
+      "date": "04 08",
+      "description": "941163 NO RET/LF"
+    },
+    {
+      "description": "CURRENT CHARGES:",
+      "charges": 69.62,
+      "balance": 367.96
+    }
+  ],
+  "reference_list": [],
+  "reference_list_complete": true,
+  "scanline": {
+    "raw": "25600770871000367962",
+    "encodes_account": "077087",
+    "encodes_amount": 367.96,
+    "binds_to": [
+      "total_printed",
+      "vendor_account_number"
+    ],
+    "note": "May never bind to amount_payable (F7)"
+  },
+  "derived": {
+    "amount_payable": 69.62,
+    "payable_basis": "current_charges"
+  },
+  "assertions": [
+    {
+      "check": "balance_composition",
+      "expr": "298.34 + 69.62",
+      "equals": 367.96
+    },
+    {
+      "check": "amount_payable",
+      "equals": 69.62,
+      "note": "NOT 367.96 - this is the whole point of the document"
+    },
+    {
+      "check": "payable_basis",
+      "equals": "current_charges"
+    },
+    {
+      "check": "scanline_agrees_with_printed_total",
+      "equals": 367.96
+    },
+    {
+      "check": "past_due_is_a_tag_not_a_type",
+      "note": "60pt PAST DUE banner must not change doc_type (F16)"
+    },
+    {
+      "check": "watermark_not_captured",
+      "note": "'We'll Take Care Of It' script overlaps the table region; must be dropped as furniture"
+    },
+    {
+      "check": "filename_crosscheck",
+      "equals": "agree",
+      "note": "filename asserts 69.62 as the payable"
+    },
+    {
+      "check": "review_not_needed",
+      "equals": false,
+      "note": "closure verified, so the derivation is trustworthy"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

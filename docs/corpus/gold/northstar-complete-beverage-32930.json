@@ -1,0 +1,222 @@
+{
+  "gold_id": "northstar-complete-beverage-32930",
+  "source_file": "_AP Invoice 32930 Complete Beverage Destruction 1177.70000.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F2",
+    "F4",
+    "F8",
+    "F10",
+    "F15"
+  ],
+  "notes": "One invoice + three pages of scanned handwritten backup. Zero text layer despite rendering crisply. All 12 line items close to the total exactly, including a 0.00 NO MARKET VALUE row.",
+  "classification": {
+    "doc_type": "invoice_with_attachment",
+    "tags": [
+      "mixed_sign",
+      "ocr_only",
+      "handwritten_supporting"
+    ],
+    "text_source": "ocr",
+    "page_count": 4,
+    "page_roles": [
+      "primary",
+      "supporting",
+      "supporting",
+      "supporting"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Complete Beverage Destruction, LLC",
+    "vendor_address": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
+    "vendor_email": "AR@CBD-USA.COM",
+    "invoice_number": "32930",
+    "invoice_date": "2025-10-24",
+    "due_date": "2025-11-23",
+    "payment_terms": "Net 30",
+    "bill_to_name": "NorthStar Recycling Company, LLC",
+    "bill_to_attention": "Refresco, Acline",
+    "bill_to_address": "P.O. Box 188, East Longmeadow, MA 01028, United States",
+    "seal_number": "5951119",
+    "bol_number": "10-21-25-01",
+    "total_printed": 1177.7,
+    "balance_due": 1177.7,
+    "currency": "USD",
+    "currency_basis": "pack_default"
+  },
+  "line_items": [
+    {
+      "service_date": "2025-10-23",
+      "item_code": "2001",
+      "description": "Aluminum Cases (Aluminum Cans)",
+      "quantity": 200,
+      "unit_price": 0.68,
+      "amount": 136.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "2002",
+      "description": "Loose Aluminum Container/Tote",
+      "quantity": 4,
+      "unit_price": 42.0,
+      "amount": 168.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "2003",
+      "description": "Loose Aluminum Container w/ Cases",
+      "quantity": 2,
+      "unit_price": 93.0,
+      "amount": 186.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "2004",
+      "description": "Clean Aluminum Container/Tote: By Weight / Tote",
+      "quantity": 100,
+      "unit_price": -0.65,
+      "amount": -65.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "4002",
+      "description": "Loose Plastic Container/Tote",
+      "quantity": 3,
+      "unit_price": 51.0,
+      "amount": 153.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "4003",
+      "description": "Loose Plastic Container/Tote w/ Cases",
+      "quantity": 1,
+      "unit_price": 102.0,
+      "amount": 102.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "8007 - OCC Bales",
+      "description": "OCC: Cardboard Bales - By Weight / Market Net Ton",
+      "quantity": 1.1,
+      "unit_price": -20.0,
+      "amount": -22.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "4010",
+      "description": "Plastic Drum: 55 Gallon Drum(s): By Weight / LB",
+      "quantity": 480,
+      "unit_price": -0.02,
+      "amount": -9.6
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "8009 - Carrier Stock Bales/Loose",
+      "description": "Carrier Stock Bales/Loose: By Weight / Market Net Ton  NO MARKET VALUE",
+      "quantity": 4670,
+      "unit_price": 0.0,
+      "amount": 0.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "8888",
+      "description": "Rubbish: Disposal By Weight - LB or NT",
+      "quantity": 1070,
+      "unit_price": 0.09,
+      "amount": 96.3
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "00",
+      "description": "Freight Charge",
+      "quantity": 1,
+      "unit_price": 325.0,
+      "amount": 325.0
+    },
+    {
+      "service_date": "2025-10-23",
+      "item_code": "11",
+      "description": "Environmental Fee - Wastewater Treatment per gallon",
+      "quantity": 4000,
+      "unit_price": 0.027,
+      "amount": 108.0
+    }
+  ],
+  "reference_list": [
+    {
+      "value": "5951119",
+      "source_field": "SEAL#",
+      "page": 1,
+      "pattern_id": "seal"
+    },
+    {
+      "value": "10-21-25-01",
+      "source_field": "BOL#",
+      "page": 1,
+      "pattern_id": "bol"
+    },
+    {
+      "value": "5951119",
+      "source_field": "handwritten_bol_seal",
+      "page": 2,
+      "pattern_id": "seal"
+    },
+    {
+      "value": "10-21-25-01",
+      "source_field": "handwritten_bol_number",
+      "page": 2,
+      "pattern_id": "bol"
+    }
+  ],
+  "reference_list_complete": false,
+  "reference_list_note": "Pages 3-4 not transcribed in this labelling pass. Pages 1-2 are complete.",
+  "supporting_page_content": {
+    "page": 2,
+    "kind": "bill_of_lading",
+    "handwritten": true,
+    "skewed": true,
+    "bol_number": "10-21-25-01",
+    "carrier": "R&L",
+    "trailer_number": "35243",
+    "seal_number": "5951119",
+    "weight": 20000,
+    "commodity": "Pallets, Totes",
+    "ship_from": "Refresco Beverage, 4506 Acline Drive, Tampa FL 33605",
+    "ship_to": "R&L, 405 E Alabama St, Plant City FL 33563",
+    "special_instructions": "KEEP FROM FREEZING/HEAT"
+  },
+  "derived": {
+    "amount_payable": 1177.7,
+    "payable_basis": "total_printed"
+  },
+  "assertions": [
+    {
+      "check": "line_sum",
+      "expr": "sum of all 12 signed amounts",
+      "equals": 1177.7
+    },
+    {
+      "check": "every_line_qty_times_price",
+      "note": "all 12 rows: quantity * unit_price == amount (0.027*4000 == 108.00)"
+    },
+    {
+      "check": "zero_value_row_preserved",
+      "note": "item 8009 amount 0.00 must be present, not dropped as a parse failure (F15)"
+    },
+    {
+      "check": "not_a_batch",
+      "note": "exactly one primary page; must NOT be flagged as a batch PDF (F10)"
+    },
+    {
+      "check": "values_never_from_supporting",
+      "note": "no field value may originate on pages 2-4"
+    }
+  ],
+  "expected_routing": {
+    "lane": "medium",
+    "review_flag": true,
+    "regen_flag": false,
+    "reason": "OCR-only source plus handwritten supporting pages; ocr_source and handwriting modifiers apply"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "gold_id": "digitaldirection-lumen-5-QXH7QKM7",
+  "source_file": "Lumen - 5-QXH7QKM7.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F4",
+    "F5",
+    "F7",
+    "F8",
+    "F12"
+  ],
+  "notes": "THREE printed names for one carrier: the LUMEN logo, 'Level 3 Communications, LLC, a CenturyLink company', and the remittance payee 'Level 3 Communications, LLC'. The only bill in this pack that prints a real invoice number.",
+  "classification": {
+    "doc_type": "telecom_bill",
+    "tags": [
+      "prior_balance_cleared",
+      "multi_brand_sender",
+      "has_scanline"
+    ],
+    "text_source": "native",
+    "page_count": 6,
+    "page_roles": [
+      "primary",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Lumen",
+    "carrier_canonical": "lumen",
+    "vendor_legal_name": "Level 3 Communications, LLC",
+    "vendor_parent_reference": "a CenturyLink company",
+    "vendor_address": "1025 Eldorado Blvd., Broomfield, CO 80021",
+    "remit_payee": "Level 3 Communications, LLC",
+    "remit_address": "PO Box 52015, Phoenix, AZ 85072-2015",
+    "vendor_phone": "1-877-453-8353",
+    "vendor_email": "Billing@Lumen.com",
+    "account_number": "5-QXH7QKM7",
+    "invoice_number": "752233001",
+    "bill_date": "2025-09-01",
+    "due_date": "2025-10-01",
+    "bill_to_name": "City of Dublin",
+    "bill_to_address": "5555 Perimeter Dr, Dublin, OH 43017-3219",
+    "prior_balance": 249.84,
+    "payments_credits": -249.84,
+    "credits_adjustments": 0.0,
+    "balance": 0.0,
+    "current_charges": 248.09,
+    "total_printed": 248.09,
+    "currency": "USD",
+    "currency_basis": "explicit_iso_code",
+    "prior_balance_basis": "gross",
+    "prior_balance_basis_note": "Prior balance is printed gross; 'Payment Received - Thank You!  (249.84)' is a separate signed credit. Carried balance = prior_balance + payments_credits."
+  },
+  "reference_list": [
+    {
+      "value": "752233001",
+      "source_field": "Invoice Number",
+      "page": 1,
+      "pattern_id": "invoice_number"
+    },
+    {
+      "value": "5-QXH7QKM7",
+      "source_field": "Billing Account Number",
+      "page": 1,
+      "pattern_id": "account"
+    }
+  ],
+  "reference_list_complete": false,
+  "reference_list_note": "Pages 2-6 carry per-service detail, not transcribed in this pass.",
+  "scanline": {
+    "raw": "251001 000000752233001 00000000000586878247 8 2 00000024809 2",
+    "encodes_due_date": "2025-10-01",
+    "encodes_invoice_number": "752233001",
+    "encodes_amount": 248.09,
+    "binds_to": [
+      "total_printed",
+      "invoice_number",
+      "due_date"
+    ],
+    "note": "The richest scanline in the corpus: three independently verifiable fields (F7)."
+  },
+  "derived": {
+    "amount_payable": 248.09,
+    "payable_basis": "total_printed",
+    "document_identity": "752233001",
+    "identity_basis": "invoice_number"
+  },
+  "assertions": [
+    {
+      "check": "balance_composition",
+      "expr": "249.84 - 249.84 + 0.00",
+      "equals": 0.0
+    },
+    {
+      "check": "payable_composition",
+      "expr": "0.00 + 248.09",
+      "equals": 248.09
+    },
+    {
+      "check": "parens_parsed_negative",
+      "note": "'(249.84)' must parse to -249.84 via parens_to_negative (F4)"
+    },
+    {
+      "check": "alias_collapse_three_names",
+      "equals": "lumen",
+      "note": "LUMEN logo + Level 3 Communications, LLC + CenturyLink -> ONE persona (F5)"
+    },
+    {
+      "check": "payee_preferred_over_logo",
+      "note": "remit_payee 'Level 3 Communications, LLC' is the stable identity; the logo is marketing"
+    },
+    {
+      "check": "duplicate_anchor_agrees",
+      "note": "Billing Account Number, Invoice Number, Payment Due and Total Amount Due all appear twice (body + remittance); must agree (F12)"
+    },
+    {
+      "check": "identity_basis",
+      "equals": "invoice_number",
+      "note": "the only bill in this pack with a real invoice number (F6)"
+    },
+    {
+      "check": "scanline_three_way",
+      "note": "scanline corroborates invoice_number, total_printed AND due_date"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

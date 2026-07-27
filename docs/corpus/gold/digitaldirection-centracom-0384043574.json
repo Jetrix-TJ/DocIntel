@@ -1,0 +1,167 @@
+{
+  "gold_id": "digitaldirection-centracom-0384043574",
+  "source_file": "Centracom_0384043574_01012026_BILL.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F1",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F11"
+  ],
+  "notes": "THE SINGLE MOST IMPORTANT DOCUMENT IN THE CORPUS. Total Amount Due 33876.40 includes a 20123.80 prior balance; the payable is 13752.60. A naive extractor is wrong by $20,123.80 here and correct everywhere else in this pack.",
+  "priority": "critical",
+  "classification": {
+    "doc_type": "telecom_bill",
+    "tags": [
+      "prior_balance_present",
+      "past_due",
+      "no_invoice_number",
+      "has_scanline"
+    ],
+    "text_source": "native",
+    "page_count": 10,
+    "page_roles": [
+      "primary",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting"
+    ]
+  },
+  "fields": {
+    "vendor_name": "CentraCom",
+    "carrier_canonical": "centracom",
+    "vendor_address": "PO Box 7, Fairview, UT 84629",
+    "vendor_phone": "435-427-3331",
+    "remit_payee": "CentraCom",
+    "remit_address": "PO Box 7, Fairview, UT 84629-0007",
+    "account_number": "0384043574",
+    "account_name": "CLYDE COMPANIES",
+    "invoice_number": null,
+    "bill_date": "2026-01-01",
+    "due_date": "25TH OF THE MONTH",
+    "due_date_parsed": null,
+    "bill_to_name": "CLYDE COMPANIES",
+    "bill_to_address": "PO Box 1955, Orem, UT 84059-1955",
+    "circuit_id": "4351003276",
+    "billing_group": "0384 - ACRA",
+    "balance_from_last_statement": 44244.0,
+    "payments_credits": -24120.2,
+    "prior_balance": 20123.8,
+    "current_charges": 13752.6,
+    "total_printed": 33876.4,
+    "taxes_and_fees": 0.2,
+    "currency": "USD",
+    "currency_basis": "pack_default",
+    "prior_balance_basis": "net_of_payments",
+    "prior_balance_basis_note": "CentraCom prints 'Previous Balance Due' already net of payments (44,244.00 - 24,120.20). Do not subtract payments a second time."
+  },
+  "charges": [
+    {
+      "label": "Internet Charges",
+      "amount": 140.9
+    },
+    {
+      "label": "Internet Taxes, Surcharges, & Fees",
+      "amount": 0.2
+    },
+    {
+      "label": "Special Circuit Charges",
+      "amount": 13611.5
+    }
+  ],
+  "reference_list": [
+    {
+      "value": "0384043574",
+      "source_field": "Account Number",
+      "page": 1,
+      "pattern_id": "account"
+    },
+    {
+      "value": "4351003276",
+      "source_field": "Special Circuit",
+      "page": 1,
+      "pattern_id": "circuit_id"
+    }
+  ],
+  "reference_list_complete": false,
+  "reference_list_note": "Pages 2-10 carry per-circuit detail with additional circuit identifiers, not transcribed in this pass.",
+  "scanline": {
+    "raw": "03840384043574000033876408",
+    "encodes_account": "0384043574",
+    "encodes_amount": 33876.4,
+    "binds_to": [
+      "total_printed",
+      "account_number"
+    ],
+    "critical_note": "The scanline encodes 33876.40 - the TRAP value. It validates transcription fidelity, not business correctness. Binding it to amount_payable would cement the bug (F7)."
+  },
+  "derived": {
+    "amount_payable": 13752.6,
+    "payable_basis": "current_charges",
+    "document_identity": "0384043574|2026-01-01",
+    "identity_basis": "account_period"
+  },
+  "assertions": [
+    {
+      "check": "current_charges_composition",
+      "expr": "140.90 + 0.20 + 13611.50",
+      "equals": 13752.6
+    },
+    {
+      "check": "balance_composition",
+      "expr": "13752.60 + 20123.80",
+      "equals": 33876.4
+    },
+    {
+      "check": "prior_balance_is_net",
+      "expr": "44244.00 + (-24120.20)",
+      "equals": 20123.8
+    },
+    {
+      "check": "prior_balance_derivation",
+      "expr": "44244.00 - 24120.20",
+      "equals": 20123.8
+    },
+    {
+      "check": "amount_payable",
+      "equals": 13752.6,
+      "note": "NOT 33876.40. A $20,123.80 error if wrong."
+    },
+    {
+      "check": "payable_basis",
+      "equals": "current_charges"
+    },
+    {
+      "check": "not_misclassified_as_statement",
+      "note": "page 1 is titled 'Account Summary' and says 'statement' twice; must still classify as telecom_bill (F9)"
+    },
+    {
+      "check": "identity_fallback",
+      "equals": "account_period",
+      "note": "no invoice number anywhere in the document (F6)"
+    },
+    {
+      "check": "due_date_unparsed",
+      "note": "'25TH OF THE MONTH' is not a date; pass through with a penalty, never invent a day"
+    },
+    {
+      "check": "review_not_needed",
+      "equals": false,
+      "note": "closure verified, so the derivation is trustworthy"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

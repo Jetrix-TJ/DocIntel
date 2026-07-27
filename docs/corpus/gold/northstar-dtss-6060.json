@@ -1,0 +1,87 @@
+{
+  "gold_id": "northstar-dtss-6060",
+  "source_file": "_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F11",
+    "F17"
+  ],
+  "notes": "Cleanest document in the corpus. The control case: if this does not route High, something is broken upstream of the interesting logic.",
+  "classification": {
+    "doc_type": "standard_invoice",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "D.T.S.S., Inc.",
+    "vendor_address": "500 North Defiance Trail, Spencerville, OH 45887",
+    "invoice_number": "6060",
+    "invoice_date": "2025-09-15",
+    "bill_to_name": "Northstar Recycling Company, LLC",
+    "bill_to_address": "P.O. Box 188, East Longmeadow, MA 01028",
+    "payment_terms": "Due on receipt",
+    "total_printed": 699.0,
+    "payments_credits": 0.0,
+    "balance_due": 699.0,
+    "currency": "USD",
+    "currency_basis": "pack_default"
+  },
+  "line_items": [
+    {
+      "description": "NS # 2561194, Swap at Michigan Bread - Taylor, MI, 9-11-25",
+      "quantity": 1,
+      "unit_price": 550.0,
+      "amount": 550.0
+    },
+    {
+      "description": "NS # 2561194, Trailer Washout for 9-11-25 swap",
+      "quantity": 1,
+      "unit_price": 50.0,
+      "amount": 50.0
+    },
+    {
+      "description": "NS # 2561194, Fuel Surcharge for 9-11-25 swap",
+      "quantity": 1,
+      "unit_price": 99.0,
+      "amount": 99.0
+    }
+  ],
+  "reference_list": [
+    {
+      "value": "2561194",
+      "source_field": "line_item_description",
+      "page": 1,
+      "pattern_id": "ns_hash"
+    }
+  ],
+  "reference_list_complete": true,
+  "derived": {
+    "amount_payable": 699.0,
+    "payable_basis": "total_printed"
+  },
+  "assertions": [
+    {
+      "check": "line_sum",
+      "expr": "550.00 + 50.00 + 99.00",
+      "equals": 699.0
+    },
+    {
+      "check": "no_prior_balance",
+      "equals": true
+    },
+    {
+      "check": "reference_dedupe",
+      "note": "NS # 2561194 appears on all three rows; dedupe to one entry"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

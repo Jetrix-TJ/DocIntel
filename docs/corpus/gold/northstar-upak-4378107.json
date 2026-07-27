@@ -1,0 +1,240 @@
+{
+  "gold_id": "northstar-upak-4378107",
+  "source_file": "CANADIAN WITHOUT NOTES U- PAK 4378107 (1).pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "corpus-analysis pass, 2026-07-27",
+  "teaches": [
+    "F4",
+    "F8",
+    "F9",
+    "F13",
+    "F14",
+    "F15",
+    "F19",
+    "F20"
+  ],
+  "notes": "THE ARITHMETIC-MISMATCH CASE. Total Invoice 14789.77 but Please Pay 14740.85, with all aging buckets at 0.00 - so the -48.92 gap is NOT a prior balance. amount_payable must be null and the document must route to review. Also: totals live on page 5, not page 1.",
+  "classification": {
+    "doc_type": "standard_invoice",
+    "tags": [
+      "foreign_currency",
+      "has_tax",
+      "sub_accounts",
+      "mixed_sign",
+      "past_due"
+    ],
+    "text_source": "native",
+    "page_count": 5,
+    "page_roles": [
+      "primary",
+      "primary",
+      "primary",
+      "primary",
+      "primary"
+    ],
+    "page_roles_note": "Same template repeated; the totals block resolves on page 5 via totals-block region (F9)"
+  },
+  "fields": {
+    "vendor_name": "U-Pak Disposals (1989) Ltd",
+    "vendor_address": "15 Tidemore Avenue, Etobicoke, ON M9W 7E9",
+    "vendor_phone": "416-675-3700",
+    "remit_payee": "U-Pak Disposals (1989) Ltd",
+    "invoice_number": "4378107",
+    "invoice_date": "2025-03-31",
+    "vendor_account_number": "1 -24136 1",
+    "service_dates": "MARCH 31, 2025",
+    "bill_to_name": "Northstar Recycling Company LLC",
+    "bill_to_address": "94 Maple St, East Longmeadow, MA 01028",
+    "service_location": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
+    "tax_id": "123142812RT0001",
+    "subtotal": 8119.44,
+    "tax_amount": 2325.69,
+    "total_printed": 14789.77,
+    "please_pay": 14740.85,
+    "currency": "CAD",
+    "currency_basis": "tax_regime_marker",
+    "currency_basis_note": "H.S.T. plus Ontario postal codes. The string 'CAD' appears nowhere in the document (F14)."
+  },
+  "charges": [
+    {
+      "label": "FUEL SURCHARGE",
+      "amount": 1218.04
+    },
+    {
+      "label": "ENVIRONMENTAL SURCHARGE",
+      "amount": 2342.42
+    },
+    {
+      "label": "EFW COMPLIANCE CHRG",
+      "amount": 784.18
+    },
+    {
+      "label": "H.S.T.",
+      "amount": 2325.69,
+      "tax_id": "123142812RT0001"
+    }
+  ],
+  "aging": {
+    "current": 14740.85,
+    "days_30": 0.0,
+    "days_60": 0.0,
+    "days_90": 0.0
+  },
+  "sub_account": [
+    {
+      "id": "1 - 22335",
+      "name": "SHEARER'S FOODS CANADA R/O",
+      "address": "745 Southgate Dr"
+    }
+  ],
+  "line_items_page1_sample": [
+    {
+      "date": "2025-03-31",
+      "description": "ENVIRONMENTAL REPORTING",
+      "quantity": 1.0,
+      "total": 54.5,
+      "inline_block": {
+        "sub_total": 54.5,
+        "taxes": 7.09,
+        "total": 61.59
+      }
+    },
+    {
+      "date": "2025-03-04",
+      "description": "40 YD PACKER - TO EMERALD / ENERGY FROM WASTE",
+      "quantity": 1.0,
+      "amount": null,
+      "total": 519.93
+    },
+    {
+      "date": "2025-03-04",
+      "description": "DISPOSAL FEE/EFW / ENERGY FROM WASTE",
+      "quantity": 3.54,
+      "unit_price": 125.0,
+      "total": 442.5
+    },
+    {
+      "date": "2025-03-04",
+      "description": "40 PACKER LIFT-CARDBOARD / CARDBOARD",
+      "quantity": 1.0,
+      "total": 144.42
+    },
+    {
+      "date": "2025-03-04",
+      "description": "CARDBOARD WEIGHTS / CARDBOARD",
+      "quantity": 1.42,
+      "unit_price": -40.5,
+      "total": -57.51
+    },
+    {
+      "date": "2025-03-11",
+      "description": "40 YD PACKER - TO EMERALD / ENERGY FROM WASTE",
+      "quantity": 1.0,
+      "total": 519.93
+    },
+    {
+      "date": "2025-03-11",
+      "description": "DISPOSAL FEE/EFW / ENERGY FROM WASTE",
+      "quantity": 3.6,
+      "unit_price": 125.0,
+      "total": 450.0
+    },
+    {
+      "date": "2025-03-11",
+      "description": "40 PACKER LIFT-CARDBOARD / CARDBOARD",
+      "quantity": 1.79,
+      "unit_price": -40.5,
+      "total": -72.5
+    },
+    {
+      "date": "2025-03-18",
+      "description": "40 YD PACKER - TO EMERALD / ENERGY FROM WASTE",
+      "quantity": 1.0,
+      "total": 519.93
+    }
+  ],
+  "line_items_complete": false,
+  "line_items_note": "Only page 1 transcribed in this labelling pass; pages 2-4 carry further service groups.",
+  "reference_list": [
+    {
+      "value": "4342903",
+      "source_field": "WORK ORDER#",
+      "page": 1,
+      "pattern_id": "work_order"
+    },
+    {
+      "value": "4342904",
+      "source_field": "WORK ORDER#",
+      "page": 1,
+      "pattern_id": "work_order"
+    },
+    {
+      "value": "4348255",
+      "source_field": "WORK ORDER#",
+      "page": 1,
+      "pattern_id": "work_order"
+    },
+    {
+      "value": "4348256",
+      "source_field": "WORK ORDER#",
+      "page": 1,
+      "pattern_id": "work_order"
+    },
+    {
+      "value": "4355256",
+      "source_field": "WORK ORDER#",
+      "page": 1,
+      "pattern_id": "work_order"
+    }
+  ],
+  "reference_list_complete": false,
+  "reference_list_note": "Page 1 only. Pages 2-4 contain additional WORK ORDER# values.",
+  "derived": {
+    "amount_payable": null,
+    "payable_basis": null
+  },
+  "assertions": [
+    {
+      "check": "total_composition",
+      "expr": "8119.44 + 1218.04 + 2342.42 + 784.18 + 2325.69",
+      "equals": 14789.77
+    },
+    {
+      "check": "payable_mismatch",
+      "expr": "14789.77 - 14740.85",
+      "equals": 48.92,
+      "note": "Unexplained. Aging is all-zero so no prior balance accounts for it."
+    },
+    {
+      "check": "amount_payable_is_null",
+      "note": "derive_amount_payable MUST NOT guess. null + review flag."
+    },
+    {
+      "check": "arith_balance_mismatch_applied",
+      "equals": true
+    },
+    {
+      "check": "totals_not_on_page_1",
+      "note": "page 1 Please Pay cell is blank; totals-block must resolve on the last page (F9)"
+    },
+    {
+      "check": "hst_anchor_hazard",
+      "note": "'H.S.T. # 123142812RT0001  2,325.69' - the value is 2325.69, not the registration number (F14)"
+    },
+    {
+      "check": "empty_amount_cell_not_a_failure",
+      "note": "'40 YD PACKER' rows have blank AMOUNT and populated TOTAL (F15)"
+    },
+    {
+      "check": "currency_inferred",
+      "equals": "CAD",
+      "note": "carries currency_inferred_weak modifier"
+    }
+  ],
+  "expected_routing": {
+    "lane": "review",
+    "review_flag": true,
+    "regen_flag": false,
+    "reason": "arith_balance_mismatch: printed total and payable differ by 48.92 with no prior balance to explain it (F8)"
+  }
+}
