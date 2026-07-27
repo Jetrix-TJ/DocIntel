@@ -8,7 +8,9 @@ makes grammar rule V10 impossible to violate rather than merely forbidden.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Literal
 
 PageRole = Literal["primary", "supporting", "unknown"]
@@ -28,32 +30,12 @@ DERIVED_ONLY: frozenset[str] = frozenset({
 _LINE_TOLERANCE = 3.0  # points; words within this vertical distance share a line
 
 
-class _GuardedDict(dict[str, Any]):
-    """A dict that refuses derived_only keys on every insertion path."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # Build key-by-key to ensure __setitem__ is called for validation
-        # (dict.__init__ bypasses __setitem__ in Python 3.12)
-        temp = dict(*args, **kwargs)
-        for key, value in temp.items():
-            self[key] = value
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        if key in DERIVED_ONLY:
-            raise ValueError(
-                f"{key!r} is derived_only (grammar V10) and cannot be extracted; "
-                "compute it with an adjust op and store it on DerivedFields"
-            )
-        super().__setitem__(key, value)
-
-    def update(self, *args: Any, **kwargs: Any) -> None:
-        for key in dict(*args, **kwargs):
-            if key in DERIVED_ONLY:
-                raise ValueError(
-                    f"{key!r} is derived_only (grammar V10) and cannot be extracted; "
-                    "compute it with an adjust op and store it on DerivedFields"
-                )
-        super().update(*args, **kwargs)
+def _reject_derived(name: str) -> None:
+    if name in DERIVED_ONLY:
+        raise ValueError(
+            f"{name!r} is derived_only (grammar V10) and cannot be extracted; "
+            "compute it with an adjust op and store it on DerivedFields"
+        )
 
 
 @dataclass(frozen=True)
@@ -119,27 +101,36 @@ class ReferenceHit:
 
 @dataclass
 class ExtractedFields:
-    """Values read off the page. Never holds a derived field."""
+    """Values read off the page. Never holds a derived field.
 
-    values: dict[str, Any] = field(default_factory=_GuardedDict)
-    match_quality: dict[str, float] = field(default_factory=_GuardedDict)
+    The backing dicts are private and exposed only as read-only mapping views,
+    so `set()` is the single insertion path and no dict method can reach around
+    it. Subclassing dict does not work here: CPython's setdefault and __ior__
+    are C-level and bypass an overridden __setitem__.
+    """
+
+    _values: dict[str, Any] = field(default_factory=dict)
+    _match_quality: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        # Re-wrap any caller-supplied dicts so all insertion paths are validated
-        object.__setattr__(self, 'values', _GuardedDict(self.values))
-        object.__setattr__(self, 'match_quality', _GuardedDict(self.match_quality))
+        for name in (*self._values, *self._match_quality):
+            _reject_derived(name)
+
+    @property
+    def values(self) -> Mapping[str, Any]:
+        return MappingProxyType(self._values)
+
+    @property
+    def match_quality(self) -> Mapping[str, float]:
+        return MappingProxyType(self._match_quality)
 
     def set(self, name: str, value: Any, match_quality: float) -> None:
-        if name in DERIVED_ONLY:
-            raise ValueError(
-                f"{name!r} is derived_only (grammar V10) and cannot be extracted; "
-                "compute it with an adjust op and store it on DerivedFields"
-            )
-        self.values[name] = value
-        self.match_quality[name] = match_quality
+        _reject_derived(name)
+        self._values[name] = value
+        self._match_quality[name] = match_quality
 
     def get(self, name: str, default: Any = None) -> Any:
-        return self.values.get(name, default)
+        return self._values.get(name, default)
 
 
 @dataclass

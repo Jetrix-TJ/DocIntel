@@ -62,37 +62,84 @@ def test_reference_hit_carries_provenance():
 
 
 def test_extracted_fields_blocks_direct_assignment():
-    """V10: Direct dict assignment cannot bypass the guard."""
+    """V10: Direct assignment to read-only proxy raises TypeError."""
     ef = ExtractedFields()
-    with pytest.raises(ValueError, match="derived_only"):
+    with pytest.raises(TypeError):
         ef.values['amount_payable'] = Decimal("13752.60")
 
 
-def test_extracted_fields_blocks_constructor_with_dict():
-    """V10: Construction with a dict containing a derived name is rejected."""
-    with pytest.raises(ValueError, match="derived_only"):
-        ExtractedFields(values={'amount_payable': Decimal("13752.60")})
+def test_extracted_fields_blocks_setdefault():
+    """V10: setdefault() on read-only proxy raises AttributeError."""
+    ef = ExtractedFields()
+    with pytest.raises(AttributeError):
+        ef.values.setdefault('amount_payable', 1)
+
+
+def test_extracted_fields_blocks_or_assign():
+    """V10: |= operator on read-only proxy raises TypeError."""
+    ef = ExtractedFields()
+    with pytest.raises(TypeError):
+        ef.values |= {'amount_payable': 1}
 
 
 def test_extracted_fields_blocks_update():
-    """V10: Using update() to insert a derived name is rejected."""
+    """V10: update() on read-only proxy raises AttributeError."""
     ef = ExtractedFields()
-    with pytest.raises(ValueError, match="derived_only"):
+    with pytest.raises(AttributeError):
         ef.values.update({'amount_payable': Decimal("13752.60")})
 
 
-def test_extracted_fields_legitimate_field_all_paths():
-    """Verify legitimate fields work through direct assignment, constructor, and update."""
-    # Path 1: Direct assignment via __setitem__
-    ef1 = ExtractedFields()
-    ef1.values['total_printed'] = Decimal("100.00")
-    assert ef1.values['total_printed'] == Decimal("100.00")
+def test_extracted_fields_blocks_pop():
+    """V10: pop() on read-only proxy raises AttributeError."""
+    ef = ExtractedFields()
+    ef.set('total_printed', Decimal("100.00"), 0.9)
+    with pytest.raises(AttributeError):
+        ef.values.pop('total_printed')
 
-    # Path 2: Constructor with dict
-    ef2 = ExtractedFields(values={'total_printed': Decimal("200.00")})
-    assert ef2.values['total_printed'] == Decimal("200.00")
 
-    # Path 3: Using update()
-    ef3 = ExtractedFields()
-    ef3.values.update({'total_printed': Decimal("300.00")})
-    assert ef3.values['total_printed'] == Decimal("300.00")
+def test_extracted_fields_blocks_clear():
+    """V10: clear() on read-only proxy raises AttributeError."""
+    ef = ExtractedFields()
+    ef.set('total_printed', Decimal("100.00"), 0.9)
+    with pytest.raises(AttributeError):
+        ef.values.clear()
+
+
+def test_extracted_fields_blocks_popitem():
+    """V10: popitem() on read-only proxy raises AttributeError."""
+    ef = ExtractedFields()
+    ef.set('total_printed', Decimal("100.00"), 0.9)
+    with pytest.raises(AttributeError):
+        ef.values.popitem()
+
+
+def test_extracted_fields_blocks_constructor_with_values():
+    """V10: Construction with _values containing a derived name is rejected."""
+    with pytest.raises(ValueError, match="derived_only"):
+        ExtractedFields(_values={'amount_payable': Decimal("13752.60")})
+
+
+def test_extracted_fields_blocks_constructor_with_match_quality():
+    """V10: Construction with _match_quality containing a derived name is rejected."""
+    with pytest.raises(ValueError, match="derived_only"):
+        ExtractedFields(_match_quality={'amount_payable': 1.0})
+
+
+def test_extracted_fields_legitimate_set_and_get():
+    """Verify set() and get() work for legitimate fields, and .values is readable."""
+    ef = ExtractedFields()
+    ef.set('total_printed', Decimal("33876.40"), 0.98)
+    assert ef.get('total_printed') == Decimal("33876.40")
+    assert ef.values['total_printed'] == Decimal("33876.40")
+    assert dict(ef.values) == {'total_printed': Decimal("33876.40")}
+
+
+def test_extracted_fields_values_iteration():
+    """Verify .values.items() iteration works (used by contract serializer)."""
+    ef = ExtractedFields()
+    ef.set('total_printed', Decimal("100.00"), 0.98)
+    ef.set('current_charges', Decimal("50.00"), 0.97)
+    items = list(ef.values.items())
+    assert len(items) == 2
+    assert ('total_printed', Decimal("100.00")) in items
+    assert ('current_charges', Decimal("50.00")) in items
