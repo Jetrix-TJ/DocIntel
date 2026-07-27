@@ -1762,6 +1762,7 @@ Every stage is real enough to run and log; each will be deepened by a Part B clu
 # tests/pipeline/test_stages_skeleton.py
 from docintel.adapters.vision.fake import FakeVision
 from docintel.core.contract import validate_record
+from docintel.core.models import new_context
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_default_stages
@@ -1816,6 +1817,96 @@ def test_hard_miss_routes_to_vision_not_cached_rules():
     """Skeleton has no personas, so every document is a hard miss -> 5b."""
     rec = _runner().process("d1", CORPUS)
     assert rec["extraction_route"] == "5b_vision"
+
+
+class _StubPersona:
+    rule_version = "v14"
+
+
+class _StubStore:
+    """Stands in for the Persona DB, which arrives in cluster C7."""
+
+    def __init__(self, persona: object | None) -> None:
+        self.persona = persona
+
+    def lookup(self, fingerprint: str, doc_type: str | None) -> object | None:
+        return self.persona
+
+
+class _StubExecutor:
+    """Stands in for the grammar executor, which arrives in cluster C2."""
+
+    def __init__(self, quality: float) -> None:
+        self.quality = quality
+
+    def apply(self, ctx):
+        ctx.extracted.set("invoice_number", "AC-002561", self.quality)
+        ctx.extracted.set("total_printed", "1284.50", self.quality)
+        return ctx
+
+
+def _routing_runner(persona, quality, vision):
+    """A stage list wired for one specific stage-5 routing path."""
+    from docintel.pipeline.stages.s1_intake import Intake
+    from docintel.pipeline.stages.s2_filter import AttachmentFilter
+    from docintel.pipeline.stages.s3_classify import Classify
+    from docintel.pipeline.stages.s4_persona import PersonaLookup
+    from docintel.pipeline.stages.s5a_cached import ApplyCachedRules
+    from docintel.pipeline.stages.s5b_vision import VisionOneShot
+    from docintel.pipeline.stages.s5c_agent import AgentEscalation
+    from docintel.pipeline.stages.s6_capture import CaptureFields
+    from docintel.pipeline.stages.s7_gate import ConfidenceGate
+    from docintel.pipeline.stages.s8_emit import EmitRecord
+
+    return Runner(
+        stages=[
+            Intake(), AttachmentFilter(), Classify(),
+            PersonaLookup(store=_StubStore(persona)),
+            ApplyCachedRules(executor=_StubExecutor(quality)),
+            VisionOneShot(vision=vision), AgentEscalation(),
+            CaptureFields(), ConfidenceGate(), EmitRecord(),
+        ],
+        hooks=HookRegistry(),
+    )
+
+
+def test_persona_hit_with_good_confidence_takes_the_fast_lane_with_zero_vision_calls():
+    """The economics of the whole design: a persona hit must cost no AI call."""
+    vision = FakeVision()
+    rec = _routing_runner(_StubPersona(), quality=0.95, vision=vision).process("d1", CORPUS)
+    assert rec["extraction_route"] == "5a_cached"
+    assert vision.calls == [], "the fast lane must make ZERO vision calls"
+    assert rec["extraction_rule_version"] == "v14"
+
+
+def test_persona_hit_whose_rules_collapse_falls_back_to_vision():
+    """Old selectors against a redesigned template: emit trustworthy values anyway."""
+    vision = FakeVision()
+    rec = _routing_runner(_StubPersona(), quality=0.10, vision=vision).process("d1", CORPUS)
+    assert vision.calls != [], "a collapsed persona must fall back to the vision one-shot"
+    assert rec["extraction_route"] == "5b_vision"
+
+
+def test_soft_miss_still_runs_the_cached_rules_first():
+    """Layout drift is usually cosmetic, so try the rules before paying for vision."""
+    from docintel.pipeline.stages.s5a_cached import ApplyCachedRules
+
+    ctx = new_context(document_id="d1", source_path=CORPUS)
+    ctx.persona_status = "soft_miss"
+    ctx.persona = _StubPersona()
+    out = ApplyCachedRules(executor=_StubExecutor(0.95)).run(ctx)
+    assert out.extraction_route == "5a_cached"
+    assert out.extracted.get("invoice_number") == "AC-002561"
+
+
+def test_hard_miss_sets_review_not_regen():
+    """A first-time sender has no rules, so regen_flag would be meaningless."""
+    rec = _runner().process("d1", CORPUS)
+    assert rec["review_flag"] is True
+    assert rec["regen_flag"] is False, (
+        "regen_flag means 'the rules are wrong'; a hard miss has no rules. "
+        "Stage 7 is the sole writer of regen_flag."
+    )
 
 
 def test_unsupported_file_type_is_skipped_with_a_reason_never_dropped():
@@ -2045,7 +2136,12 @@ DEFAULT_FIELDS = ["vendor_name", "invoice_number", "invoice_date", "total_printe
 
 
 def _collapsed(ctx: JobContext) -> bool:
-    """Several fields below threshold means the rules failed, not the document."""
+    """Have the cached rules failed, rather than the document being bad?
+
+    True when two or more fields fall below threshold, and also when NOTHING was
+    extracted at all — a persona whose selectors matched zero fields has failed
+    just as completely as one whose values came back weak.
+    """
     if not ctx.extracted.match_quality:
         return True
     weak = [q for q in ctx.extracted.match_quality.values() if q < COLLAPSE_THRESHOLD]
@@ -2103,7 +2199,13 @@ class AgentEscalation:
         ctx.log("s5c: agent_escalation (job queued, authoring deferred)")
         if self.jobs is not None:
             self.jobs.enqueue_once(ctx.sender_fingerprint, ctx.doc_type)  # type: ignore[attr-defined]
-        ctx.regen_flag = True
+        # A review flag, NOT a regen flag. Spec Part 3 "First-time": a hard miss
+        # "emits anyway with the one-shot result and a review flag". regen_flag
+        # means "the rules are wrong" (Stage 7, Very Low lane) — but a first-time
+        # sender has no rules yet, so a regen flag here would send a downstream
+        # consumer looking for a regeneration that cannot exist. Stage 7 is the
+        # sole writer of regen_flag, so the two never disagree.
+        ctx.review_flag = True
         return ctx
 ```
 
@@ -2284,6 +2386,8 @@ git commit -m "feat(pipeline): walking skeleton - all 8 stages execute end to en
 
 ```python
 # tests/adapters/test_filesystem_intake.py
+import os
+
 from docintel.adapters.intake.filesystem import FilesystemIntake
 
 CORPUS = "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf"
@@ -2302,6 +2406,42 @@ def test_ids_differ_between_documents():
         "docs/EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf",
     ]).items())
     assert len({i.document_id for i in items}) == 2
+
+
+def test_a_directory_named_like_a_pdf_is_not_mistaken_for_a_document(tmp_path):
+    """os.walk separates directories from files, so `archive.pdf/` is walked into."""
+    fake_dir = tmp_path / "archive.pdf"
+    fake_dir.mkdir()
+    (fake_dir / "real.pdf").write_bytes(b"%PDF-1.4 stub")
+    items = list(FilesystemIntake([str(tmp_path)]).items())
+    paths = [i.source_path for i in items]
+    assert str(fake_dir) not in paths, "a directory must never be yielded as a document"
+    assert str(fake_dir / "real.pdf") in paths, "the PDF inside it must be found"
+
+
+def test_nested_pdfs_are_found_not_silently_ignored(tmp_path):
+    """Spec Stage 1: nothing is discarded at intake.
+
+    A flat listing leaves a PDF one directory down invisible — not skipped, not
+    dead-lettered, not even counted. That is the one failure mode this design
+    refuses, so intake recurses.
+    """
+    (tmp_path / "top.pdf").write_bytes(b"%PDF-1.4")
+    deep = tmp_path / "a" / "b"
+    deep.mkdir(parents=True)
+    (deep / "buried.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "ignore.txt").write_text("not a pdf")
+
+    found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
+    assert found == {"top.pdf", "buried.pdf"}
+
+
+def test_traversal_order_is_deterministic(tmp_path):
+    for name in ("c.pdf", "a.pdf", "b.pdf"):
+        (tmp_path / name).write_bytes(b"%PDF-1.4")
+    first = [i.source_path for i in FilesystemIntake([str(tmp_path)]).items()]
+    second = [i.source_path for i in FilesystemIntake([str(tmp_path)]).items()]
+    assert first == second == sorted(first)
 
 
 def test_directory_expands_to_its_pdfs():
@@ -2396,12 +2536,31 @@ class FilesystemIntake:
     def items(self) -> Iterator[IntakeItem]:
         for path in self.paths:
             if os.path.isdir(path):
-                for name in sorted(os.listdir(path)):
-                    if name.lower().endswith(".pdf"):
-                        full = os.path.join(path, name)
-                        yield IntakeItem(_stable_id(full), full)
+                yield from self._walk(path)
             else:
+                # A missing or unreadable path is still yielded: the filter stage
+                # skips it with a reason. Spec Stage 1 - nothing is discarded at
+                # intake, and a path nobody looked at is not even counted.
                 yield IntakeItem(_stable_id(path), path)
+
+    @staticmethod
+    def _walk(root: str) -> Iterator[IntakeItem]:
+        """Walk a directory tree, deepest paths included.
+
+        Recursion is deliberate. A flat listdir leaves a PDF one directory down
+        completely invisible - not skipped, not dead-lettered, not counted in
+        `intaken` - which is the one failure mode this pipeline refuses. os.walk
+        also separates directories from files, so a *directory* named
+        `archive.pdf` is walked into rather than mistaken for a document.
+        """
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames.sort()  # deterministic traversal order
+            for name in sorted(filenames):
+                if name.lower().endswith(".pdf"):
+                    yield IntakeItem(
+                        _stable_id(os.path.join(dirpath, name)),
+                        os.path.join(dirpath, name),
+                    )
 ```
 
 - [ ] **Step 4: Write the CLI**
@@ -2415,6 +2574,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 
 from docintel.adapters.intake.filesystem import FilesystemIntake
 from docintel.adapters.vision.fake import FakeVision
@@ -2429,6 +2589,8 @@ def _build_runner() -> Runner:
 
 def _cmd_process(args: argparse.Namespace) -> int:
     runner = _build_runner()
+    dispositions: Counter[str] = Counter()
+
     for item in FilesystemIntake(args.paths).items():
         record = runner.process(
             document_id=item.document_id,
@@ -2436,6 +2598,7 @@ def _cmd_process(args: argparse.Namespace) -> int:
             sender_email=item.sender_email,
             email_id=item.email_id,
         )
+        dispositions[record["disposition"]] += 1
         if args.json:
             print(json.dumps(record, separators=(",", ":")))
         else:
@@ -2443,7 +2606,15 @@ def _cmd_process(args: argparse.Namespace) -> int:
                 f"{record['disposition']:<12} {record['lane'] or '-':<7} "
                 f"{record['doc_type'] or '-':<22} {item.source_path}"
             )
+
     stats = runner.stats
+    if not args.json and dispositions:
+        # Exit 0 means "every document emitted", NOT "every document was clean".
+        # Without this summary an operator reading only the exit code would take
+        # a run full of dead letters for a success.
+        summary = ", ".join(f"{n} {d}" for d, n in sorted(dispositions.items()))
+        print(f"\n{stats['emitted']} emitted ({summary})")
+
     if stats["intaken"] != stats["emitted"]:
         print(f"INVARIANT VIOLATED: {stats}", file=sys.stderr)
         return 2
@@ -2469,7 +2640,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docintel")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("process", help="run one or more PDFs through the pipeline")
+    p = sub.add_parser(
+        "process",
+        help="run one or more PDFs through the pipeline",
+        description=(
+            "Exit 0 means every intaken document emitted a record - including "
+            "skipped and dead-lettered ones. It does NOT mean every document was "
+            "processed cleanly; read the per-document dispositions for that. "
+            "Exit 2 means a document was intaken and never emitted, which is a bug."
+        ),
+    )
     p.add_argument("paths", nargs="+")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_process)
@@ -2635,18 +2815,33 @@ class Assertion:
 def matches(expected: Any, actual: Any, kind: str) -> bool:
     """Compare a gold expectation against a record value.
 
-    Money needs value equality, not string equality: gold holds 33876.4 (JSON
-    drops the trailing zero) while the record serializes Decimal("33876.40") as
-    "33876.40". Both denote the same amount.
+    Four comparison kinds:
+      exact    - plain equality
+      money    - value equality via Decimal. Gold holds 33876.4 (JSON drops the
+                 trailing zero) while the record serializes Decimal("33876.40")
+                 as "33876.40"; both denote the same amount.
+      superset - every expected member must be present in actual, extras allowed.
+                 Used where a pack may legitimately contribute MORE than the gold
+                 label records, e.g. tags, or references on a document whose gold
+                 label is transcribed for only some pages.
+      set      - exact set equality, used where the gold label is complete.
     """
-    if kind != "money":
-        return expected == actual
-    if expected is None or actual is None:
-        return expected == actual
-    try:
-        return Decimal(str(expected)) == Decimal(str(actual))
-    except (InvalidOperation, ValueError):
-        return False
+    if kind == "money":
+        if expected is None or actual is None:
+            return expected == actual
+        try:
+            return Decimal(str(expected)) == Decimal(str(actual))
+        except (InvalidOperation, ValueError):
+            return False
+    if kind == "superset":
+        if actual is None:
+            return not expected
+        return set(expected) <= set(actual)
+    if kind == "set":
+        if actual is None:
+            return not expected
+        return set(expected) == set(actual)
+    return expected == actual
 
 
 def load_gold() -> list[dict[str, Any]]:
@@ -2660,12 +2855,31 @@ def load_gold() -> list[dict[str, Any]]:
 MONEY_FIELDS = frozenset({
     "total_printed", "current_charges", "prior_balance", "payments_credits",
     "subtotal", "tax_amount", "balance_due", "please_pay", "amount_payable",
+    "taxes_and_fees", "discount_amount", "balance_from_last_statement",
+    "amount_previously_due", "credits_adjustments", "balance", "total_weight",
 })
 
+# Every entry here is tied to a finding in docs/corpus-analysis.md. An earlier
+# draft asserted only 12 scalar fields, which left the loop blind to ten
+# documented findings and all fifteen tags — it could have reached "10/10 green"
+# with an empty reference_list and no tags at all.
 CHECKED_FIELDS = (
-    "total_printed", "current_charges", "prior_balance", "subtotal", "tax_amount",
-    "invoice_number", "invoice_date", "vendor_name", "account_number", "bill_date",
-    "currency", "service_location",
+    # amounts, and the F1/F1b machinery that decides what is actually payable
+    "total_printed", "current_charges", "prior_balance", "prior_balance_basis",
+    "payments_credits", "subtotal", "tax_amount", "taxes_and_fees", "please_pay",
+    "balance_due",
+    # identity (F5, F6)
+    "invoice_number", "vendor_name", "remit_payee", "carrier_canonical",
+    "account_number", "vendor_account_number", "telephone_number", "circuit_id",
+    # dates and terms (F18)
+    "invoice_date", "bill_date", "due_date", "payment_terms",
+    "discount_date", "discount_amount",
+    # allocation and guards (F13)
+    "bill_to_name", "service_location",
+    # currency (F14)
+    "currency",
+    # match keys carried as scalar fields (F11)
+    "customer_po", "seal_number", "bol_number",
 )
 
 CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "identity_basis")
@@ -2699,6 +2913,28 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
                 lambda r, n=name: r["derived"].get(n),
                 kind="money" if name in MONEY_FIELDS else "exact",
             ))
+
+    # Tags. Superset, not equality: a pack may legitimately contribute tags the
+    # hand-written gold label does not enumerate, but every tag the label DOES
+    # record must be present. Without this the loop is blind to F3's forced
+    # review, F4's mixed_sign, F14's foreign_currency and twelve others.
+    gold_tags = cls.get("tags", [])
+    if gold_tags:
+        items.append(Assertion(
+            "tags", sorted(gold_tags), lambda r: r.get("tags", []), kind="superset",
+        ))
+
+    # Reference list (F11). Exact set only where the gold label is complete;
+    # subset where only some pages were transcribed, so a partial label can never
+    # fail a record that found MORE keys than were written down.
+    refs = [e["value"] for e in gold.get("reference_list", [])]
+    if refs:
+        complete = gold.get("reference_list_complete", True)
+        items.append(Assertion(
+            "reference_list.values", sorted(refs),
+            lambda r: [e["value"] for e in r.get("reference_list", [])],
+            kind="set" if complete else "superset",
+        ))
 
     return items
 
@@ -2857,25 +3093,32 @@ def test_invariant_holds_with_a_failure_injected_at_every_stage(index, exc):
         assert rec["disposition"] == "dead_letter"
 
 
-def test_a_throwing_pack_hook_is_isolated_as_a_PackError():
-    """Not an invariant test yet.
+@pytest.mark.parametrize("socket", [
+    "beforeIntake", "afterFilter", "beforePersonaLookup",
+    "afterExtraction", "beforeConfidenceGate", "beforeEmit",
+])
+def test_the_invariant_holds_when_a_pack_hook_throws_at_any_socket(socket):
+    """End-to-end, not just at the registry.
 
-    Stages do not dispatch hooks until cluster C5, so this asserts only what
-    exists today: the registry converts a pack exception into PackError, which
-    the runner already routes to a dead letter (see test_runner.py). C5 must add
-    the end-to-end invariant case once a stage owns the socket.
+    The runner dispatches all six boundary sockets, so a third-party pack bug at
+    any of them must still produce a record. This is the guarantee that lets an
+    operator install an unreviewed pack without risking silent document loss.
     """
-    from docintel.core.errors import PackError
-    from docintel.core.models import new_context
-
     hooks = HookRegistry()
 
     def boom(ctx, nxt):
         raise RuntimeError("pack bug")
 
-    hooks.register("afterExtraction", boom, pack="northstar")
-    with pytest.raises(PackError, match="northstar"):
-        hooks.run("afterExtraction", new_context("d", "/x.pdf"))
+    hooks.register(socket, boom, pack="northstar")
+    runner = Runner(stages=build_default_stages(vision=FakeVision()), hooks=hooks)
+    records = [runner.process(f"d{i}", "docs/Lumen - 5-QXH7QKM7.pdf") for i in range(5)]
+
+    assert len(records) == 5
+    assert runner.stats["intaken"] == runner.stats["emitted"] == 5
+    for rec in records:
+        validate_record(rec)
+        assert rec["disposition"] == "dead_letter"
+        assert "northstar" in rec["reason"]
 
 
 def test_baseexception_escapes_by_design_and_the_counters_report_the_gap():
@@ -2914,7 +3157,7 @@ def test_invariant_holds_across_the_whole_corpus():
 - [ ] **Step 2: Run it and confirm it passes**
 
 Run: `python3 -m pytest tests/test_invariant.py -q`
-Expected: PASS, 42 tests
+Expected: PASS, 48 tests
 
 - [ ] **Step 3: Run the full suite and the gold validator**
 
@@ -3309,6 +3552,17 @@ def test_bounded_quantifier_is_allowed():
     assert compile_restricted(r"NS\s?#\s?(\d{7})") is not None
     assert compile_restricted(r".{0,80}") is not None
 ```
+
+**Carried over from the Task A10 review — contract keys the scorecard still cannot assert.** Four gold sections have no corresponding key in the Stage 8 record, so the scorecard cannot measure them and the loop is blind to the findings behind them:
+
+| Gold section | Finding | Needs |
+|---|---|---|
+| `line_items` | F8 (arithmetic closure), F19 (row groups) | a `line_items` key on the record |
+| `charges` | F14 (surcharge capture) | a `charges` key: `{label, amount}` pairs |
+| `scanline` | F7 (machine-readable ground truth) | a `scanline` key, scoring-only |
+| `sub_account` | F13 (70+ account identities) | a `sub_account` key |
+
+Add these four keys to `core/contract.py`'s `build_record` when this cluster's row-group support lands, extend `validate_record` to type-check them, then add the matching assertions to `scorecard.py` — `line_items` asserted by count and signed sum where `line_items_complete` is true, `charges` by label/amount pairs, `scanline` by raw string, `sub_account` by id/name. Until then the loop cannot see F7, F8, F14 or F19, so **`10/10 green` before this lands does not mean the corpus is satisfied.**
 
 **Exit criterion:** the validator passes all 13 rules; the executor extracts fields from a fixture `PageText`. `replay-gold` still near zero because no personas exist yet — that is C5.
 
