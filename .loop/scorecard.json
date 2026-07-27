@@ -14,7 +14,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 15,
+      "total_count": 25,
       "assertions": [
         {
           "name": "doc_type",
@@ -66,9 +66,44 @@
           "passed": false
         },
         {
+          "name": "fields.prior_balance_basis",
+          "kind": "exact",
+          "expected": "net_of_payments",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": -24120.2,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.taxes_and_fees",
+          "kind": "money",
+          "expected": 0.2,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.vendor_name",
           "kind": "exact",
           "expected": "CentraCom",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "CentraCom",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.carrier_canonical",
+          "kind": "exact",
+          "expected": "centracom",
           "actual": null,
           "passed": false
         },
@@ -80,9 +115,30 @@
           "passed": false
         },
         {
+          "name": "fields.circuit_id",
+          "kind": "exact",
+          "expected": "4351003276",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.bill_date",
           "kind": "exact",
           "expected": "2026-01-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.due_date",
+          "kind": "exact",
+          "expected": "25TH OF THE MONTH",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "CLYDE COMPANIES",
           "actual": null,
           "passed": false
         },
@@ -120,6 +176,28 @@
           "expected": "account_period",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "has_scanline",
+            "no_invoice_number",
+            "past_due",
+            "prior_balance_present"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "0384043574",
+            "4351003276"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -136,7 +214,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 16,
+      "total_count": 25,
       "assertions": [
         {
           "name": "doc_type",
@@ -188,9 +266,44 @@
           "passed": false
         },
         {
+          "name": "fields.prior_balance_basis",
+          "kind": "exact",
+          "expected": "gross",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": -212.87,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.taxes_and_fees",
+          "kind": "money",
+          "expected": 3.22,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.vendor_name",
           "kind": "exact",
           "expected": "Comcast Business",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "Comcast",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.carrier_canonical",
+          "kind": "exact",
+          "expected": "comcast",
           "actual": null,
           "passed": false
         },
@@ -209,9 +322,16 @@
           "passed": false
         },
         {
-          "name": "fields.currency",
+          "name": "fields.due_date",
           "kind": "exact",
-          "expected": "USD",
+          "expected": "2025-12-29",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Clyde Administration Servi",
           "actual": null,
           "passed": false
         },
@@ -219,6 +339,13 @@
           "name": "fields.service_location",
           "kind": "exact",
           "expected": "387 S 520 W STE 210, Lindon, UT 84042-1960",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
           "actual": null,
           "passed": false
         },
@@ -249,6 +376,26 @@
           "expected": "account_period",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "has_scanline",
+            "no_invoice_number",
+            "prior_balance_cleared"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "8495444620365242"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -265,7 +412,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 16,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -317,6 +464,20 @@
           "passed": false
         },
         {
+          "name": "fields.prior_balance_basis",
+          "kind": "exact",
+          "expected": "gross",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": -249.84,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.invoice_number",
           "kind": "exact",
           "expected": "752233001",
@@ -331,6 +492,20 @@
           "passed": false
         },
         {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "Level 3 Communications, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.carrier_canonical",
+          "kind": "exact",
+          "expected": "lumen",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.account_number",
           "kind": "exact",
           "expected": "5-QXH7QKM7",
@@ -341,6 +516,20 @@
           "name": "fields.bill_date",
           "kind": "exact",
           "expected": "2025-09-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.due_date",
+          "kind": "exact",
+          "expected": "2025-10-01",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "City of Dublin",
           "actual": null,
           "passed": false
         },
@@ -378,6 +567,27 @@
           "expected": "invoice_number",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "has_scanline",
+            "multi_brand_sender",
+            "prior_balance_cleared"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "5-QXH7QKM7",
+            "752233001"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -394,7 +604,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 15,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -446,9 +656,37 @@
           "passed": false
         },
         {
+          "name": "fields.prior_balance_basis",
+          "kind": "exact",
+          "expected": "gross",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": -1231.74,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.vendor_name",
           "kind": "exact",
           "expected": "Kinetic Business by Windstream",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "Oklahoma Windstream, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.carrier_canonical",
+          "kind": "exact",
+          "expected": "windstream",
           "actual": null,
           "passed": false
         },
@@ -460,9 +698,30 @@
           "passed": false
         },
         {
+          "name": "fields.telephone_number",
+          "kind": "exact",
+          "expected": "918-653-3103",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.bill_date",
           "kind": "exact",
           "expected": "2025-07-22",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.due_date",
+          "kind": "exact",
+          "expected": "2025-08-11",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Choctaw Travel Mart",
           "actual": null,
           "passed": false
         },
@@ -500,6 +759,29 @@
           "expected": "account_period",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "has_scanline",
+            "multi_brand_sender",
+            "no_invoice_number",
+            "prior_balance_cleared",
+            "promo_content"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "041069076",
+            "918-653-3103"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -516,7 +798,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 11,
+      "total_count": 19,
       "assertions": [
         {
           "name": "doc_type",
@@ -554,16 +836,16 @@
           "passed": false
         },
         {
-          "name": "fields.invoice_number",
-          "kind": "exact",
-          "expected": "32930",
+          "name": "fields.balance_due",
+          "kind": "money",
+          "expected": 1177.7,
           "actual": null,
           "passed": false
         },
         {
-          "name": "fields.invoice_date",
+          "name": "fields.invoice_number",
           "kind": "exact",
-          "expected": "2025-10-24",
+          "expected": "32930",
           "actual": null,
           "passed": false
         },
@@ -575,9 +857,51 @@
           "passed": false
         },
         {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-10-24",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.due_date",
+          "kind": "exact",
+          "expected": "2025-11-23",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payment_terms",
+          "kind": "exact",
+          "expected": "Net 30",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "NorthStar Recycling Company, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.currency",
           "kind": "exact",
           "expected": "USD",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.seal_number",
+          "kind": "exact",
+          "expected": "5951119",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bol_number",
+          "kind": "exact",
+          "expected": "10-21-25-01",
           "actual": null,
           "passed": false
         },
@@ -594,6 +918,29 @@
           "expected": "total_printed",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "handwritten_supporting",
+            "mixed_sign",
+            "ocr_only"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "10-21-25-01",
+            "10-21-25-01",
+            "5951119",
+            "5951119"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -607,7 +954,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 11,
+      "total_count": 16,
       "assertions": [
         {
           "name": "doc_type",
@@ -645,9 +992,30 @@
           "passed": false
         },
         {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": 0.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.balance_due",
+          "kind": "money",
+          "expected": 699.0,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.invoice_number",
           "kind": "exact",
           "expected": "6060",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "D.T.S.S., Inc.",
           "actual": null,
           "passed": false
         },
@@ -659,9 +1027,16 @@
           "passed": false
         },
         {
-          "name": "fields.vendor_name",
+          "name": "fields.payment_terms",
           "kind": "exact",
-          "expected": "D.T.S.S., Inc.",
+          "expected": "Due on receipt",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Northstar Recycling Company, LLC",
           "actual": null,
           "passed": false
         },
@@ -685,6 +1060,15 @@
           "expected": "total_printed",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "set",
+          "expected": [
+            "2561194"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -702,7 +1086,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 13,
+      "total_count": 19,
       "assertions": [
         {
           "name": "doc_type",
@@ -754,9 +1138,37 @@
           "passed": false
         },
         {
+          "name": "fields.prior_balance_basis",
+          "kind": "exact",
+          "expected": "gross",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_credits",
+          "kind": "money",
+          "expected": 0.0,
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.vendor_name",
           "kind": "exact",
           "expected": "EDCO Waste & Recycling Service",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "EDCO Waste & Recycling Service",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_account_number",
+          "kind": "exact",
+          "expected": "25-3A 077087",
           "actual": null,
           "passed": false
         },
@@ -768,9 +1180,9 @@
           "passed": false
         },
         {
-          "name": "fields.currency",
+          "name": "fields.bill_to_name",
           "kind": "exact",
-          "expected": "USD",
+          "expected": "Northstar Recycling",
           "actual": null,
           "passed": false
         },
@@ -778,6 +1190,13 @@
           "name": "fields.service_location",
           "kind": "exact",
           "expected": "Hunter Industries, 260 S Pacific St, San Marcos, CA 92078",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
           "actual": null,
           "passed": false
         },
@@ -793,6 +1212,15 @@
           "kind": "exact",
           "expected": "current_charges",
           "actual": null,
+          "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "past_due"
+          ],
+          "actual": [],
           "passed": false
         }
       ]
@@ -811,7 +1239,7 @@
       ],
       "passed": false,
       "passed_count": 2,
-      "total_count": 12,
+      "total_count": 17,
       "assertions": [
         {
           "name": "doc_type",
@@ -856,13 +1284,6 @@
           "passed": false
         },
         {
-          "name": "fields.invoice_date",
-          "kind": "exact",
-          "expected": "2025-05-31",
-          "actual": null,
-          "passed": false
-        },
-        {
           "name": "fields.vendor_name",
           "kind": "exact",
           "expected": "Federal Recycling & Waste Solutions",
@@ -870,9 +1291,30 @@
           "passed": false
         },
         {
-          "name": "fields.currency",
+          "name": "fields.remit_payee",
           "kind": "exact",
-          "expected": "USD",
+          "expected": "Federal International Recycling and Waste Solutions, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-05-31",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payment_terms",
+          "kind": "exact",
+          "expected": "EOM plus 15",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Northstar-Bimbo-Market Street",
           "actual": null,
           "passed": false
         },
@@ -880,6 +1322,13 @@
           "name": "fields.service_location",
           "kind": "exact",
           "expected": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01028",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "USD",
           "actual": null,
           "passed": false
         },
@@ -895,6 +1344,29 @@
           "kind": "exact",
           "expected": "total_printed",
           "actual": null,
+          "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "has_flattened_annotations",
+            "mixed_sign",
+            "ocr_only"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "set",
+          "expected": [
+            "2436687",
+            "2436820",
+            "2436821",
+            "2436823"
+          ],
+          "actual": [],
           "passed": false
         }
       ]
@@ -915,7 +1387,7 @@
       ],
       "passed": false,
       "passed_count": 6,
-      "total_count": 14,
+      "total_count": 20,
       "assertions": [
         {
           "name": "doc_type",
@@ -967,16 +1439,16 @@
           "passed": false
         },
         {
-          "name": "fields.invoice_number",
-          "kind": "exact",
-          "expected": "4378107",
+          "name": "fields.please_pay",
+          "kind": "money",
+          "expected": 14740.85,
           "actual": null,
           "passed": false
         },
         {
-          "name": "fields.invoice_date",
+          "name": "fields.invoice_number",
           "kind": "exact",
-          "expected": "2025-03-31",
+          "expected": "4378107",
           "actual": null,
           "passed": false
         },
@@ -988,9 +1460,30 @@
           "passed": false
         },
         {
-          "name": "fields.currency",
+          "name": "fields.remit_payee",
           "kind": "exact",
-          "expected": "CAD",
+          "expected": "U-Pak Disposals (1989) Ltd",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_account_number",
+          "kind": "exact",
+          "expected": "1 -24136 1",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.invoice_date",
+          "kind": "exact",
+          "expected": "2025-03-31",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Northstar Recycling Company LLC",
           "actual": null,
           "passed": false
         },
@@ -998,6 +1491,13 @@
           "name": "fields.service_location",
           "kind": "exact",
           "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.currency",
+          "kind": "exact",
+          "expected": "CAD",
           "actual": null,
           "passed": false
         },
@@ -1014,6 +1514,32 @@
           "expected": null,
           "actual": null,
           "passed": true
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "foreign_currency",
+            "has_tax",
+            "mixed_sign",
+            "past_due",
+            "sub_accounts"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "superset",
+          "expected": [
+            "4342903",
+            "4342904",
+            "4348255",
+            "4348256",
+            "4355256"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     },
@@ -1030,7 +1556,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 14,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -1089,6 +1615,27 @@
           "passed": false
         },
         {
+          "name": "fields.vendor_name",
+          "kind": "exact",
+          "expected": "Veritiv Operating Company",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_payee",
+          "kind": "exact",
+          "expected": "Veritiv Operating Company",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_account_number",
+          "kind": "exact",
+          "expected": "068753",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "fields.invoice_date",
           "kind": "exact",
           "expected": "2025-08-14",
@@ -1096,9 +1643,44 @@
           "passed": false
         },
         {
-          "name": "fields.vendor_name",
+          "name": "fields.due_date",
           "kind": "exact",
-          "expected": "Veritiv Operating Company",
+          "expected": "2025-09-14",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payment_terms",
+          "kind": "exact",
+          "expected": "1 % 30 DAYS, NET 31 DAYS",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.discount_date",
+          "kind": "exact",
+          "expected": "2025-09-13",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.discount_amount",
+          "kind": "money",
+          "expected": 46.08,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_name",
+          "kind": "exact",
+          "expected": "Northstar Recycling Company LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_location",
+          "kind": "exact",
+          "expected": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
           "actual": null,
           "passed": false
         },
@@ -1110,9 +1692,9 @@
           "passed": false
         },
         {
-          "name": "fields.service_location",
+          "name": "fields.customer_po",
           "kind": "exact",
-          "expected": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
+          "expected": "Northstar# 2542693",
           "actual": null,
           "passed": false
         },
@@ -1129,6 +1711,26 @@
           "expected": "total_printed",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "tags",
+          "kind": "superset",
+          "expected": [
+            "early_pay_discount",
+            "has_tax"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "reference_list.values",
+          "kind": "set",
+          "expected": [
+            "2542693",
+            "33905296"
+          ],
+          "actual": [],
+          "passed": false
         }
       ]
     }
@@ -1138,6 +1740,6 @@
     "passed": 0,
     "failed": 10,
     "assertions_passed": 27,
-    "assertions_total": 137
+    "assertions_total": 213
   }
 }

@@ -29,18 +29,33 @@ class Assertion:
 def matches(expected: Any, actual: Any, kind: str) -> bool:
     """Compare a gold expectation against a record value.
 
-    Money needs value equality, not string equality: gold holds 33876.4 (JSON
-    drops the trailing zero) while the record serializes Decimal("33876.40") as
-    "33876.40". Both denote the same amount.
+    Four comparison kinds:
+      exact    - plain equality
+      money    - value equality via Decimal. Gold holds 33876.4 (JSON drops the
+                 trailing zero) while the record serializes Decimal("33876.40")
+                 as "33876.40"; both denote the same amount.
+      superset - every expected member must be present in actual, extras allowed.
+                 Used where a pack may legitimately contribute MORE than the gold
+                 label records, e.g. tags, or references on a document whose gold
+                 label is transcribed for only some pages.
+      set      - exact set equality, used where the gold label is complete.
     """
-    if kind != "money":
-        return expected == actual
-    if expected is None or actual is None:
-        return expected == actual
-    try:
-        return Decimal(str(expected)) == Decimal(str(actual))
-    except (InvalidOperation, ValueError):
-        return False
+    if kind == "money":
+        if expected is None or actual is None:
+            return expected == actual
+        try:
+            return Decimal(str(expected)) == Decimal(str(actual))
+        except (InvalidOperation, ValueError):
+            return False
+    if kind == "superset":
+        if actual is None:
+            return not expected
+        return set(expected) <= set(actual)
+    if kind == "set":
+        if actual is None:
+            return not expected
+        return set(expected) == set(actual)
+    return expected == actual
 
 
 def load_gold() -> list[dict[str, Any]]:
@@ -54,12 +69,31 @@ def load_gold() -> list[dict[str, Any]]:
 MONEY_FIELDS = frozenset({
     "total_printed", "current_charges", "prior_balance", "payments_credits",
     "subtotal", "tax_amount", "balance_due", "please_pay", "amount_payable",
+    "taxes_and_fees", "discount_amount", "balance_from_last_statement",
+    "amount_previously_due", "credits_adjustments", "balance", "total_weight",
 })
 
+# Every entry here is tied to a finding in docs/corpus-analysis.md. An earlier
+# draft asserted only 12 scalar fields, which left the loop blind to ten
+# documented findings and all fifteen tags - it could have reached "10/10 green"
+# with an empty reference_list and no tags at all.
 CHECKED_FIELDS = (
-    "total_printed", "current_charges", "prior_balance", "subtotal", "tax_amount",
-    "invoice_number", "invoice_date", "vendor_name", "account_number", "bill_date",
-    "currency", "service_location",
+    # amounts, and the F1/F1b machinery that decides what is actually payable
+    "total_printed", "current_charges", "prior_balance", "prior_balance_basis",
+    "payments_credits", "subtotal", "tax_amount", "taxes_and_fees", "please_pay",
+    "balance_due",
+    # identity (F5, F6)
+    "invoice_number", "vendor_name", "remit_payee", "carrier_canonical",
+    "account_number", "vendor_account_number", "telephone_number", "circuit_id",
+    # dates and terms (F18)
+    "invoice_date", "bill_date", "due_date", "payment_terms",
+    "discount_date", "discount_amount",
+    # allocation and guards (F13)
+    "bill_to_name", "service_location",
+    # currency (F14)
+    "currency",
+    # match keys carried as scalar fields (F11)
+    "customer_po", "seal_number", "bol_number",
 )
 
 CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "identity_basis")
@@ -93,6 +127,28 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
                 lambda r, n=name: r["derived"].get(n),
                 kind="money" if name in MONEY_FIELDS else "exact",
             ))
+
+    # Tags. Superset, not equality: a pack may legitimately contribute tags the
+    # hand-written gold label does not enumerate, but every tag the label DOES
+    # record must be present. Without this the loop is blind to F3's forced
+    # review, F4's mixed_sign, F14's foreign_currency and twelve others.
+    gold_tags = cls.get("tags", [])
+    if gold_tags:
+        items.append(Assertion(
+            "tags", sorted(gold_tags), lambda r: r.get("tags", []), kind="superset",
+        ))
+
+    # Reference list (F11). Exact set only where the gold label is complete;
+    # subset where only some pages were transcribed, so a partial label can never
+    # fail a record that found MORE keys than were written down.
+    refs = [e["value"] for e in gold.get("reference_list", [])]
+    if refs:
+        complete = gold.get("reference_list_complete", True)
+        items.append(Assertion(
+            "reference_list.values", sorted(refs),
+            lambda r: [e["value"] for e in r.get("reference_list", [])],
+            kind="set" if complete else "superset",
+        ))
 
     return items
 
