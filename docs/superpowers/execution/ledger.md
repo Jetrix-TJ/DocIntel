@@ -644,3 +644,74 @@ PROCESS CORRECTION (user): the C1b implementer reached ~390k tokens over three
   agent reads. NEW STANDING RULE: fresh implementer per cluster, and swap on the
   SECOND fix round rather than the third. A redundant handoff agent was dispatched
   and stood down cleanly when the original committed first.
+Cluster C2a: EXECUTED INLINE (no dispatched implementer — the resumed session
+  forbade subagent use). Delivers schema.py, patterns.py, regions.py, validator.py;
+  executor.py and the four contract keys remain C2b. 228 new tests, suite 503/503
+  in 7.6s, mypy strict clean over 12 files, ruff clean, gold 95 green. Scorecard
+  UNCHANGED at 0/10 and 39/223 — verified, not assumed (standing rule 3): C2a adds
+  a validator, not an extraction capability, so nothing it produces is observable
+  in a Stage 8 record and there is no new assertion for the scorecard to carry.
+  First real movement is still C3.
+CONTROLLER DECISION (user-approved, two options presented): region resolvers return
+  a new frozen `Span` type (page_number, source, words, bbox + lines()/text) rather
+  than trimmed PageText objects, because a PageText whose word set is not the page's
+  while its width/height still describe the page is a lie, and the region bbox is
+  wanted for field provenance. Uniform 3-arg signature with an optional anchor, one
+  RESOLVERS dict, one executor call site.
+FINDING (mid-test, unplanned): a bare `Word` cannot say which page it came from, and
+  `Word` is a frozen core.models contract. Added `Anchor(word, page_number)` — the
+  page is part of the LOCATION, not context the caller supplies separately. Also
+  found ANCHOR_REQUIRED is FIVE regions, not the three the spec's prose implies:
+  line_items and last-table-row are equally anchor-relative.
+RULING: regions.py stays pure geometry and does NOT filter `supporting` pages, even
+  though §7 forbids field values from them. Reference-pattern matching must run
+  across every page and uses these same resolvers, so `any-page` must mean every
+  page; role filtering belongs to the executor, the only layer that knows whether
+  it is capturing a field or a reference. Pinned by a test asserting any-page does
+  NOT filter, so a later "fix" cannot quietly break reference matching.
+RULING on V5: §1.1 waives `region` for a "provably unique" anchor. Uniqueness is a
+  property of a DOCUMENT, not a persona, so it cannot be established at write time
+  — `region` is therefore always required. A persona with a unique anchor loses
+  nothing by naming `any-page` explicitly and gains a reviewable statement of intent.
+SPEC ERRATUM 1: §3.2 specifies a linear-time engine ("RE2 / `regex` with
+  backtracking disabled"). Not implementable as written — the `regex` module has no
+  backtracking-disabled mode, and true RE2 is a new binary dependency. Built on
+  stdlib `re` + the static restrictions, with the 50ms runtime budget (C2b) as the
+  second half. Surfaced to the user, left as-is. If a real linear-time guarantee is
+  later required, google-re2 is the change and it is NOT a drop-in: RE2 rejects
+  lookahead, which §3.2 permits.
+SPEC ERRATUM 2: §9's worked EDCO example asserts `invoice_account` in its scanline,
+  which §1.3 forbids (permitted set: total_printed, account_number, invoice_number,
+  due_date). §1.3 is normative and load-bearing — it is what stops the F1 bug being
+  cemented via F7 — while §9's field naming is illustrative and already diverges
+  from the Northstar pack elsewhere (invoice_account vs vendor_account_number,
+  bill_date vs invoice_date). Read as a typo for account_number. §9's persona is
+  reproduced as a validator test with that one correction, so the grammar is pinned
+  against the spec's own worked example.
+TIGHTENING beyond the plan: §1.3 writes the scanline's region as its own narrower
+  enum than §2's. First draft accepted any known region there; now restricted to
+  {last-page, remittance-block} plus any page:N. An OCR-A remittance line is a
+  physical feature of the payment stub, so a persona claiming one in a header-block
+  describes something that cannot exist, and the spec's position is that closed
+  vocabularies are rejected at WRITE time. page:N generalizes §1.3's literal
+  page:1 — a five-page bill's stub is on page five.
+ADDED beyond §3.2: compile_restricted also rejects a quantifier nested inside a
+  quantified group. Bounded-ness is NOT sufficient for linear time —
+  `(?:a{0,20}){0,20}` is bounded at every level and still exponential. Check order
+  inside compile_restricted is load-bearing: length before structure, and
+  backreferences independently of the capture count, because `(a)\1` is WITHIN the
+  1-capture budget and still forbidden.
+SELF-REVIEW found 3 defects before the commit, all in the new tests rather than the
+  implementation: (1) the same-cell test passed for the wrong reason — the fixture
+  helper's 6pt-per-char width made a claimed "5pt gap" an actual 23pt column gap,
+  so the test was asserting that a two-word cell SPLITS; (2) a V6 test used the
+  anchor-relative `same-row` with no anchor and was correctly rejected by the new
+  anchor-presence check; (3) test_V4_rejects_an_unknown_pattern_name_as_a_regex
+  asserted the OPPOSITE of its name — `currancy` is accepted as a literal regex.
+  Renamed, and its docstring now states the real limitation: the grammar cannot
+  distinguish a typo'd pattern name from a deliberate literal matcher (`BALANCE
+  FORWARD` is exactly that shape and legitimate), so the eval attached to a persona
+  write catches this, not V4. Also fixed a TypeError leak in V12 when `source_tags`
+  was neither a string nor a sequence — the boundary must raise ValidationError or
+  nothing.
+Cluster C2a: COMPLETE (0 fix rounds). Full detail in task-c2a-report.md.

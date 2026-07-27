@@ -1,0 +1,688 @@
+"""V1-V13, the persona-write security boundary (selector-grammar.md section 8).
+
+From the spec's own framing: "The validator is the security boundary. There is
+no sandbox because there is nothing to sandbox. If the validator accepts
+something it shouldn't, that is the whole vulnerability class."
+
+The V1-V13 block below is carried over verbatim from the implementation plan;
+the tests after it cover the rules the plan's block did not reach.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from docintel.core.errors import ValidationError
+from docintel.grammar.validator import validate_persona
+
+
+def _base(**over: Any) -> dict[str, Any]:
+    p = {
+        "sender_fingerprint": "x|y", "doc_type": "standard_invoice",
+        "rule_version": "v1", "status": "draft", "field_selectors": [],
+        "layout_fingerprint": {},
+    }
+    p.update(over)
+    return p
+
+
+class FakePack:
+    """Minimal Pack for the pack-dependent rules. The real registry is C5a."""
+
+    name = "fake"
+
+    def __init__(
+        self,
+        fields: set[str] | None = None,
+        required: set[str] | None = None,
+        derived_only: set[str] | None = None,
+        ops: set[str] | None = None,
+    ) -> None:
+        self._fields = frozenset(fields or {"total_printed", "vendor_name", "invoice_number"})
+        self._required = frozenset(required or set())
+        self._derived_only = frozenset(derived_only or set())
+        self._ops = frozenset(ops or set())
+
+    def fields_for(self, doc_type: str) -> frozenset[str]:
+        return self._fields
+
+    def required_fields(self, doc_type: str) -> frozenset[str]:
+        return self._required
+
+    def derived_only_fields(self, doc_type: str) -> frozenset[str]:
+        return self._derived_only
+
+    def adjust_ops(self) -> frozenset[str]:
+        return self._ops
+
+
+# ==========================================================================
+# The plan's V1-V13 block, verbatim
+# ==========================================================================
+
+
+def test_V10_selector_may_not_target_amount_payable() -> None:
+    """The single easiest way to reintroduce the F1 bug."""
+    p = _base(field_selectors=[
+        {"field": "amount_payable", "anchor": "Total Amount Due",
+         "region": "totals-block", "pattern": "currency"}
+    ])
+    with pytest.raises(ValidationError, match="derived_only"):
+        validate_persona(p, pack=None)
+
+
+def test_V7_scanline_may_not_assert_amount_payable() -> None:
+    """Centracom's scanline encodes the trap value (F7)."""
+    p = _base(field_selectors=[
+        {"scanline": True, "region": "remittance-block",
+         "asserts": [{"field": "amount_payable", "as": "digits_no_decimal"}]}
+    ])
+    with pytest.raises(ValidationError, match="amount_payable"):
+        validate_persona(p, pack=None)
+
+
+def test_V6_bare_digit_regex_needs_a_narrowing_region() -> None:
+    p = _base(field_selectors=[
+        {"field": "reference", "region": "any-page", "pattern": r"(\d{7})"}
+    ])
+    with pytest.raises(ValidationError, match="narrowing region"):
+        validate_persona(p, pack=None)
+
+
+def test_V4_unbounded_quantifier_is_rejected() -> None:
+    p = _base(field_selectors=[
+        {"field": "vendor_name", "region": "header-block", "pattern": ".*"}
+    ])
+    with pytest.raises(ValidationError, match="unbounded"):
+        validate_persona(p, pack=None)
+
+
+def test_V3_unknown_region_is_rejected() -> None:
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "middle-ish", "pattern": "currency"}
+    ])
+    with pytest.raises(ValidationError, match="region"):
+        validate_persona(p, pack=None)
+
+
+def test_V8_sub_group_nesting_depth_is_capped_at_one() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "Description",
+        "columns": {"amount": "currency"},
+        "sub_group": {"anchor": "WORK ORDER#:", "field": "work_order",
+                      "pattern": r"(\d{7})",
+                      "sub_group": {"anchor": "x", "field": "y", "pattern": "z"}},
+    }])
+    with pytest.raises(ValidationError, match="nesting"):
+        validate_persona(p, pack=None)
+
+
+def test_V9_row_count_must_be_a_range() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "Description",
+        "columns": {"amount": "currency"}, "row_count": 10,
+    }])
+    with pytest.raises(ValidationError, match="range"):
+        validate_persona(p, pack=None)
+
+
+def test_V11_persona_over_64kb_is_rejected() -> None:
+    p = _base(few_shot_examples=[{"blob": "x" * 70_000}])
+    with pytest.raises(ValidationError, match="64"):
+        validate_persona(p, pack=None)
+
+
+def test_V12_few_shot_examples_capped_at_three() -> None:
+    p = _base(few_shot_examples=[{}, {}, {}, {}])
+    with pytest.raises(ValidationError, match="few_shot"):
+        validate_persona(p, pack=None)
+
+
+def test_a_valid_persona_passes() -> None:
+    validate_persona(_base(field_selectors=[
+        {"field": "total_printed", "anchor": "Total Amount Due",
+         "region": "totals-block", "pattern": "currency"}
+    ]), pack=None)
+
+
+def test_rejection_is_all_or_nothing() -> None:
+    """A persona is never half-migrated to a bad rule set."""
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency"},
+        {"field": "amount_payable", "region": "totals-block", "pattern": "currency"},
+    ])
+    with pytest.raises(ValidationError):
+        validate_persona(p, pack=None)
+
+
+# ==========================================================================
+# The rules the plan's block did not reach
+# ==========================================================================
+
+# --- V1: every field is in the pack's registered field set -----------------
+
+
+def test_V1_unregistered_field_is_rejected() -> None:
+    p = _base(field_selectors=[
+        {"field": "favourite_colour", "region": "header-block", "pattern": "text"}
+    ])
+    with pytest.raises(ValidationError, match="not a registered field"):
+        validate_persona(p, pack=FakePack())
+
+
+def test_V1_is_skipped_without_a_pack() -> None:
+    """`pack=None` means "cannot check", which must not mean "reject".
+
+    Grammar-only validation is genuinely useful on its own - it is what the
+    grammar tests and the persona-authoring tools use - and conflating an
+    unknown field set with a bad one would make that impossible.
+    """
+    validate_persona(_base(field_selectors=[
+        {"field": "favourite_colour", "region": "header-block", "pattern": "text"}
+    ]), pack=None)
+
+
+def test_V1_applies_to_row_group_and_sub_group_fields_too() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "Description",
+        "columns": {"amount": "currency"},
+        "sub_group": {"anchor": "WORK ORDER#:", "field": "not_a_field",
+                      "pattern": r"WO\s?(\d{7})"},
+    }])
+    with pytest.raises(ValidationError, match="not a registered field"):
+        validate_persona(p, pack=FakePack())
+
+
+# --- V2: every adjust op is registered -------------------------------------
+
+
+def test_V2_unregistered_adjust_op_is_rejected() -> None:
+    """The agent may reference an op; it may never define one."""
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency",
+         "adjust": ["strip_currency_symbols", "invent_a_number"]}
+    ])
+    with pytest.raises(ValidationError, match="invent_a_number"):
+        validate_persona(p, pack=None)
+
+
+def test_V2_base_ops_need_no_pack() -> None:
+    validate_persona(_base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency",
+         "adjust": ["strip_currency_symbols", "derive_amount_payable"]}
+    ]), pack=None)
+
+
+def test_V2_pack_registered_ops_are_accepted() -> None:
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency",
+         "adjust": ["northstar_special"]}
+    ])
+    validate_persona(p, pack=FakePack(ops={"northstar_special"}))
+    with pytest.raises(ValidationError, match="northstar_special"):
+        validate_persona(p, pack=FakePack())
+
+
+# --- V3: regions ----------------------------------------------------------
+
+
+def test_V3_accepts_every_name_in_the_enum() -> None:
+    from docintel.grammar.regions import RESOLVERS
+
+    for region in (*RESOLVERS, "page:1", "page:12"):
+        validate_persona(_base(field_selectors=[
+            {"field": "total_printed", "anchor": "Total", "region": region,
+             "pattern": "currency"}
+        ]), pack=None)
+
+
+def test_V3_rejects_a_row_groups_region_too() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D", "region": "middle-ish",
+        "columns": {"amount": "currency"},
+    }])
+    with pytest.raises(ValidationError, match="region"):
+        validate_persona(p, pack=None)
+
+
+def test_V3_rejects_a_scanlines_region_too() -> None:
+    p = _base(field_selectors=[
+        {"scanline": True, "region": "middle-ish",
+         "asserts": [{"field": "total_printed", "as": "digits_only"}]}
+    ])
+    with pytest.raises(ValidationError, match="region"):
+        validate_persona(p, pack=None)
+
+
+# --- V4: patterns ---------------------------------------------------------
+
+
+def test_V4_accepts_every_named_pattern() -> None:
+    from docintel.grammar.patterns import NAMED
+
+    for name in NAMED:
+        validate_persona(_base(field_selectors=[
+            {"field": "total_printed", "anchor": "Total", "region": "totals-block",
+             "pattern": name}
+        ]), pack=None)
+
+
+def test_V4_treats_an_unknown_pattern_name_as_a_regex() -> None:
+    """A typo'd pattern name is NOT caught here, and that is a real limitation.
+
+    `currancy` is a syntactically valid regex matching the literal text
+    "currancy", so V4 accepts it and the selector then misses on every
+    document. The grammar cannot distinguish a typo from a deliberate literal
+    matcher (`BALANCE FORWARD` is exactly that shape and is legitimate). What
+    catches this is the eval attached to the persona write, not the validator.
+    """
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currancy"}
+    ])
+    validate_persona(p, pack=None)
+
+
+def test_V4_applies_to_row_group_column_patterns() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": ".*"},
+    }])
+    with pytest.raises(ValidationError, match="unbounded"):
+        validate_persona(p, pack=None)
+
+
+def test_V4_applies_to_sub_group_patterns() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": "currency"},
+        "sub_group": {"anchor": "WO:", "field": "work_order", "pattern": ".+"},
+    }])
+    with pytest.raises(ValidationError, match="unbounded"):
+        validate_persona(p, pack=None)
+
+
+def test_V4_backreference_is_rejected() -> None:
+    p = _base(field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": r"(a)\1"}
+    ])
+    with pytest.raises(ValidationError, match="backreference"):
+        validate_persona(p, pack=None)
+
+
+# --- V5: a selector needs a region ----------------------------------------
+
+
+def test_V5_a_field_selector_without_a_region_is_rejected() -> None:
+    """Section 1.1 makes `region` "required unless the anchor is provably
+    unique". Uniqueness is a property of a document, not of the persona, so it
+    cannot be proven at write time - the honest static rule is that `region` is
+    always required. A persona that genuinely has a unique anchor loses
+    nothing by naming `any-page` explicitly."""
+    p = _base(field_selectors=[
+        {"field": "total_printed", "anchor": "Total Amount Due", "pattern": "currency"}
+    ])
+    with pytest.raises(ValidationError, match="region"):
+        validate_persona(p, pack=None)
+
+
+def test_V5_a_scanline_without_a_region_is_rejected() -> None:
+    p = _base(field_selectors=[
+        {"scanline": True, "asserts": [{"field": "total_printed", "as": "digits_only"}]}
+    ])
+    with pytest.raises(ValidationError, match="region"):
+        validate_persona(p, pack=None)
+
+
+# --- V6: bare-digit patterns ----------------------------------------------
+
+
+def test_V6_a_bare_digit_regex_is_fine_with_a_narrowing_region() -> None:
+    validate_persona(_base(field_selectors=[
+        {"field": "reference", "region": "header-block", "pattern": r"(\d{7})"}
+    ]), pack=None)
+
+
+def test_V6_an_anchor_relative_region_also_narrows() -> None:
+    """`same-row` narrows too, but it needs the anchor it is defined against."""
+    validate_persona(_base(field_selectors=[
+        {"field": "reference", "anchor": "NS #", "region": "same-row",
+         "pattern": r"(\d{7})"}
+    ]), pack=None)
+
+
+def test_an_anchor_relative_region_without_an_anchor_is_rejected() -> None:
+    """`near-anchor` with nothing to be near cannot resolve at run time, so it is
+    a write-time error rather than a silent field miss on every document."""
+    p = _base(field_selectors=[
+        {"field": "service_location", "region": "near-anchor", "pattern": "text_block"}
+    ])
+    with pytest.raises(ValidationError, match="anchor"):
+        validate_persona(p, pack=None)
+
+
+def test_V6_a_bare_digit_regex_is_fine_with_column_headers() -> None:
+    validate_persona(_base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"work_order": r"(\d{7})"},
+        "column_headers": {"work_order": "WORK ORDER#"},
+    }]), pack=None)
+
+
+def test_V6_a_bare_digit_column_without_headers_is_rejected() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"work_order": r"(\d{7})"},
+    }])
+    with pytest.raises(ValidationError, match="narrowing region"):
+        validate_persona(p, pack=None)
+
+
+@pytest.mark.parametrize("pattern", [
+    r"(\d{7})", r"\d{5,9}", r"(\d{3}-\d{4})", r"[0-9]{7}", r"(\d\d\d\d\d\d\d)",
+])
+def test_V6_recognizes_every_bare_digit_form(pattern: str) -> None:
+    """F11: unscoped, these match phone numbers and zip+4. A dash or a space is
+    not literal context - `(\\d{3}-\\d{4})` is exactly a phone number."""
+    p = _base(field_selectors=[
+        {"field": "reference", "region": "any-page", "pattern": pattern}
+    ])
+    with pytest.raises(ValidationError, match="narrowing region"):
+        validate_persona(p, pack=None)
+
+
+@pytest.mark.parametrize("pattern", [
+    r"NS\s?#\s?(\d{7})", r"Invoice\s(\d{5,9})", r"WO(\d{7})",
+])
+def test_V6_literal_text_context_is_not_a_bare_digit_pattern(pattern: str) -> None:
+    validate_persona(_base(field_selectors=[
+        {"field": "reference", "region": "any-page", "pattern": pattern}
+    ]), pack=None)
+
+
+def test_V6_does_not_fire_on_named_patterns() -> None:
+    """`integer` on `any-page` is a judgement call, not a grammar violation."""
+    validate_persona(_base(field_selectors=[
+        {"field": "reference", "region": "any-page", "pattern": "integer"}
+    ]), pack=None)
+
+
+# --- V7: scanline asserts -------------------------------------------------
+
+
+@pytest.mark.parametrize("field", ["total_printed", "account_number",
+                                   "invoice_number", "due_date"])
+def test_V7_permits_the_four_named_fields(field: str) -> None:
+    validate_persona(_base(field_selectors=[
+        {"scanline": True, "region": "remittance-block",
+         "asserts": [{"field": field, "as": "digits_only"}]}
+    ]), pack=None)
+
+
+@pytest.mark.parametrize("field", ["current_charges", "prior_balance",
+                                   "vendor_name", "subtotal"])
+def test_V7_rejects_everything_else(field: str) -> None:
+    """Narrow by enumeration, not by exclusion: `current_charges` is named in the
+    spec, but so is the principle that the set is closed."""
+    p = _base(field_selectors=[
+        {"scanline": True, "region": "remittance-block",
+         "asserts": [{"field": field, "as": "digits_only"}]}
+    ])
+    with pytest.raises(ValidationError, match="scanline"):
+        validate_persona(p, pack=None)
+
+
+@pytest.mark.parametrize("region", ["last-page", "remittance-block", "page:1", "page:5"])
+def test_a_scanline_may_be_sought_in_the_stub_regions(region: str) -> None:
+    validate_persona(_base(field_selectors=[
+        {"scanline": True, "region": region,
+         "asserts": [{"field": "total_printed", "as": "digits_only"}]}
+    ]), pack=None)
+
+
+@pytest.mark.parametrize("region", ["header-block", "totals-block", "any-page",
+                                    "top-left", "line_items"])
+def test_a_scanline_may_not_be_sought_anywhere_else(region: str) -> None:
+    """Section 1.3 writes the scanline's region as its own narrower enum. An
+    OCR-A remittance line is a physical feature of the payment stub, so a
+    persona claiming one in a header block describes something that cannot
+    exist - and the spec's whole position is that closed vocabularies are
+    rejected at write time, not discovered at run time."""
+    p = _base(field_selectors=[
+        {"scanline": True, "region": region,
+         "asserts": [{"field": "total_printed", "as": "digits_only"}]}
+    ])
+    with pytest.raises(ValidationError, match="scanline"):
+        validate_persona(p, pack=None)
+
+
+def test_V7_rejects_an_unknown_as_form() -> None:
+    p = _base(field_selectors=[
+        {"scanline": True, "region": "remittance-block",
+         "asserts": [{"field": "total_printed", "as": "base64"}]}
+    ])
+    with pytest.raises(ValidationError, match="base64"):
+        validate_persona(p, pack=None)
+
+
+# --- V9: row_count --------------------------------------------------------
+
+
+def test_V9_a_min_max_range_is_accepted() -> None:
+    validate_persona(_base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": "currency"}, "row_count": {"min": 1, "max": 40},
+    }]), pack=None)
+
+
+def test_V9_an_inverted_range_is_rejected() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": "currency"}, "row_count": {"min": 40, "max": 1},
+    }])
+    with pytest.raises(ValidationError, match="range"):
+        validate_persona(p, pack=None)
+
+
+def test_V9_a_min_only_range_is_rejected() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": "currency"}, "row_count": {"min": 1},
+    }])
+    with pytest.raises(ValidationError, match="range"):
+        validate_persona(p, pack=None)
+
+
+# --- V10: derived_only ----------------------------------------------------
+
+
+@pytest.mark.parametrize("field", sorted({
+    "amount_payable", "payable_basis", "document_identity",
+    "identity_basis", "carried_balance",
+}))
+def test_V10_covers_every_derived_only_field(field: str) -> None:
+    """V10 reads its set from core.models.DERIVED_ONLY, so the two cannot drift."""
+    p = _base(field_selectors=[
+        {"field": field, "region": "totals-block", "pattern": "currency"}
+    ])
+    with pytest.raises(ValidationError, match="derived_only"):
+        validate_persona(p, pack=None)
+
+
+def test_V10_applies_to_row_group_columns() -> None:
+    """A column named amount_payable is the same footgun wearing a hat."""
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount_payable": "currency"},
+    }])
+    with pytest.raises(ValidationError, match="derived_only"):
+        validate_persona(p, pack=None)
+
+
+def test_V10_applies_to_sub_group_fields() -> None:
+    p = _base(field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"amount": "currency"},
+        "sub_group": {"anchor": "WO:", "field": "amount_payable", "pattern": "currency"},
+    }])
+    with pytest.raises(ValidationError, match="derived_only"):
+        validate_persona(p, pack=None)
+
+
+def test_V10_honours_a_pack_specific_derived_only_field() -> None:
+    p = _base(field_selectors=[
+        {"field": "allocation_key", "region": "totals-block", "pattern": "text"}
+    ])
+    pack = FakePack(fields={"allocation_key"}, derived_only={"allocation_key"})
+    with pytest.raises(ValidationError, match="derived_only"):
+        validate_persona(p, pack=pack)
+
+
+# --- V11 / V12 ------------------------------------------------------------
+
+
+def test_V11_a_persona_just_under_the_limit_passes() -> None:
+    validate_persona(_base(few_shot_examples=[{"blob": "x" * 60_000}]), pack=None)
+
+
+def test_V12_exactly_three_examples_pass() -> None:
+    validate_persona(_base(few_shot_examples=[{}, {}, {}]), pack=None)
+
+
+def test_V12_an_example_from_a_flattened_annotation_document_is_rejected() -> None:
+    """F3: Federal Recycling's colored fills are invisible to the text layer, so
+    a few-shot example drawn from it teaches the wrong lesson confidently."""
+    p = _base(few_shot_examples=[
+        {"document_id": "d1", "source_tags": ["ocr_only", "flattened_annotations"]}
+    ])
+    with pytest.raises(ValidationError, match="flattened_annotations"):
+        validate_persona(p, pack=None)
+
+
+# --- V13: required fields need selectors before leaving draft --------------
+
+
+def test_V13_an_active_persona_missing_a_required_field_is_rejected() -> None:
+    p = _base(status="active", field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency"}
+    ])
+    pack = FakePack(required={"total_printed", "vendor_name"})
+    with pytest.raises(ValidationError, match="vendor_name"):
+        validate_persona(p, pack=pack)
+
+
+def test_V13_a_draft_persona_may_be_incomplete() -> None:
+    """Draft is how a persona gets built up over successive writes."""
+    p = _base(status="draft", field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency"}
+    ])
+    validate_persona(p, pack=FakePack(required={"total_printed", "vendor_name"}))
+
+
+def test_V13_an_active_persona_with_every_required_field_passes() -> None:
+    p = _base(status="active", field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency"},
+        {"field": "vendor_name", "region": "header-block", "pattern": "text"},
+    ])
+    validate_persona(p, pack=FakePack(required={"total_printed", "vendor_name"}))
+
+
+def test_V13_a_derived_only_required_field_needs_no_selector() -> None:
+    """amount_payable is required AND derived_only. V13 must not demand a
+    selector for it, or V10 and V13 would make the persona unwritable."""
+    p = _base(status="active", field_selectors=[
+        {"field": "total_printed", "region": "totals-block", "pattern": "currency"},
+    ])
+    pack = FakePack(
+        fields={"total_printed", "amount_payable"},
+        required={"total_printed", "amount_payable"},
+        derived_only={"amount_payable"},
+    )
+    validate_persona(p, pack=pack)
+
+
+def test_V13_a_row_group_column_satisfies_a_required_field() -> None:
+    p = _base(status="active", field_selectors=[{
+        "row_group": "line_items", "table_anchor": "D",
+        "columns": {"description": "text", "amount": "currency"},
+        "column_headers": {"amount": "CHARGES"},
+    }])
+    pack = FakePack(fields={"description", "amount"}, required={"amount"})
+    validate_persona(p, pack=pack)
+
+
+# --- structural / whole-persona -------------------------------------------
+
+
+def test_a_non_mapping_persona_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="mapping"):
+        validate_persona(["not", "a", "persona"], pack=None)  # type: ignore[arg-type]
+
+
+def test_a_persona_missing_status_is_rejected() -> None:
+    p = _base()
+    del p["status"]
+    with pytest.raises(ValidationError, match="status"):
+        validate_persona(p, pack=None)
+
+
+def test_the_worked_edco_example_from_section_nine_validates() -> None:
+    """The persona the spec itself puts forward as correct must pass.
+
+    This is the end-to-end check on the whole rule set: if section 9's worked
+    example cannot be written, the grammar is wrong, not the example.
+
+    SPEC ERRATUM: section 9 asserts `invoice_account` in its scanline, but
+    section 1.3's permitted set is `total_printed`, `account_number`,
+    `invoice_number`, `due_date`. Section 1.3 is normative and load-bearing
+    (it is what stops the F1 bug being cemented via F7), while section 9's
+    field naming is illustrative and already diverges from the Northstar pack
+    elsewhere (`invoice_account` vs `vendor_account_number`, `bill_date` vs
+    `invoice_date`). Read as a typo for `account_number` and reproduced here
+    with the normative name.
+    """
+    edco = {
+        "sender_fingerprint": "edcodisposal.com|edco waste & recycling service",
+        "doc_type": "standard_invoice",
+        "rule_version": "v1",
+        "status": "draft",
+        "field_selectors": [
+            {"field": "invoice_account", "anchor": "Account Number",
+             "region": "header-block", "pattern": "account_number",
+             "adjust": ["strip_internal_whitespace"]},
+            {"field": "bill_date", "anchor": "Billing Date",
+             "region": "header-block", "pattern": "date",
+             "adjust": ["normalize_date_iso"]},
+            {"field": "total_printed", "anchor": "Total Amount Due",
+             "anchor_alts": ["Amount Due"],
+             "region": "totals-block", "pattern": "currency",
+             "adjust": ["crosscheck_scanline", "crosscheck_duplicate_anchor"]},
+            {"field": "prior_balance", "anchor": "BALANCE FORWARD",
+             "region": "line_items", "pattern": "currency", "required": False},
+            {"field": "current_charges", "anchor": "CURRENT CHARGES:",
+             "anchor_alts": ["CURRENT CHARGES", "Current Charges"],
+             "region": "line_items", "pattern": "currency",
+             "adjust": ["derive_amount_payable", "crosscheck_balance_composition"]},
+            {"field": "service_location", "anchor": "FOR SERVICE AT:",
+             "region": "near-anchor", "pattern": "text_block"},
+            {"field": "bill_to_name", "anchor": "SEND PAYMENT TO:",
+             "region": "header-block", "pattern": "text_block", "required": False},
+            {"row_group": "line_items", "table_anchor": "DESCRIPTION",
+             "column_headers": {"description": "DESCRIPTION", "charges": "CHARGES",
+                                "payments": "PAYMENTS", "balance": "BALANCE"},
+             "columns": {"description": "text", "charges": "currency",
+                         "payments": "currency", "balance": "currency"},
+             "row_count": {"min": 1, "max": 40}, "allow_empty_cells": True},
+            {"scanline": True, "region": "remittance-block",
+             "asserts": [{"field": "total_printed", "as": "digits_no_decimal"},
+                         {"field": "account_number", "as": "digits_only"}]},
+        ],
+        "layout_fingerprint": {
+            "page_count": {"min": 1, "max": 2}, "has_table": True,
+            "header_signature": "vendor-left|boxes-right",
+            "totals_page_role": "first", "text_source": "native",
+            "column_signature": ["DESCRIPTION", "CHARGES", "PAYMENTS", "BALANCE"],
+        },
+    }
+    validate_persona(edco, pack=None)
