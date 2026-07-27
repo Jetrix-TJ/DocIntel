@@ -50,9 +50,27 @@ decide whether that is worth surfacing):
 
 1. The first page carrying a totals-block label on its own — that is where
    the payable lives, even without a confirmed identity anchor next to it.
+   A reasonable inference, not flagged any further.
 2. If literally no page carries either signal, page 1, as an unconditional
-   last resort — logged loudly, because at that point the choice really is
-   arbitrary and a human should know it happened.
+   last resort. This tier is fundamentally a guess — the exact shape of the
+   bug the F10 review round was about, just relocated from "always page 1"
+   to "page 1 when the phrase enumeration below doesn't recognize this
+   document's wording" — and a log line nobody is watching is not an
+   acceptable way to surface a guess in a project whose whole position is
+   that a wrong value is recoverable *because it is visible*. So tier 2 is
+   reported twice: once via `logger.warning`, and once structurally, in
+   `assign`'s second return value (`used_last_resort: bool`), which
+   `s2_filter.py` turns into the `page_role_fallback` tag on the emitted
+   record. Tier 1 does not get a tag; it is a targeted, reasonable
+   inference from a signal that IS present on the page, not a shot in the
+   dark.
+
+`assign` therefore returns `(meta, used_last_resort)`, not just `meta` — a
+plain 2-tuple, matching this package's existing convention for a function
+with more than one thing to hand back (`normalize.load_document` returns
+`(pages, meta, text_source)` the same way, rather than a dataclass or
+`NamedTuple`); there is no other multi-value-return convention in this
+package to break from.
 
 A page that is not `primary` is `supporting` unless it carries no words at
 all (`len(page.words) == 0`) — a genuinely blank page is not "known" to be
@@ -101,8 +119,20 @@ _MAX_ANCHOR_LINE_WORDS = 8
 # Deliberately narrower than a first draft of this module, which matched
 # bare "AMOUNT DUE" and "CURRENT CHARGES" and, as a result, misclassified
 # both of those continuation pages as `primary`.
+#
+# This is a documented ENUMERATION, not a general phrase detector, and it
+# stays that way on purpose (fix round 2): "Balance Payable" and "Amount Now
+# Due" (via "NOW DUE") were added because they are obvious, common invoice
+# phrasings this list happened to miss, not because a clever general regex
+# was found - a looser pattern trades a known, visible gap (the logged
+# tier-2 fallback, and now also the `page_role_fallback` tag) for unknown
+# false positives on documents outside this corpus, which is worse. The next
+# unusual phrasing an invoice uses WILL still miss both signals and cascade
+# to the tier-2 fallback; that is by design, and is exactly why the fallback
+# is tagged onto the record rather than only logged (see `assign`).
 _TOTALS_RE = re.compile(
-    r"\b(TOTAL AMOUNT DUE|PLEASE PAY|BALANCE DUE|TOTAL DUE|GRAND TOTAL|TOTAL AMT)\b"
+    r"\b(TOTAL AMOUNT DUE|PLEASE PAY|BALANCE DUE|BALANCE PAYABLE|TOTAL DUE|"
+    r"NOW DUE|GRAND TOTAL|TOTAL AMT)\b"
 )
 _MAX_TOTALS_LINE_WORDS = 12
 
@@ -127,7 +157,9 @@ def _page_signals(page: PageText) -> tuple[bool, bool]:
     return has_anchor, has_totals
 
 
-def assign(pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]) -> tuple[PageMeta, ...]:
+def assign(
+    pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]
+) -> tuple[tuple[PageMeta, ...], bool]:
     """Classify every page as `primary`, `supporting`, or `unknown`.
 
     `primary`: the page's own signals qualify it (see module docstring for
@@ -136,12 +168,20 @@ def assign(pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]) -> tuple[Pag
     `unknown`: not primary, and carries no words at all.
     `supporting`: not primary, and carries at least one word.
 
+    Returns `(meta, used_last_resort)`. `used_last_resort` is True only when
+    the tier-2 fallback fired (no page carried an identity anchor, a totals
+    label, or both) — the caller (`s2_filter.py`) is expected to turn that
+    into the `page_role_fallback` tag on the emitted record, per the module
+    docstring: a guess this blind must be visible on the record, not just in
+    a log. Tier-1 fallback (a page with only a totals label) does not set
+    this — it is a targeted inference, not a guess.
+
     Never mutates `pages` or `meta` — always returns a new tuple built from
     new `PageMeta` instances (see the module docstring for why that is
     load-bearing).
     """
     if not pages:
-        return meta
+        return meta, False
     if len(pages) != len(meta):
         raise ValueError(f"pages/meta length mismatch: {len(pages)} vs {len(meta)}")
 
@@ -150,6 +190,7 @@ def assign(pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]) -> tuple[Pag
         i for i, (has_anchor, has_totals) in enumerate(signals) if has_anchor and has_totals
     }
 
+    used_last_resort = False
     if not primary_idx:
         totals_only = [i for i, (_, has_totals) in enumerate(signals) if has_totals]
         if totals_only:
@@ -162,6 +203,7 @@ def assign(pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]) -> tuple[Pag
             )
         else:
             primary_idx = {0}
+            used_last_resort = True
             logger.warning(
                 "pageroles: no page carried an identity anchor, a totals label, "
                 "or both; falling back to page 1 as a last resort so the "
@@ -177,4 +219,5 @@ def assign(pages: tuple[PageText, ...], meta: tuple[PageMeta, ...]) -> tuple[Pag
         else:
             roles.append("supporting")
 
-    return tuple(replace(m, role=r) for m, r in zip(meta, roles))
+    new_meta = tuple(replace(m, role=r) for m, r in zip(meta, roles))
+    return new_meta, used_last_resort

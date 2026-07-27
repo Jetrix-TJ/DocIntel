@@ -15,6 +15,11 @@ allowed to do with a page:
   context is *replaced* with the assigned tuple, never mutated in place —
   `assign` hands back new `PageMeta` instances precisely so the memoized
   tuple `load_document` returned is left untouched for the next caller.
+  When `assign` had to fall all the way back to "page 1, last resort"
+  (no page carried an identity anchor or a totals label), it says so via
+  its second return value, and this stage turns that into the
+  `page_role_fallback` tag — a page-role guess that blind must be visible
+  on the record, not just in a log nobody is watching.
 - `annotations.detect_flattened` (F3) sets the `has_flattened_annotations`
   tag when a page's markup was baked into its raster image rather than kept
   as a stripped PDF annotation layer. That tag forces review unconditionally
@@ -49,8 +54,11 @@ class AttachmentFilter:
 
         pages, page_meta, text_source = load_document(ctx.source_path)
         ctx.pages = pages
-        ctx.page_meta = pageroles.assign(pages, page_meta)
+        ctx.page_meta, used_last_resort_role_fallback = pageroles.assign(pages, page_meta)
         ctx.text_source = text_source
+
+        if used_last_resort_role_fallback:
+            ctx.add_tag("page_role_fallback")
 
         if annotations.detect_flattened(ctx.source_path, pages, page_meta):
             ctx.add_tag("has_flattened_annotations")

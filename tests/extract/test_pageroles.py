@@ -5,9 +5,10 @@ import os
 
 import pytest
 
-from docintel.core.models import PageMeta, PageText, Word
+from docintel.core.models import JobContext, PageMeta, PageText, Word
 from docintel.extract import pageroles
 from docintel.extract.normalize import load_document
+from docintel.pipeline.stages import s2_filter
 
 GOLD_DIR = os.path.join("docs", "corpus", "gold")
 
@@ -75,7 +76,8 @@ GOLD_CASES = _gold_cases()
 def test_assigned_roles_match_the_gold_label(gold_id, source_file, expected_roles):
     path = os.path.join("docs", source_file)
     pages, meta, _ = load_document(path)
-    got = [m.role for m in pageroles.assign(pages, meta)]
+    new_meta, _ = pageroles.assign(pages, meta)
+    got = [m.role for m in new_meta]
     assert got == expected_roles
 
 
@@ -83,8 +85,10 @@ def test_upak_is_primary_on_every_page():
     """F10: the same template repeats, totals resolving only on the last page."""
     path = "docs/CANADIAN WITHOUT NOTES U- PAK 4378107 (1).pdf"
     pages, meta, _ = load_document(path)
-    roles = [m.role for m in pageroles.assign(pages, meta)]
+    new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary"] * 5
+    assert used_last_resort is False
 
 
 def test_complete_beverage_bol_pages_are_supporting_not_primary(caplog):
@@ -97,9 +101,11 @@ def test_complete_beverage_bol_pages_are_supporting_not_primary(caplog):
     path = "docs/_AP Invoice 32930 Complete Beverage Destruction 1177.70000.pdf"
     pages, meta, _ = load_document(path)
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary", "supporting", "supporting", "supporting"]
     assert "falling back to page 1, the first page carrying a totals label" in caplog.text
+    assert used_last_resort is False  # tier 1, not tier 2 - not tagged
 
 
 def test_dtss_falls_back_to_the_page_with_a_totals_label(caplog):
@@ -108,9 +114,11 @@ def test_dtss_falls_back_to_the_page_with_a_totals_label(caplog):
     path = "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf"
     pages, meta, _ = load_document(path)
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary"]
     assert "falling back to page 1, the first page carrying a totals label" in caplog.text
+    assert used_last_resort is False  # tier 1, not tier 2 - not tagged
 
 
 def test_edco_falls_back_to_page_1_as_a_last_resort(caplog):
@@ -118,13 +126,17 @@ def test_edco_falls_back_to_page_1_as_a_last_resort(caplog):
     totals-block label under the tightened, prose-resistant regexes - its
     account number and total appear only in a scan-line code and a bare
     'Current Charges:' recap line, neither of which qualifies. This is the
-    tier-2, last-resort fallback."""
+    tier-2, last-resort fallback, and the one corpus document that must
+    come back with `used_last_resort=True` - `s2_filter.py` turns this into
+    the `page_role_fallback` tag on the emitted record (fix round 2)."""
     path = "docs/EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf"
     pages, meta, _ = load_document(path)
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary"]
     assert "last resort" in caplog.text
+    assert used_last_resort is True
 
 
 def test_assign_does_not_mutate_or_corrupt_the_memoized_meta():
@@ -138,7 +150,7 @@ def test_assign_does_not_mutate_or_corrupt_the_memoized_meta():
     pages, meta_before, _ = load_document(path)
     assert all(m.role == "unknown" for m in meta_before)
 
-    assigned = pageroles.assign(pages, meta_before)
+    assigned, _ = pageroles.assign(pages, meta_before)
     assert assigned is not meta_before
     assert all(a is not m for a, m in zip(assigned, meta_before))
     assert [m.role for m in assigned] == ["primary"]
@@ -149,7 +161,7 @@ def test_assign_does_not_mutate_or_corrupt_the_memoized_meta():
 
 
 def test_assign_on_empty_pages_returns_meta_unchanged():
-    assert pageroles.assign((), ()) == ()
+    assert pageroles.assign((), ()) == ((), False)
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +171,39 @@ def test_assign_on_empty_pages_returns_meta_unchanged():
 # qualifying signals on a page that is NOT page 1, and check the rule
 # follows the signals rather than the position.
 # ---------------------------------------------------------------------------
+
+
+def test_balance_payable_and_now_due_resolve_a_page_2_case_without_cascading_to_tier_2(caplog):
+    """Fix round 2: 'Balance Payable' and 'Amount Now Due' are common
+    invoice phrasings the original six-phrase enumeration missed entirely -
+    neither matched `_TOTALS_RE`, so a document phrased this way had no
+    page satisfying the direct rule AND no totals-only page for tier 1
+    either, cascading straight to tier 2 ("page 1, last resort") even
+    though the real totals block was sitting right there on page 2. That
+    silently reproduced the exact cover-page-1 bug the Critical finding was
+    about, just relocated into the phrase list. With both phrases added,
+    this must resolve directly - no fallback, no log warning, no tag.
+    """
+    pages = (
+        _page(1, [NOISE_LINE, ["Routing", "sheet", "-", "internal", "use", "only"]]),
+        _page(2, [ANCHOR_LINE, ["Balance", "Payable:", "$500.00"]]),
+        _page(3, [NOISE_LINE, ["Amount", "Now", "Due:", "$500.00"]]),
+    )
+    meta = _meta(list(pages))
+    with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
+    assert roles == ["supporting", "primary", "supporting"]
+    assert used_last_resort is False
+    assert caplog.text == ""  # no fallback fired at all - direct rule sufficed
+
+    # And "Amount Now Due" alone (no anchor) still recognizes NOW DUE as a
+    # totals label on its own, exercising it independently of BALANCE PAYABLE.
+    solo_pages = (_page(1, [["Amount", "Now", "Due:", "$500.00"]]),)
+    solo_meta = _meta(list(solo_pages))
+    solo_new_meta, solo_used_last_resort = pageroles.assign(solo_pages, solo_meta)
+    assert [m.role for m in solo_new_meta] == ["primary"]
+    assert solo_used_last_resort is False  # tier 1: totals label present, just no anchor
 
 
 def test_page_2_is_primary_when_the_anchor_and_totals_first_appear_there():
@@ -173,8 +218,10 @@ def test_page_2_is_primary_when_the_anchor_and_totals_first_appear_there():
         _page(3, [NOISE_LINE]),
     )
     meta = _meta(list(pages))
-    roles = [m.role for m in pageroles.assign(pages, meta)]
+    new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["supporting", "primary", "supporting"]
+    assert used_last_resort is False
 
 
 def test_fallback_fires_when_no_page_carries_both_signals(caplog):
@@ -189,9 +236,11 @@ def test_fallback_fires_when_no_page_carries_both_signals(caplog):
     )
     meta = _meta(list(pages))
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary", "supporting"]
     assert "falling back" in caplog.text
+    assert used_last_resort is False  # tier 1 (a totals-only page exists), not tier 2
 
 
 def test_single_page_with_anchor_but_no_totals_is_still_primary(caplog):
@@ -203,9 +252,11 @@ def test_single_page_with_anchor_but_no_totals_is_still_primary(caplog):
     pages = (_page(1, [ANCHOR_LINE]),)
     meta = _meta(list(pages))
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary"]
     assert "last resort" in caplog.text
+    assert used_last_resort is True
 
 
 def test_page_with_neither_signal_in_a_multipage_document_is_supporting():
@@ -220,8 +271,10 @@ def test_page_with_neither_signal_in_a_multipage_document_is_supporting():
         _page(2, [NOISE_LINE, NOISE_LINE]),
     )
     meta = _meta(list(pages))
-    roles = [m.role for m in pageroles.assign(pages, meta)]
+    new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary", "supporting"]
+    assert used_last_resort is False
 
 
 def test_blank_page_is_unknown_not_supporting():
@@ -236,8 +289,10 @@ def test_blank_page_is_unknown_not_supporting():
         _blank_page(2),
     )
     meta = _meta(list(pages))
-    roles = [m.role for m in pageroles.assign(pages, meta)]
+    new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary", "unknown"]
+    assert used_last_resort is False
 
 
 def test_blank_first_page_still_becomes_primary_via_last_resort_fallback(caplog):
@@ -249,6 +304,93 @@ def test_blank_first_page_still_becomes_primary_via_last_resort_fallback(caplog)
     pages = (_blank_page(1), _blank_page(2))
     meta = _meta(list(pages))
     with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
-        roles = [m.role for m in pageroles.assign(pages, meta)]
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    roles = [m.role for m in new_meta]
     assert roles == ["primary", "unknown"]
     assert "last resort" in caplog.text
+    assert used_last_resort is True
+
+
+# ---------------------------------------------------------------------------
+# Fix round 2: the tier-2 last-resort fallback must be visible on the
+# emitted record (a `page_role_fallback` tag), not just in a log line
+# nobody is watching. These exercise `s2_filter.AttachmentFilter`, which is
+# what actually turns `pageroles.assign`'s second return value into
+# `ctx.tags` - `assign`'s own boolean return is already covered above.
+# ---------------------------------------------------------------------------
+
+
+def test_page_role_fallback_tag_appears_when_no_page_carries_either_signal(tmp_path, monkeypatch):
+    """Fully synthetic: no real PDF is read. `load_document` and
+    `annotations.detect_flattened` are faked so this exercises exactly
+    `s2_filter`'s wiring of `pageroles.assign`'s tier-2 result into a tag,
+    for a single blank page that carries neither signal.
+    """
+    dummy = tmp_path / "dummy.pdf"
+    dummy.write_bytes(b"%PDF-1.4\n%%EOF\n")  # never actually parsed
+
+    page = _blank_page(1)
+    meta = _meta([page])
+
+    monkeypatch.setattr(s2_filter, "load_document", lambda path: ((page,), meta, "native"))
+    monkeypatch.setattr(
+        s2_filter.annotations, "detect_flattened", lambda path, pages, meta: False
+    )
+
+    ctx = JobContext(document_id="d1", source_path=str(dummy))
+    s2_filter.AttachmentFilter().run(ctx)
+
+    assert "page_role_fallback" in ctx.tags
+
+
+def test_page_role_fallback_tag_absent_for_a_normal_synthetic_document(tmp_path, monkeypatch):
+    """Same wiring, but the page carries both signals directly - no
+    fallback at all - so the tag must NOT appear.
+    """
+    dummy = tmp_path / "dummy.pdf"
+    dummy.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    page = _page(1, [ANCHOR_LINE, TOTALS_LINE])
+    meta = _meta([page])
+
+    monkeypatch.setattr(s2_filter, "load_document", lambda path: ((page,), meta, "native"))
+    monkeypatch.setattr(
+        s2_filter.annotations, "detect_flattened", lambda path, pages, meta: False
+    )
+
+    ctx = JobContext(document_id="d1", source_path=str(dummy))
+    s2_filter.AttachmentFilter().run(ctx)
+
+    assert "page_role_fallback" not in ctx.tags
+
+
+def test_edco_the_one_corpus_tier_2_document_carries_the_fallback_tag():
+    """The concrete corpus proof: EDCO is the only one of the ten real
+    documents that hits the tier-2 last-resort fallback (see
+    `test_edco_falls_back_to_page_1_as_a_last_resort` above), so it must be
+    the only one whose emitted record carries `page_role_fallback`.
+    """
+    path = "docs/EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf"
+    ctx = JobContext(document_id="d1", source_path=path)
+    s2_filter.AttachmentFilter().run(ctx)
+    assert "page_role_fallback" in ctx.tags
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "docs/_AP Invoice 715-33905296    Veritiv Operating Company 4908.00000.pdf",
+        "docs/_AP Invoice 32930 Complete Beverage Destruction 1177.70000.pdf",  # tier 1
+        "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf",  # tier 1
+        "docs/CANADIAN WITHOUT NOTES U- PAK 4378107 (1).pdf",
+    ],
+)
+def test_other_corpus_documents_do_not_carry_the_fallback_tag(path):
+    """Direct-rule and tier-1 documents must NOT carry `page_role_fallback`
+    - only EDCO's tier-2 last resort does. Includes both of the tier-1
+    documents explicitly, since tier 1 is a targeted inference and must
+    stay untagged even though it IS a fallback of sorts.
+    """
+    ctx = JobContext(document_id="d1", source_path=path)
+    s2_filter.AttachmentFilter().run(ctx)
+    assert "page_role_fallback" not in ctx.tags
