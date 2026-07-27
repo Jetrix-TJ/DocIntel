@@ -1,0 +1,76 @@
+"""Command-line entry point."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from docintel.adapters.intake.filesystem import FilesystemIntake
+from docintel.adapters.vision.fake import FakeVision
+from docintel.pipeline.hooks import HookRegistry
+from docintel.pipeline.runner import Runner
+from docintel.pipeline.stages import build_default_stages
+
+
+def _build_runner() -> Runner:
+    return Runner(stages=build_default_stages(vision=FakeVision()), hooks=HookRegistry())
+
+
+def _cmd_process(args: argparse.Namespace) -> int:
+    runner = _build_runner()
+    for item in FilesystemIntake(args.paths).items():
+        record = runner.process(
+            document_id=item.document_id,
+            source_path=item.source_path,
+            sender_email=item.sender_email,
+            email_id=item.email_id,
+        )
+        if args.json:
+            print(json.dumps(record, separators=(",", ":")))
+        else:
+            print(
+                f"{record['disposition']:<12} {record['lane'] or '-':<7} "
+                f"{record['doc_type'] or '-':<22} {item.source_path}"
+            )
+    stats = runner.stats
+    if stats["intaken"] != stats["emitted"]:
+        print(f"INVARIANT VIOLATED: {stats}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _cmd_replay_gold(args: argparse.Namespace) -> int:
+    from docintel.scorecard import replay_gold
+
+    card = replay_gold(runner_factory=_build_runner)
+    if args.json:
+        print(json.dumps(card, indent=2))
+    else:
+        for doc in card["documents"]:
+            mark = "PASS" if doc["passed"] else "FAIL"
+            print(f"{mark}  {doc['gold_id']}  ({doc['passed_count']}/{doc['total_count']})")
+        s = card["summary"]
+        print(f"\n{s['passed']}/{s['total']} documents green")
+    return 0 if card["summary"]["failed"] == 0 else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="docintel")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("process", help="run one or more PDFs through the pipeline")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_process)
+
+    g = sub.add_parser("replay-gold", help="run the gold corpus and score it")
+    g.add_argument("--json", action="store_true")
+    g.set_defaults(func=_cmd_replay_gold)
+
+    args = parser.parse_args(argv)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
