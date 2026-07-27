@@ -16,7 +16,8 @@ Every task's requirements implicitly include this section. Values are copied ver
 - **Money is `Decimal`, never `float`.** Arithmetic closure checks use **exact equality**, not tolerance.
 - **`amount_payable` is `derived_only`.** It must never appear on `ExtractedFields`. Grammar rule V10.
 - **Confidence:** boosts multiply to at most **×1.10**; a field may never exceed **0.99**.
-- **Regex limits:** linear-time engine only, no backreferences, no lookbehind, max **200** characters, max **1** capture group, **50 ms** timeout per field per document, unbounded quantifiers (`.*`, `.+`) rejected unless bounded.
+- **Regex limits — these bind AGENT-AUTHORED selector patterns only**, i.e. the `pattern` field of a persona selector, validated by grammar rule V4: linear-time engine only, no backreferences, no lookbehind, max **200** characters, max **1** capture group, **50 ms** timeout per field per document, unbounded quantifiers (`.*`, `.+`) rejected unless bounded.
+  These limits exist because persona patterns are machine-written, untrusted, and run per-field under a hard timeout (`selector-grammar.md` §3.2, "Restricted regex"). They do **not** apply to hand-written, PR-reviewed regexes inside `src/docintel/core/` or `src/docintel/extract/` — e.g. `money.MONEY_RE` legitimately uses 5 named groups, because decomposing it would move the sign handling out of one auditable pattern and into procedural code on the highest-risk path in the system. Cluster C2's validator must enforce these limits on persona patterns and nowhere else. *(Ruled 2026-07-27 after the Task A1 review raised the contradiction.)*
 - **Persona limits:** serialized size ≤ **64 KB**; `few_shot_examples` ≤ **3**.
 - **The invariant:** `count(intaken) == count(emitted)`. Every document emits a Stage 8 record, including skips and dead letters.
 - **`docs/corpus/gold/*.json` is READ-ONLY.** Changing a gold value requires re-reading the source PDF and writing a justification in `.loop/journal.md`. The gold set is the spec.
@@ -302,7 +303,7 @@ def is_money(raw: str) -> bool:
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `python3 -m pip install -e '.[dev]' && python3 -m pytest tests/core/test_money.py -v`
-Expected: PASS, 25 tests
+Expected: PASS, 24 tests
 
 - [ ] **Step 6: Commit**
 
@@ -1051,6 +1052,7 @@ document_identity, identity_basis, page_roles, and reference_list as objects.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any
 
@@ -1071,10 +1073,16 @@ _DISPOSITIONS = {"processed", "skipped", "dead_letter"}
 
 
 def _serialize(value: Any) -> Any:
-    """Decimal becomes a string so no consumer can accidentally use a float."""
+    """Decimal becomes a string so no consumer can accidentally use a float.
+
+    Tests `Mapping`, not `dict`: ExtractedFields.values is a read-only
+    MappingProxyType view (see models.py), which is a Mapping but NOT a dict.
+    An isinstance(value, dict) check would silently pass the proxy through
+    unserialized and leak Decimal objects into the record.
+    """
     if isinstance(value, Decimal):
         return format(value, "f")
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {k: _serialize(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_serialize(v) for v in value]
@@ -1342,12 +1350,25 @@ from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 
 
+def _classified(ctx: JobContext) -> JobContext:
+    """Stand in for stage 3, which every real run performs before emit.
+
+    validate_record requires a non-empty doc_type on a record whose disposition
+    is "processed". A stage double that never classifies would therefore
+    (correctly) degrade to dead_letter, so these doubles set it the way the real
+    Classify stage does.
+    """
+    if ctx.doc_type is None:
+        ctx.doc_type = "standard_invoice"
+    return ctx
+
+
 class Ok:
     name = "ok"
 
     def run(self, ctx: JobContext) -> JobContext:
         ctx.log("ok")
-        return ctx
+        return _classified(ctx)
 
 
 class Boom:
@@ -1417,7 +1438,7 @@ def test_transient_error_that_recovers_emits_processed():
             self.calls += 1
             if self.calls < 2:
                 raise TransientError("timeout")
-            return ctx
+            return _classified(ctx)
 
     r = Runner(stages=[Flaky()], hooks=HookRegistry(), max_retries=2)
     assert r.process("d1", "/tmp/a.pdf")["disposition"] == "processed"
@@ -1431,6 +1452,102 @@ def test_the_invariant_holds_over_a_burst_with_mixed_failures():
     assert r.stats["intaken"] == r.stats["emitted"] == 50
     for rec in records:
         validate_record(rec)
+
+
+def test_a_throwing_pack_hook_still_emits_a_dead_letter():
+    """The docstring's claim that a pack hook is a guarded escape route, made real.
+
+    A hook registered by a third-party pack raises. The document must still emit.
+    """
+    hooks = HookRegistry()
+
+    def boom(ctx, nxt):
+        raise RuntimeError("pack bug")
+
+    hooks.register("afterFilter", boom, pack="northstar")
+
+    class Filter:
+        name = "attachment_filter"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            return _classified(ctx)
+
+    r = Runner(stages=[Filter()], hooks=hooks)
+    rec = r.process("d1", "/tmp/a.pdf")
+    validate_record(rec)
+    assert rec["disposition"] == "dead_letter"
+    assert "northstar" in rec["reason"]
+    assert r.stats == {"intaken": 1, "emitted": 1}
+
+
+def test_hooks_fire_at_their_declared_boundaries():
+    """Each boundary socket the runner owns must actually be dispatched."""
+    hooks = HookRegistry()
+    fired: list[str] = []
+
+    for socket in ("beforeIntake", "afterFilter", "beforePersonaLookup",
+                   "afterExtraction", "beforeConfidenceGate", "beforeEmit"):
+        hooks.register(
+            socket,
+            (lambda s: lambda ctx, nxt: (fired.append(s), nxt(ctx))[1])(socket),
+            pack="probe",
+        )
+
+    class Named:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def run(self, ctx: JobContext) -> JobContext:
+            return _classified(ctx)
+
+    stages = [Named(n) for n in ("intake", "attachment_filter", "persona_lookup",
+                                "capture_fields", "confidence_gate", "emit_record")]
+    Runner(stages=stages, hooks=hooks).process("d1", "/tmp/a.pdf")
+    assert fired == ["beforeIntake", "afterFilter", "beforePersonaLookup",
+                     "afterExtraction", "beforeConfidenceGate", "beforeEmit"]
+
+
+def test_beforeEmit_fires_even_for_a_skipped_document():
+    """Skipped documents never reach the emit stage, but they DO emit a record."""
+    hooks = HookRegistry()
+    fired: list[str] = []
+    hooks.register("beforeEmit", lambda ctx, nxt: (fired.append("x"), nxt(ctx))[1],
+                   pack="probe")
+
+    class Skipper:
+        name = "attachment_filter"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            ctx.disposition = "skipped"
+            ctx.skip_reason = "not in allowlist"
+            return ctx
+
+    rec = Runner(stages=[Skipper()], hooks=hooks).process("d1", "/tmp/a.png")
+    assert rec["disposition"] == "skipped"
+    assert fired == ["x"], "beforeEmit must reach every emitted record"
+
+
+def test_a_record_that_fails_validation_degrades_instead_of_raising():
+    """The invariant must survive its own enforcement machinery failing.
+
+    If validate_record raised out of process(), the caller would get an
+    exception instead of a record while the emitted counter had already been
+    bumped — so stats would claim a document was emitted when none was.
+    """
+    class Corrupt:
+        name = "corrupt"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            ctx.doc_type = None          # illegal on a processed record (see _classified)
+            ctx.confidence["x"] = 99.0   # illegal: outside [0, 0.99]
+            return ctx
+
+    r = _runner([Corrupt()])
+    rec = r.process("d1", "/tmp/a.pdf")
+    validate_record(rec)                 # the returned record is itself valid
+    assert rec["disposition"] == "dead_letter"
+    assert "contract validation failed" in rec["reason"]
+    assert r.stats == {"intaken": 1, "emitted": 1}
 
 
 def test_a_stage_that_returns_none_is_a_programming_error_not_silent_data_loss():
@@ -1479,6 +1596,29 @@ class Stage(Protocol):
     def run(self, ctx: JobContext) -> JobContext: ...
 
 
+# Which hook socket fires at which stage boundary.
+#
+# The runner owns BOUNDARY sockets, because it is the only object that can see
+# the seams between stages. Two sockets are deliberately absent: classifySignals
+# fires *inside* stage 3 (a pack injects its signal ladder there, cluster C5), and
+# onRegenTrigger belongs to the rule lifecycle, which runs beside the pipeline
+# rather than in it.
+HOOKS_BEFORE: dict[str, str] = {
+    "intake": "beforeIntake",
+    "persona_lookup": "beforePersonaLookup",
+    "capture_fields": "afterExtraction",
+    "confidence_gate": "beforeConfidenceGate",
+}
+
+HOOKS_AFTER: dict[str, str] = {
+    "attachment_filter": "afterFilter",
+}
+
+# beforeEmit is NOT in either map. It fires inside _emit() so that it reaches
+# every emitted record — including skipped and dead-lettered ones, which never
+# reach the emit stage because _run_stages breaks out early.
+
+
 class Runner:
     def __init__(
         self,
@@ -1511,17 +1651,56 @@ class Runner:
             ctx.skip_reason = str(exc)
             ctx.review_flag = True
             ctx.log(f"dead_letter: {type(exc).__name__}: {exc}")
-        finally:
-            self._emitted += 1
-            ctx.emitted = True
 
-        record = build_record(ctx)
+        record = self._emit(ctx)
+        self._emitted += 1
+        ctx.emitted = True
+        return record
+
+    def _emit(self, ctx: JobContext) -> dict[str, Any]:
+        """Build and validate the record, degrading rather than raising.
+
+        Subtle but load-bearing: if validation raised out of process(), the
+        caller would get an exception instead of a record while the emitted
+        counter had already been bumped — so the invariant this class exists to
+        guarantee would silently become a lie. A record that cannot be validated
+        is itself a dead letter, not an exception.
+        """
+        try:
+            ctx = self.hooks.run("beforeEmit", ctx)
+            record = build_record(ctx)
+            validate_record(record)
+            return record
+        except Exception as exc:  # noqa: BLE001 - deliberate catch-all
+            ctx.log(f"emit failed, degrading: {exc}")
+            return self._minimal_dead_letter(ctx.document_id, str(exc))
+
+    @staticmethod
+    def _minimal_dead_letter(document_id: str, reason: str) -> dict[str, Any]:
+        """The last-resort record. Built from a fresh context so no field
+        polluted by a partially-run pipeline can make it fail validation too."""
+        fallback = new_context(document_id=document_id, source_path="")
+        fallback.disposition = "dead_letter"
+        fallback.skip_reason = f"contract validation failed: {reason}"
+        fallback.review_flag = True
+        record = build_record(fallback)
         validate_record(record)
         return record
 
     def _run_stages(self, ctx: JobContext) -> JobContext:
         for stage in self.stages:
+            before = HOOKS_BEFORE.get(stage.name)
+            if before is not None:
+                ctx = self.hooks.run(before, ctx)
+
             ctx = self._run_one(stage, ctx)
+
+            # The after-socket runs before the disposition check so a pack can
+            # observe - or react to - a skip the base pipeline just decided.
+            after = HOOKS_AFTER.get(stage.name)
+            if after is not None:
+                ctx = self.hooks.run(after, ctx)
+
             if ctx.disposition != "processed":
                 break
         return ctx
@@ -1538,7 +1717,10 @@ class Runner:
             if not isinstance(result, JobContext):
                 raise TypeError(f"stage {stage.name!r} must return a JobContext")
             return result
-        assert last is not None
+        if last is None:  # unreachable for max_retries >= 0, but not via assert:
+            raise RuntimeError(  # `python -O` strips asserts, and this is control flow
+                f"stage {stage.name!r} exhausted retries without a result"
+            )
         raise last
 ```
 
@@ -2068,7 +2250,7 @@ def build_default_stages(vision: object) -> list[object]:
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/pipeline/test_stages_skeleton.py -v`
-Expected: PASS, 5 tests
+Expected: PASS, 6 tests
 
 - [ ] **Step 6: Run the whole suite**
 
@@ -2696,6 +2878,30 @@ def test_a_throwing_pack_hook_is_isolated_as_a_PackError():
         hooks.run("afterExtraction", new_context("d", "/x.pdf"))
 
 
+def test_baseexception_escapes_by_design_and_the_counters_report_the_gap():
+    """The invariant covers Exception-class failures, NOT BaseException.
+
+    KeyboardInterrupt and SystemExit must propagate: catching them would make a
+    runaway pipeline un-interruptible and would swallow interpreter shutdown.
+    When one does escape, intaken > emitted — and that is the CORRECT signal, not
+    a false alarm: a document entered and produced no record, which is exactly
+    what the operator needs to know.
+
+    This test exists so nobody "fixes" the runner to catch BaseException.
+    """
+    class Interrupt:
+        name = "interrupt"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            raise KeyboardInterrupt()
+
+    runner = Runner(stages=[Interrupt()], hooks=HookRegistry())
+    with pytest.raises(KeyboardInterrupt):
+        runner.process("d1", "/tmp/a.pdf")
+    assert runner.stats == {"intaken": 1, "emitted": 0}
+    assert runner.stats["intaken"] > runner.stats["emitted"]
+
+
 def test_invariant_holds_across_the_whole_corpus():
     runner = Runner(stages=build_default_stages(vision=FakeVision()), hooks=HookRegistry())
     from docintel.adapters.intake.filesystem import FilesystemIntake
@@ -3116,7 +3322,17 @@ def test_bounded_quantifier_is_allowed():
 **Files:**
 - Create: `src/docintel/grammar/ops/__init__.py`, `base.py`, `derive.py`, `crosscheck.py`, `infer.py`
 - Modify: `src/docintel/pipeline/stages/s6_capture.py` — run the op chain, apply both confidence inputs
+- Modify: `src/docintel/core/contract.py` — see the carried-over requirement below
 - Test: `tests/grammar/ops/test_base.py`, `test_derive.py`, `test_crosscheck.py`, `test_infer.py`, `tests/test_f1_antiregression.py`
+
+**Carried over from the Task A5 review (deferred, not dropped).** `validate_record` does not
+currently require `document_identity` and `identity_basis` in `derived`. It could not: those values are
+produced by the derive ops this cluster creates, so enforcing it during Part A would have failed every
+document in the walking skeleton. Now that the ops exist, extend `validate_record` so that a record
+with `disposition == "processed"` MUST carry both keys in `derived`, and add a test proving a processed
+record lacking them is rejected. Rationale: these two fields exist solely so downstream dedup works for
+the 3 of 10 corpus documents that print no invoice number (finding F6). A processed record without them
+silently starves the duplicate decision — the exact failure the delta was written to prevent.
 
 **Interfaces:**
 - Produces:

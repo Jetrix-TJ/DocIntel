@@ -150,15 +150,31 @@ becomes a testable property rather than a hope.
 The only difference the pipeline records is `text_source: native | ocr`, which drives the
 `ocr_source ×0.90` modifier (delta 1 in corpus-analysis §6).
 
-### 3.3 `amount_payable` cannot be extracted, structurally
+### 3.3 `amount_payable` has one writer, and it is not a selector
 
 `ExtractedFields` and `DerivedFields` are separate types. Selectors write to the first; ops write to
-the second. Grammar rule V10 ("no selector may target a `derived_only` field") therefore becomes
-impossible to violate rather than merely forbidden — there is no field to target.
+the second. `ExtractedFields` keeps its backing dicts private and exposes them only as read-only
+`MappingProxyType` views, so `set()` — which rejects every `derived_only` name — is the sole insertion
+path. Grammar rule V10 ("no selector may target a `derived_only` field") is therefore enforced by the
+type, not by reviewer vigilance.
 
 This matters more than it looks. On 7 of the 10 corpus documents a selector pointed straight at
 `amount_payable` would produce the correct value, so the bug is invisible to casual testing and
 attractive to anyone simplifying the code.
+
+**The precise claim, corrected 2026-07-27.** An earlier draft of this document said the separation made
+the bug "structurally impossible" and "impossible to violate." That was overstated, and the Task A3
+review disproved it: the first implementation subclassed `dict`, and `setdefault` and `|=` bypassed the
+guard entirely because CPython implements them in C and they never dispatch to an overridden
+`__setitem__`. Two fix rounds later the exposed surface is genuinely read-only, but
+`obj._values[name] = value` still reaches the private attribute — and no Python design closes that,
+since `object.__setattr__`, `__dict__`, name-mangled access and `ctypes` all remain.
+
+So the accurate claim is: **no accidental path, exactly one intended writer.** The threat this guard
+exists for is machine-authored persona JSON naming `amount_payable`, which reaches `set()` and raises.
+A developer deliberately writing `obj._values[...]` is a different threat, addressed by code review and
+by the grammar validator's V10 check at persona-write time — two independent defenses, neither of them
+absolute. Claiming more than that invites someone to trust the type and skip the validator.
 
 ### 3.4 Stage 6 has two independent confidence inputs
 
