@@ -7,12 +7,12 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        e40a1f9                clean tree, 35 commits
-tests       1,061 passing in ~8.2s
+HEAD        299cd71                clean tree, 37 commits
+tests       1,101 passing in ~7.8s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 41/339 assertions
+scorecard   0/10 documents green, 42/339 assertions
 ```
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
@@ -68,13 +68,17 @@ under injected failures at every stage.
   findings; see `execution/task-c3-report.md`.
 - C3b — scorecard coverage (+87 assertions) and GUARDRAIL 3. 0 rounds. Corrects my
   own C3 finding in both directions; see `execution/task-c3b-report.md`.
+- C4 — a real `s7_gate`: four lanes, forced review, deterministic audit sampling,
+  and GUARDRAIL 4. 0 rounds. Two spec errata and one real bug caught only by the
+  whole-path test; see `execution/task-c4-report.md`.
 
-**Read `execution/task-c3-report.md` before starting C4.** Its "Notes for C4"
-section covers the `lane` scoreboard, the `flattened_annotations` forced-review
-wiring still owed, and that `ctx.review_flag` is already set by three C3 ops — the
-gate may raise it but must never clear it.
+**Read `execution/task-c4-report.md` before starting C5.** Its "Notes for C5"
+section carries one thing that will otherwise cost a whole round: a `draft`
+persona applies `draft_rules` (0.85) to every field and the default threshold is
+0.90, so **a draft persona can never produce a `high` lane — and seven documents
+expect one.** C5's personas must reach `active`, or must ship thresholds below 0.85.
 
-## Next: five dispatch units
+## Next: four dispatch units
 
 Sizes are calibrated against C1a (458 src lines / 6 files), C1b (568 / 6),
 C2a (1,150 / 4) and C2b (760 / 5). Both C2 estimates ran ~30–60% over, almost
@@ -82,21 +86,17 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C4** | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | `lane` + routing |
-| 2 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
-| 3 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
-| 4 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
-| 5 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
+| 1 | **C5a** | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
+| 2 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
+| 3 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
+| 4 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
 
-All the extraction and derivation infrastructure is in place, and the scorecard
-now measures it. **Nothing more can move the score until C5 authors personas** —
-every C3 op runs only when a persona declares it, which is why C3 scored zero and
-the plan's "some `derived.*`" was optimistic. C4 makes the routing real (its
-scoreboard is the 10 failing `lane` assertions); C5 is where the numerator moves.
+Every stage is now real except Stage 4 (persona lookup) and Stage 5b (vision).
+**The remaining 297 failing assertions are essentially all waiting on personas.**
 
-Current 41 passing breaks down as: 10 `doc_type`, 10 `text_source`, 10
-`page_roles`, 2 `confidence_modifiers`, 2 U-PAK vacuous (documented), and the
-`review_flag`/`regen_flag` defaults.
+Current 42 passing: 10 `text_source`, 10 `page_roles`, 2 `doc_type`, 2
+`confidence_modifiers`, 1 `lane` (Federal Recycling, forced review), 2 U-PAK
+vacuous-and-documented, and the `review_flag` / `regen_flag` defaults.
 
 **Optional reorder, now actionable:** hand-author ONE persona for the cleanest
 document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
@@ -167,9 +167,9 @@ ledger → commit.
 - ~~**4 contract keys**~~ — **DONE in C2b.** All four are on the record, type-checked by
   `validate_record`, and asserted by the scorecard (+19 assertions). 10/10 green now means
   what it says.
-- **`has_flattened_annotations` → forced review** — the tag is set but `s7_gate` does not
-  consume `ctx.tags`. Scheduled into C4. Federal Recycling cannot reach its gold routing
-  until then.
+- ~~**`has_flattened_annotations` → forced review**~~ — **DONE in C4.** The full chain
+  runs and Federal Recycling reaches its gold routing. Pinned by GUARDRAIL 4
+  (`tests/test_f3_forced_review.py`).
 - **`document_identity` / `identity_basis` validation** — `validate_record` cannot require
   them yet because no derive op produces them. Scheduled into C3.
 - **Minor deferred items** — collected in the ledger, one line each, for the final
