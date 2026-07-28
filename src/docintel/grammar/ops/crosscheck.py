@@ -46,6 +46,46 @@ AMOUNT_COLUMNS = frozenset({"amount", "charges", "balance", "total"})
 # (F17): a 2-digit total matches almost any filename containing a date.
 _MIN_FILENAME_DIGITS = 3
 
+# What a human might have named the file after, most specific first.
+#
+# `amount_payable` and `account_number` were missing and their absence was
+# expensive. Two corpus filenames name exactly those:
+#
+#   EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf
+#        ^ vendor account                                     ^ the PAYABLE, 69.62
+#   Centracom_0384043574_01012026_BILL.pdf
+#             ^ the account number
+#
+# Checking only `invoice_number` and `total_printed` reported `disagree` on both -
+# and since `filename_disagree` is a document-wide modifier, that x0.95 dragged
+# EVERY field below its threshold and routed five documents to `medium` when their
+# gold expects `high`. A wrong crosscheck is not a cosmetic problem.
+#
+# `amount_payable` is read from `derived`, which is the only place it can be.
+FILENAME_CANDIDATES: tuple[str, ...] = (
+    "invoice_number",
+    "account_number",
+    "vendor_account_number",
+    "amount_payable",
+    "total_printed",
+)
+
+
+def _plain(value: Any) -> str:
+    """A value's own text, never its repr.
+
+    An `AccountNumber` reaches here whenever a persona used the `account_number`
+    pattern, and `str()` on it yields the dataclass repr - so its digits came back
+    DOUBLED (raw and normalized concatenated) and never matched a filename.
+    Comcast's `Comcast_8495 44 462 0365242_...pdf` was reported as a disagreement
+    with its own account number in the name.
+    """
+    for attribute in ("normalized", "raw"):
+        text = getattr(value, attribute, None)
+        if isinstance(text, str):
+            return text
+    return str(value)
+
 
 def _boost(ctx: JobContext, field: str) -> None:
     ctx.boosts[field] = ctx.boosts.get(field, 0) + 1
@@ -166,9 +206,24 @@ def crosscheck_scanline(ctx: JobContext) -> JobContext:
     if not ctx.scanline:
         return ctx
 
-    for field in sorted(scanline_mod.CORROBORATABLE_FIELDS):
+    declared = _declared_asserts(ctx)
+    if not declared:
+        # No scanline selector, or one that asserts nothing. Section 1.3 makes the
+        # `asserts` array the persona's statement about WHICH fields this
+        # particular stub vouches for; with no statement there is nothing to check.
+        return ctx
+
+    for field in sorted(declared):
         value = ctx.extracted.get(field)
         if value is None:
+            continue
+        if not scanline_mod.is_corroboratable(value):
+            # Too few digits to conclude anything either way. Silence is the only
+            # honest answer - see `scanline.is_corroboratable`.
+            ctx.log(
+                f"s6: {field}={value!r} has too few digits for the scan line to "
+                "corroborate; neither boosted nor flagged"
+            )
             continue
         if scanline_mod.corroborates(ctx.scanline, value, field):
             _boost(ctx, field)
@@ -176,6 +231,29 @@ def crosscheck_scanline(ctx: JobContext) -> JobContext:
             ctx.add_field_modifier(field, "scanline_mismatch")
             ctx.log(f"s6: {field}={value!r} does not appear in the scan line digits")
     return ctx
+
+
+def _declared_asserts(ctx: JobContext) -> set[str]:
+    """The fields the persona's scanline selector says this stub corroborates.
+
+    **The persona decides, not this op.** An earlier version looped over all of
+    `scanline.CORROBORATABLE_FIELDS`, which overrode the persona's own declaration
+    and produced a false mismatch on Windstream: its scan line embeds `250719`, a
+    BILLING CYCLE date matching neither its bill date (07-22) nor its due date
+    (08-11), and its persona correctly asserts only `total_printed` and
+    `account_number`. Checking `due_date` anyway applied `scanline_mismatch` to a
+    correctly-extracted field and cost the document its lane.
+
+    Section 1.3's permitted set is still the ceiling - the validator enforces it at
+    write time (V7). This is the persona choosing from within it.
+    """
+    declared: set[str] = set()
+    for selector in getattr(ctx.persona, "field_selectors", ()) or ():
+        for assertion in getattr(selector, "asserts", ()) or ():
+            name = getattr(assertion, "field", None)
+            if name in scanline_mod.CORROBORATABLE_FIELDS:
+                declared.add(name)
+    return declared
 
 
 def crosscheck_duplicate_anchor(ctx: JobContext) -> JobContext:
@@ -215,12 +293,22 @@ def crosscheck_filename(ctx: JobContext) -> JobContext:
     filename = (ctx.source_path or "").rsplit("/", 1)[-1]
     haystack = "".join(ch for ch in filename if ch.isdigit())
 
+    # A filename with almost no digits can neither agree nor disagree. Lumen's is
+    # `Lumen - 5-QXH7QKM7.pdf`, whose only digit is the `5` in its account key -
+    # calling that a disagreement applied a document-wide x0.95 to every field and
+    # cost the document its lane. Same principle as `scanline.is_corroboratable`.
+    if len(haystack) < _MIN_FILENAME_DIGITS:
+        ctx.derived.set("filename_crosscheck", "absent")
+        return ctx
+
     checked = False
-    for field in ("invoice_number", "total_printed"):
+    for field in FILENAME_CANDIDATES:
         value = ctx.extracted.get(field)
         if value is None:
+            value = ctx.derived.get(field)
+        if value is None:
             continue
-        digits = "".join(ch for ch in str(value) if ch.isdigit())
+        digits = "".join(ch for ch in _plain(value) if ch.isdigit())
         if len(digits) < _MIN_FILENAME_DIGITS:
             continue
         checked = True

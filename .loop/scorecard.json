@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 33,
+      "passed_count": 35,
       "total_count": 39,
       "assertions": [
         {
@@ -34,8 +34,8 @@
           "name": "review_flag",
           "kind": "exact",
           "expected": false,
-          "actual": true,
-          "passed": false
+          "actual": false,
+          "passed": true
         },
         {
           "name": "regen_flag",
@@ -48,8 +48,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "medium",
-          "passed": false
+          "actual": "high",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -366,7 +366,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 32,
+      "passed_count": 34,
       "total_count": 38,
       "assertions": [
         {
@@ -387,8 +387,8 @@
           "name": "review_flag",
           "kind": "exact",
           "expected": false,
-          "actual": true,
-          "passed": false
+          "actual": false,
+          "passed": true
         },
         {
           "name": "regen_flag",
@@ -401,8 +401,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "medium",
-          "passed": false
+          "actual": "high",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -694,7 +694,7 @@
         "F12"
       ],
       "passed": false,
-      "passed_count": 32,
+      "passed_count": 34,
       "total_count": 39,
       "assertions": [
         {
@@ -715,8 +715,8 @@
           "name": "review_flag",
           "kind": "exact",
           "expected": false,
-          "actual": true,
-          "passed": false
+          "actual": false,
+          "passed": true
         },
         {
           "name": "regen_flag",
@@ -729,8 +729,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "medium",
-          "passed": false
+          "actual": "high",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -1013,7 +1013,7 @@
         "F9"
       ],
       "passed": false,
-      "passed_count": 31,
+      "passed_count": 33,
       "total_count": 36,
       "assertions": [
         {
@@ -1034,8 +1034,8 @@
           "name": "review_flag",
           "kind": "exact",
           "expected": false,
-          "actual": true,
-          "passed": false
+          "actual": false,
+          "passed": true
         },
         {
           "name": "regen_flag",
@@ -1048,8 +1048,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "medium",
-          "passed": false
+          "actual": "high",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -1791,7 +1791,7 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 25,
+      "passed_count": 28,
       "total_count": 35,
       "assertions": [
         {
@@ -1812,8 +1812,8 @@
           "name": "review_flag",
           "kind": "exact",
           "expected": false,
-          "actual": true,
-          "passed": false
+          "actual": false,
+          "passed": true
         },
         {
           "name": "regen_flag",
@@ -1826,8 +1826,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "medium",
-          "passed": false
+          "actual": "high",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -2050,8 +2050,8 @@
           "name": "derived.filename_crosscheck",
           "kind": "exact",
           "expected": "agree",
-          "actual": "disagree",
-          "passed": false
+          "actual": "agree",
+          "passed": true
         }
       ]
     },
@@ -3049,7 +3049,7 @@
     "total": 10,
     "passed": 1,
     "failed": 9,
-    "assertions_passed": 263,
+    "assertions_passed": 274,
     "assertions_total": 339
   }
 }

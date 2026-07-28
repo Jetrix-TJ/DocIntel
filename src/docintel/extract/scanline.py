@@ -78,6 +78,41 @@ def find(pages: tuple[PageText, ...]) -> str | None:
     return None
 
 
+def _plain(value: object) -> str:
+    """A value's own text, never its repr.
+
+    An `AccountNumber` (from the `account_number` named pattern) carries `raw` and
+    `normalized`, and `str()` on it yields the dataclass repr - so its digits came
+    back DOUBLED and matched nothing. Comcast's account `8495444620365242` IS in its
+    scan line `849544462036524200221119`, and the doubled form was not, so a correct
+    extraction was reported as a scan-line mismatch.
+
+    `normalized` is preferred because a scan line is a pure digit run: the printed
+    spacing was never in it.
+    """
+    for attribute in ("normalized", "raw"):
+        text = getattr(value, attribute, None)
+        if isinstance(text, str):
+            return text
+    return str(value)
+
+
+def is_corroboratable(value: object) -> bool:
+    """Whether `value` has enough digits for the scan line to say anything.
+
+    `corroborates` returning False is ambiguous on its own: it means either "these
+    digits are absent from the scan line" or "there are too few digits to tell".
+    Those are completely different answers and a caller must not conflate them.
+
+    Centracom is the case that proves it. Its due date is printed
+    `25TH OF THE MONTH` (F9), whose only digits are `25` - below the coincidence
+    floor, so nothing can be concluded. Read as a mismatch it applied
+    `scanline_mismatch` (x0.85) to a correctly-extracted field and dropped the
+    document out of the `high` lane its gold expects.
+    """
+    return len(_NON_DIGIT_RE.sub("", _plain(value))) >= _MIN_CORROBORATION_DIGITS
+
+
 def corroborates(scanline: str, value: object, field: str) -> bool:
     """True if `value`'s digits appear as a contiguous run in `scanline`.
 
@@ -100,7 +135,7 @@ def corroborates(scanline: str, value: object, field: str) -> bool:
             f"{sorted(CORROBORATABLE_FIELDS)} - transcription fidelity, never "
             "business correctness (see module docstring)"
         )
-    value_digits = _NON_DIGIT_RE.sub("", str(value))
+    value_digits = _NON_DIGIT_RE.sub("", _plain(value))
     if len(value_digits) < _MIN_CORROBORATION_DIGITS:
         return False
     scanline_digits = _NON_DIGIT_RE.sub("", scanline)
