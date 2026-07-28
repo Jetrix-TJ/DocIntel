@@ -1,0 +1,139 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "doc_type": "telecom_bill",
+  "sender_fingerprint": "digitaldirection|lumen",
+  "notes": "The only bill in the pack printing an ISO currency code, and the only one with a real invoice number. The LUMEN letterhead is an IMAGE - the token never appears in the text layer - and `INVOICE START_11755352` on line 0 is a print-stream control token that an `INVOICE\\s*(\\d+)` pattern would grab instead of the real 752233001.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "any-page",
+      "pattern": "(Lumen)",
+      "required": false
+    },
+    {
+      "field": "vendor_legal_name",
+      "anchor": "Invoice of",
+      "region": "near-anchor",
+      "pattern": "(Level 3 Communications, LLC)",
+      "required": false
+    },
+    {
+      "field": "invoice_number",
+      "anchor": "Invoice Number",
+      "region": "near-anchor",
+      "pattern": "([0-9]{9})"
+    },
+    {
+      "field": "account_number",
+      "anchor": "Billing Account Number",
+      "region": "near-anchor",
+      "pattern": "account_number"
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Invoice Date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Payment Due",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ],
+      "required": false
+    },
+    {
+      "field": "bill_to_name",
+      "region": "any-page",
+      "pattern": "(CITY OF DUBLIN)"
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Statement Balance",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payment Received",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false,
+      "adjust": [
+        "normalize_credit_sign"
+      ]
+    },
+    {
+      "field": "credits_adjustments",
+      "anchor": "Credits/Adjustments",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Current Charges",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_balance_composition"
+      ]
+    },
+    {
+      "field": "currency",
+      "anchor": "Total Amount Due",
+      "region": "near-anchor",
+      "pattern": "(USD)",
+      "adjust": [
+        "infer_currency"
+      ]
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amount Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "crosscheck_scanline",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "vendor_email",
+      "region": "any-page",
+      "pattern": "(Billing@Lumen.com)",
+      "required": false
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        {
+          "field": "total_printed",
+          "as": "digits_no_decimal"
+        },
+        {
+          "field": "invoice_number",
+          "as": "digits_only"
+        }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 3,
+      "max": 10
+    },
+    "has_table": true,
+    "text_source": "native"
+  }
+}

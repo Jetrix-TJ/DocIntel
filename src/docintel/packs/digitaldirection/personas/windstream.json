@@ -1,0 +1,135 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "doc_type": "telecom_bill",
+  "sender_fingerprint": "digitaldirection|windstream",
+  "notes": "A three-column header/value pair: `Account number Telephone number Invoice date` on one line, the three values on the next. One anchor therefore yields three fields. The letterhead brand is broken in the text layer (`Windstre am`), so vendor_name cannot be captured exactly.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "any-page",
+      "pattern": "(Kinetic Business)",
+      "required": false
+    },
+    {
+      "field": "account_number",
+      "anchor": "Account number",
+      "region": "near-anchor",
+      "pattern": "([0-9]{9})"
+    },
+    {
+      "field": "telephone_number",
+      "anchor": "Account number",
+      "region": "near-anchor",
+      "pattern": "phone",
+      "required": false
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Invoice date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Due date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ],
+      "required": false
+    },
+    {
+      "field": "bill_to_name",
+      "region": "any-page",
+      "pattern": "(CHOCTAW TRAVEL MART)"
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Bill",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments/Adjustments",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false,
+      "adjust": [
+        "normalize_credit_sign"
+      ]
+    },
+    {
+      "field": "amount_previously_due",
+      "anchor": "Amount Previously Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Current Charges Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_balance_composition",
+        "infer_currency"
+      ]
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amount Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "crosscheck_scanline",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "remit_payee",
+      "anchor": "check payable to",
+      "region": "near-anchor",
+      "pattern": "(OKLAHOMA WINDSTREAM, LLC)",
+      "required": false,
+      "adjust": [
+        "resolve_vendor_alias"
+      ]
+    },
+    {
+      "field": "vendor_website",
+      "region": "any-page",
+      "pattern": "(kineticbusiness.com)",
+      "required": false
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        {
+          "field": "total_printed",
+          "as": "digits_no_decimal"
+        },
+        {
+          "field": "account_number",
+          "as": "digits_only"
+        }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 2,
+      "max": 8
+    },
+    "has_table": true,
+    "text_source": "native"
+  }
+}

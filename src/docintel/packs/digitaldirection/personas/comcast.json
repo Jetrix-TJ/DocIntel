@@ -1,0 +1,116 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "doc_type": "telecom_bill",
+  "sender_fingerprint": "digitaldirection|comcast",
+  "notes": "Account number label and value are split by a column boundary, so the value line is glued to `Taxes and fees 3.22`. The credit carries BOTH a leading minus and a trailing `cr`, which parse_money resolves with an OR rather than negating twice.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "any-page",
+      "pattern": "(Comcast Business)",
+      "required": false
+    },
+    {
+      "field": "account_number",
+      "anchor": "Account number",
+      "region": "near-anchor",
+      "pattern": "account_number",
+      "adjust": [
+        "strip_internal_whitespace"
+      ]
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Bill date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Payment due",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ],
+      "required": false
+    },
+    {
+      "field": "bill_to_name",
+      "region": "any-page",
+      "pattern": "(Clyde Administration Servi)"
+    },
+    {
+      "field": "service_location",
+      "anchor": "For service at:",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous balance",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Credit Card Payment",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false,
+      "adjust": [
+        "normalize_credit_sign"
+      ]
+    },
+    {
+      "field": "taxes_and_fees",
+      "anchor": "Taxes and fees",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Amount due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_scanline",
+        "crosscheck_filename",
+        "infer_currency"
+      ]
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        {
+          "field": "total_printed",
+          "as": "digits_no_decimal"
+        },
+        {
+          "field": "account_number",
+          "as": "digits_only"
+        }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 3,
+      "max": 10
+    },
+    "has_table": true,
+    "text_source": "native"
+  }
+}

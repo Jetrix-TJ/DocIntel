@@ -1,16 +1,25 @@
 """The pack protocol, the loader, and the rule that decides which pack owns a document.
 
-**How a pack claims a document.** Not by the sender, and never by the filename.
-A pack owns a document when the document is billed *to* that pack's organization,
-which is a fact on the page. Northstar's pack claims an invoice addressed to
-Northstar Recycling; Digital Direction's claims one addressed to Digital
-Direction. That guard is why `bill_to_name` is a required field in both pack
-specs: a vendor invoice that arrives in the wrong AP inbox must not be silently
-processed as if it belonged there.
+**How a pack claims a document.** Never by the filename, and never by asking a
+human. A pack owns a document when the document belongs to that pack's *domain*,
+which is a fact on the page - but what makes it that pack's domain differs by
+pack, so `claims` is the pack's own decision rather than a rule imposed here.
 
-The sender decides which *persona* applies (Stage 4); the recipient decides which
-*pack* applies (here). Conflating the two would mean a new vendor could not be
-processed until someone told the system which pack it belonged to.
+The two shipped packs illustrate why the choice cannot be centralized:
+
+* **Northstar** is an AP department. Every invoice it handles is billed *to*
+  Northstar, so its guard is the bill-to - and `bill_to_name` is a required field
+  precisely so a vendor invoice that arrived in the wrong inbox is not silently
+  processed as though it belonged there.
+* **Digital Direction** is a telecom expense manager. Its bills are addressed to
+  several managed clients (`CLYDE COMPANIES`, `City of Dublin`, `Choctaw Travel
+  Mart`), so there is no single recipient to guard on. What every one of its
+  documents shares is that the sender is a known carrier, which is its domain by
+  definition.
+
+The sender still decides which *persona* applies (Stage 4). Keeping that separate
+from the pack decision is what lets a brand-new vendor be processed at all, rather
+than waiting for someone to declare which pack it belongs to.
 """
 
 from __future__ import annotations
@@ -27,6 +36,7 @@ from docintel.pipeline.hooks import HookRegistry
 # become active because someone dropped a folder in place.
 PACK_MODULES: tuple[str, ...] = (
     "docintel.packs.northstar",
+    "docintel.packs.digitaldirection",
 )
 
 
@@ -98,10 +108,55 @@ def resolve_pack(ctx: JobContext, packs: list[Pack] | None = None) -> Pack | Non
     return None
 
 
+# Sockets that fire BEFORE Stage 3 has resolved a pack. A hook on one of these
+# cannot be gated on the claim, because there is nothing to gate on yet.
+_UNGATED_SOCKETS: frozenset[str] = frozenset({"beforeIntake", "afterFilter"})
+
+
+class _ClaimGatedRegistry:
+    """A HookRegistry facade that gates one pack's hooks on that pack's claim.
+
+    **Without this, adding a second pack silently breaks the first.** Every hook
+    in a `HookRegistry` runs on every document, so Northstar's ladder would set
+    `doc_type: standard_invoice` and Digital Direction's would immediately
+    overwrite it with `telecom_bill` - after which every Northstar persona lookup
+    misses and six documents fall back to the vision path. That is exactly what
+    happened when the second pack was registered, and only the scorecard noticed:
+    DTSS dropped from 23 passing assertions to 4.
+
+    The gate lives here rather than in each pack's hooks because it is a registry
+    invariant. A pack author should not have to remember it, and a pack that
+    forgot would break a *different* pack - the worst kind of coupling.
+    """
+
+    def __init__(self, registry: HookRegistry, pack: Pack) -> None:
+        self._registry = registry
+        self._pack = pack
+
+    def register(self, socket: str, fn: Any, pack: str) -> None:
+        if socket in _UNGATED_SOCKETS:
+            self._registry.register(socket, fn, pack)
+            return
+
+        owner = self._pack
+
+        def gated(ctx: JobContext, next_: Any) -> JobContext:
+            if ctx.pack is not owner:
+                return next_(ctx)
+            return fn(ctx, next_)
+
+        # Keep the original name so `HookRegistry.registered` stays readable.
+        gated.__name__ = getattr(fn, "__name__", "hook")
+        self._registry.register(socket, gated, pack)
+
+
 def register_all(registry: HookRegistry, packs: list[Pack] | None = None) -> None:
-    """Give every pack its hooks. Called once when the pipeline is built."""
+    """Give every pack its hooks, each gated on that pack having claimed.
+
+    Called once when the pipeline is built.
+    """
     for pack in packs if packs is not None else load_packs():
-        pack.register_hooks(registry)
+        pack.register_hooks(_ClaimGatedRegistry(registry, pack))  # type: ignore[arg-type]
 
 
 # --------------------------------------------------------------------------

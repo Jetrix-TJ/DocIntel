@@ -1,0 +1,149 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "doc_type": "telecom_bill",
+  "sender_fingerprint": "digitaldirection|centracom",
+  "notes": "THE RISKIEST DOCUMENT IN THE CORPUS. Total Amount Due 33,876.40 is the biggest figure on the page AND what the scanline encodes; the payable is 13,752.60. Every corroboration signal points at the trap. The only evidence for the right answer is the composition 20,123.80 + 13,752.60.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "top-left",
+      "pattern": "(CENTRACOM)"
+    },
+    {
+      "field": "account_number",
+      "anchor": "Account Number:",
+      "region": "near-anchor",
+      "pattern": "([0-9]{10})"
+    },
+    {
+      "field": "account_name",
+      "anchor": "Account Name:",
+      "region": "near-anchor",
+      "pattern": "text",
+      "required": false
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "Account Name:",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Bill Date:",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Due Date:",
+      "region": "near-anchor",
+      "pattern": "date_loose",
+      "required": false
+    },
+    {
+      "field": "balance_from_last_statement",
+      "anchor": "Balance from last statement",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments Received",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false,
+      "adjust": [
+        "normalize_credit_sign"
+      ]
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Balance",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Subtotal Current Charges",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_balance_composition",
+        "infer_currency"
+      ]
+    },
+    {
+      "field": "taxes_and_fees",
+      "anchor": "Internet Taxes, Surcharges, & Fees",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amount Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "crosscheck_scanline",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "circuit_id",
+      "anchor": "Special Circuit:",
+      "region": "near-anchor",
+      "pattern": "([0-9]{10})",
+      "required": false
+    },
+    {
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "phone",
+      "required": false
+    },
+    {
+      "row_group": "charges",
+      "table_anchor": "This Month",
+      "columns": {
+        "label": "text",
+        "amount": "currency"
+      },
+      "row_count": {
+        "min": 1,
+        "max": 20
+      },
+      "allow_empty_cells": true
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        {
+          "field": "total_printed",
+          "as": "digits_no_decimal"
+        },
+        {
+          "field": "account_number",
+          "as": "digits_only"
+        }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 4,
+      "max": 14
+    },
+    "has_table": true,
+    "text_source": "native"
+  }
+}
