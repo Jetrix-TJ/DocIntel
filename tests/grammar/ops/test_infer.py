@@ -186,3 +186,95 @@ def test_no_vendor_at_all_records_nothing() -> None:
     ctx = _ctx(_page(1, "x"))
     ctx = resolve_vendor_alias(ctx)
     assert ctx.derived.get("vendor_canonical") is None
+
+
+# --------------------------------------------------------------------------
+# The page-text rung and the display-name table (unit 2)
+# --------------------------------------------------------------------------
+
+
+class _CarrierPack:
+    default_currency = "USD"
+    vendor_aliases = {
+        "lumen": "lumen",
+        "level 3 communications, llc": "lumen",
+        "kinetic business": "windstream",
+        "windstream": "windstream",
+    }
+    display_names = {
+        "lumen": "Lumen",
+        "windstream": "Kinetic Business by Windstream",
+    }
+
+
+def _pack_ctx(*pages, **fields):
+    ctx = _ctx(*pages, **fields)
+    ctx.pack = _CarrierPack()
+    return ctx
+
+
+def test_a_canonical_key_is_found_in_page_text_when_no_field_was_extracted() -> None:
+    """Lumen's letterhead is an IMAGE - the token appears zero times in the text
+    layer, so no selector can capture it. The alias table still matches the one
+    place the brand IS written."""
+    ctx = _pack_ctx(_page(1, "How", "to", "reach", "Lumen:", "1-877-453-8353"))
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_canonical") == "lumen"
+    assert ctx.derived.get("vendor_basis") == "page_text_alias"
+
+
+def test_carrier_canonical_is_emitted_under_the_pack_specs_name() -> None:
+    """One fact, two names. Every Digital Direction gold label asserts it as
+    `carrier_canonical`."""
+    ctx = _pack_ctx(_page(1, "How", "to", "reach", "Lumen:"))
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("carrier_canonical") == ctx.derived.get("vendor_canonical")
+
+
+def test_the_display_table_supplies_a_vendor_name_the_page_cannot() -> None:
+    """Windstream's text layer breaks the brand mid-word: `Kinetic Business by
+    Windstre am`. No pattern yields the real name, but `kinetic business` still
+    resolves the canonical key."""
+    ctx = _pack_ctx(_page(1, "Please", "call", "Kinetic", "Business", "by", "Windstre", "am"))
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_canonical") == "windstream"
+    assert ctx.derived.get("vendor_name") == "Kinetic Business by Windstream"
+
+
+def test_a_printed_vendor_name_is_never_overwritten_by_the_table() -> None:
+    """F5's principle: printed evidence wins where it exists. The table is for
+    where the print is unreadable, not for normalizing what was read."""
+    ctx = _pack_ctx(_page(1, "How", "to", "reach", "Lumen:"), vendor_name="LUMEN TECHNOLOGIES")
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_name") is None
+    assert ctx.extracted.get("vendor_name") == "LUMEN TECHNOLOGIES"
+
+
+def test_the_longest_alias_match_wins() -> None:
+    """`level 3 communications, llc` is more specific than a bare brand token."""
+    ctx = _pack_ctx(_page(1, "Invoice", "of", "Level", "3", "Communications,", "LLC"))
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_canonical") == "lumen"
+
+
+def test_an_extracted_payee_still_outranks_page_text() -> None:
+    ctx = _pack_ctx(
+        _page(1, "How", "to", "reach", "Lumen:"),
+        remit_payee="Level 3 Communications, LLC",
+    )
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_basis") == "remit_payee_alias"
+
+
+def test_an_unrecognized_vendor_printing_two_names_is_logged() -> None:
+    """The case that most needs to be visible: it is a new alias-table entry
+    waiting to be written."""
+    ctx = _ctx(_page(1, "x"), vendor_name="Acme Widgets", remit_payee="Acme Holdings LLC")
+    ctx = resolve_vendor_alias(ctx)
+    assert any("differs from letterhead" in e for e in ctx.events)
+
+
+def test_no_pack_and_no_names_records_nothing() -> None:
+    ctx = _ctx(_page(1, "x"))
+    ctx = resolve_vendor_alias(ctx)
+    assert ctx.derived.get("vendor_canonical") is None

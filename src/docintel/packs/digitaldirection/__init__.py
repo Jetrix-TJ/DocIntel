@@ -67,6 +67,11 @@ class DigitalDirectionPack:
     def vendor_aliases(self) -> dict[str, str]:
         return dict(aliases.LITERAL_ALIASES)
 
+    @property
+    def display_names(self) -> dict[str, str]:
+        """canonical key -> the name to report. See `aliases.DISPLAY_NAMES`."""
+        return dict(aliases.DISPLAY_NAMES)
+
     def fields_for(self, doc_type: str) -> frozenset[str]:
         return fields.fields_for(doc_type)
 

@@ -47,6 +47,26 @@ PATTERN_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
 
 KNOWN_CARRIERS: frozenset[str] = frozenset(LITERAL_ALIASES.values())
 
+# canonical key -> the name to report.
+#
+# Two of these CANNOT be read off the page by any pattern, which is why the table
+# exists rather than being a shortcut:
+#
+#   Lumen       the LUMEN letterhead is an IMAGE - the token appears zero times
+#               in the text layer. Only `How to reach Lumen:` and the domain do.
+#   Windstream  the text layer breaks the brand mid-word: `Kinetic Business by
+#               Windstre am`. No literal or pattern match yields the real name.
+#
+# The alias table still resolves both correctly - Lumen via `\blumen\b`, Windstream
+# via `\bkinetic business\b` - so the canonical key is known even when the display
+# name is unreadable. That is exactly the gap this table fills.
+DISPLAY_NAMES: dict[str, str] = {
+    "centracom": "CentraCom",
+    "comcast": "Comcast Business",
+    "lumen": "Lumen",
+    "windstream": "Kinetic Business by Windstream",
+}
+
 
 def canonical(printed: str | None, payee: str | None = None) -> str | None:
     """The canonical carrier key, preferring the remittance payee (F5)."""

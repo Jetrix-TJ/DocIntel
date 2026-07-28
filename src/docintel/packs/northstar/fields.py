@@ -130,10 +130,15 @@ FIELDS: frozenset[str] = (
 #                   ladder falls back to account+period, so requiring a selector
 #                   here would make the documents F6 was written for unwritable.
 #   invoice_date    EDCO prints a billing date and no invoice date.
+#   vendor_name     supplied by the alias table's display names when the
+#                   letterhead is unreadable, the same way `currency` comes from
+#                   the F14 ladder. Veritiv's name shares a flattened line with
+#                   the invoice header block; Lumen's letterhead is an IMAGE and
+#                   Windstream's text layer breaks the brand mid-word. Demanding a
+#                   selector would make those three unwritable.
 #
 # What remains is what every document in the corpus genuinely carries.
 REQUIRED: frozenset[str] = frozenset({
-    "vendor_name",
     "total_printed",
     "amount_payable",
     "bill_to_name",

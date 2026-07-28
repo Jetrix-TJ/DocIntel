@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 26,
+      "passed_count": 27,
       "total_count": 39,
       "assertions": [
         {
@@ -140,8 +140,8 @@
           "name": "fields.carrier_canonical",
           "kind": "text",
           "expected": "centracom",
-          "actual": null,
-          "passed": false
+          "actual": "centracom",
+          "passed": true
         },
         {
           "name": "fields.account_number",
@@ -350,7 +350,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 23,
+      "passed_count": 24,
       "total_count": 38,
       "assertions": [
         {
@@ -469,8 +469,8 @@
           "name": "fields.carrier_canonical",
           "kind": "text",
           "expected": "comcast",
-          "actual": null,
-          "passed": false
+          "actual": "comcast",
+          "passed": true
         },
         {
           "name": "fields.account_number",
@@ -667,7 +667,7 @@
         "F12"
       ],
       "passed": false,
-      "passed_count": 26,
+      "passed_count": 28,
       "total_count": 39,
       "assertions": [
         {
@@ -786,8 +786,8 @@
           "name": "fields.carrier_canonical",
           "kind": "text",
           "expected": "lumen",
-          "actual": null,
-          "passed": false
+          "actual": "lumen",
+          "passed": true
         },
         {
           "name": "fields.account_number",
@@ -956,8 +956,8 @@
           "name": "derived.vendor_canonical",
           "kind": "exact",
           "expected": "lumen",
-          "actual": null,
-          "passed": false
+          "actual": "lumen",
+          "passed": true
         },
         {
           "name": "reference_list.values",
@@ -983,7 +983,7 @@
         "F9"
       ],
       "passed": false,
-      "passed_count": 25,
+      "passed_count": 27,
       "total_count": 36,
       "assertions": [
         {
@@ -1077,8 +1077,8 @@
           "name": "fields.vendor_name",
           "kind": "text",
           "expected": "Kinetic Business by Windstream",
-          "actual": "Kinetic Business",
-          "passed": false
+          "actual": "Kinetic Business by Windstream",
+          "passed": true
         },
         {
           "name": "fields.remit_payee",
@@ -1091,8 +1091,8 @@
           "name": "fields.carrier_canonical",
           "kind": "text",
           "expected": "windstream",
-          "actual": null,
-          "passed": false
+          "actual": "windstream",
+          "passed": true
         },
         {
           "name": "fields.account_number",
@@ -2309,7 +2309,7 @@
         "F20"
       ],
       "passed": false,
-      "passed_count": 17,
+      "passed_count": 18,
       "total_count": 32,
       "assertions": [
         {
@@ -2405,8 +2405,8 @@
           "name": "fields.vendor_name",
           "kind": "text",
           "expected": "U-Pak Disposals (1989) Ltd",
-          "actual": null,
-          "passed": false
+          "actual": "U-Pak Disposals (1989) Ltd",
+          "passed": true
         },
         {
           "name": "fields.remit_payee",
@@ -2729,7 +2729,7 @@
         "F19"
       ],
       "passed": false,
-      "passed_count": 22,
+      "passed_count": 23,
       "total_count": 37,
       "assertions": [
         {
@@ -2810,8 +2810,8 @@
           "name": "fields.vendor_name",
           "kind": "text",
           "expected": "Veritiv Operating Company",
-          "actual": null,
-          "passed": false
+          "actual": "Veritiv Operating Company",
+          "passed": true
         },
         {
           "name": "fields.remit_payee",
@@ -3016,7 +3016,7 @@
     "total": 10,
     "passed": 1,
     "failed": 9,
-    "assertions_passed": 222,
+    "assertions_passed": 230,
     "assertions_total": 339
   }
 }

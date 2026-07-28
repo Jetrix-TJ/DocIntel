@@ -55,7 +55,8 @@
       "pattern": "currency",
       "adjust": [
         "crosscheck_scanline",
-        "crosscheck_filename"
+        "crosscheck_filename",
+        "resolve_vendor_alias"
       ]
     },
     {

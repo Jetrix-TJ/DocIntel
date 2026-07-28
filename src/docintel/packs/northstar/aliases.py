@@ -92,3 +92,21 @@ def _lookup(printed: str) -> str | None:
 # The canonical key each shipped persona is filed under, so the fingerprint a
 # persona declares and the one Stage 4 computes cannot drift apart.
 KNOWN_VENDORS: frozenset[str] = frozenset(LITERAL_ALIASES.values())
+
+# canonical key -> the name to report. The *output* of the alias table, and the
+# only part of vendor identity that is genuinely table data rather than something
+# printed: a vendor with three printed renderings has one name, and picking which
+# rendering to report is a decision, not a transcription.
+#
+# Used only when no selector extracted a `vendor_name`. Printed evidence wins
+# where it exists (F5's principle), so a persona that CAN read the letterhead
+# should - and Veritiv's is the case that cannot, because its name shares a
+# flattened line with the invoice header block.
+DISPLAY_NAMES: dict[str, str] = {
+    "dtss": "D.T.S.S., Inc.",
+    "veritiv": "Veritiv Operating Company",
+    "complete_beverage_destruction": "Complete Beverage Destruction, LLC",
+    "federal_recycling": "Federal Recycling & Waste Solutions",
+    "upak": "U-Pak Disposals (1989) Ltd",
+    "edco": "EDCO Waste & Recycling Service",
+}

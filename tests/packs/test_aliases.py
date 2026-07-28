@@ -71,3 +71,32 @@ def test_empty_input_is_not_a_vendor() -> None:
 def test_known_vendors_covers_every_canonical_key() -> None:
     assert "edco" in KNOWN_VENDORS
     assert len(KNOWN_VENDORS) == 6, "one key per corpus vendor"
+
+
+# --------------------------------------------------------------------------
+# Display names — the alias table's output
+# --------------------------------------------------------------------------
+
+
+def test_every_canonical_key_has_a_display_name() -> None:
+    """A canonical key with no display name would leave `vendor_name` empty on
+    exactly the documents whose letterhead cannot be read."""
+    from docintel.packs.northstar.aliases import DISPLAY_NAMES, KNOWN_VENDORS
+
+    assert set(DISPLAY_NAMES) == KNOWN_VENDORS
+
+
+def test_digital_direction_display_names_cover_its_carriers() -> None:
+    from docintel.packs.digitaldirection.aliases import DISPLAY_NAMES, KNOWN_CARRIERS
+
+    assert set(DISPLAY_NAMES) == KNOWN_CARRIERS
+
+
+def test_the_two_unreadable_letterheads_have_display_names() -> None:
+    """Lumen's letterhead is an IMAGE (zero text-layer hits for the token) and
+    Windstream's text layer breaks the brand mid-word (`Windstre am`). Neither can
+    be captured by any pattern, which is why the table exists."""
+    from docintel.packs.digitaldirection.aliases import DISPLAY_NAMES
+
+    assert DISPLAY_NAMES["lumen"] == "Lumen"
+    assert DISPLAY_NAMES["windstream"] == "Kinetic Business by Windstream"

@@ -3,14 +3,8 @@
   "status": "active",
   "doc_type": "telecom_bill",
   "sender_fingerprint": "digitaldirection|windstream",
-  "notes": "A three-column header/value pair: `Account number Telephone number Invoice date` on one line, the three values on the next. One anchor therefore yields three fields. The letterhead brand is broken in the text layer (`Windstre am`), so vendor_name cannot be captured exactly.",
+  "notes": "A three-column header/value pair: `Account number Telephone number Invoice date` on one line, the three values on the next. One anchor therefore yields three fields. The letterhead brand is broken in the text layer (`Windstre am`), so vendor_name cannot be captured exactly. No vendor_name selector: the text layer breaks the brand mid-word (`Windstre am`), so the pack's display-name table supplies it.",
   "field_selectors": [
-    {
-      "field": "vendor_name",
-      "region": "any-page",
-      "pattern": "(Kinetic Business)",
-      "required": false
-    },
     {
       "field": "account_number",
       "anchor": "Account number",

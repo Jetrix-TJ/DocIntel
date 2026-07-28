@@ -84,7 +84,8 @@
         "derive_amount_payable",
         "crosscheck_scanline",
         "crosscheck_filename",
-        "infer_currency"
+        "infer_currency",
+        "resolve_vendor_alias"
       ]
     },
     {

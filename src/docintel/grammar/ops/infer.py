@@ -121,43 +121,114 @@ def _pack_default(ctx: JobContext) -> str | None:
 
 
 def resolve_vendor_alias(ctx: JobContext) -> JobContext:
-    """Settle on one vendor name, preferring the remittance payee (F5).
+    """Collapse every printed rendering of a sender onto one canonical key (F5).
 
-    Two of the corpus senders print one brand on the letterhead and bill under
-    another - the money goes where the remittance block says, not where the logo
-    says, so `remit_payee` wins whenever both are present. `vendor_basis` records
-    which one answered so a mismatch is auditable rather than invisible.
+    Three rungs, and `vendor_basis` records which answered:
 
-    The pack's alias table is the rung above this and arrives in C5; without one,
-    the preference order is the whole op.
+    1. the extracted `remit_payee` matches the pack's alias table -> `remit_payee_alias`
+    2. the extracted `vendor_name` matches it -> `letterhead_alias`
+    3. **the page text matches it** -> `page_text_alias`
+
+    Rung 3 is what makes this work at all on two corpus documents, and it is the
+    reason the op reads page text rather than only extracted fields:
+
+    * **Lumen's letterhead is an IMAGE.** The token `LUMEN` appears zero times in
+      the text layer, so no selector can capture it. The alias table still matches
+      `How to reach Lumen:`.
+    * **Windstream's text layer breaks the brand mid-word** - `Kinetic Business by
+      Windstre am`. No pattern yields the real name. The table matches on
+      `kinetic business` instead.
+
+    Having the canonical key, the pack's `display_names` table supplies a
+    `vendor_name` **only when no selector extracted one**. Printed evidence wins
+    where it exists, which is F5's principle; the table is for where the print is
+    unreadable.
+
+    `carrier_canonical` is emitted alongside `vendor_canonical` with the same
+    value. They are one fact under two names - the Digital Direction pack spec
+    calls it `carrier_canonical` and every gold label in that pack asserts it
+    under that name.
     """
     payee = _clean(ctx.extracted.get("remit_payee"))
     letterhead = _clean(ctx.extracted.get("vendor_name"))
+    table = _pack_aliases(ctx)
 
-    aliases = _pack_aliases(ctx)
-    for candidate, basis in ((payee, "remit_payee"), (letterhead, "letterhead")):
+    canonical: str | None = None
+    basis: str | None = None
+    for candidate, name in ((payee, "remit_payee"), (letterhead, "letterhead")):
         if candidate is None:
             continue
-        canonical = aliases.get(candidate.casefold())
-        if canonical is not None:
-            ctx.derived.set("vendor_canonical", canonical)
-            ctx.derived.set("vendor_basis", f"{basis}_alias")
-            return ctx
+        found = table.get(candidate.casefold())
+        if found is not None:
+            canonical, basis = found, f"{name}_alias"
+            break
 
-    if payee is not None:
-        ctx.derived.set("vendor_canonical", payee)
-        ctx.derived.set("vendor_basis", "remit_payee")
-        if letterhead is not None and letterhead.casefold() != payee.casefold():
+    if canonical is None:
+        canonical = _canonical_from_page(ctx, table)
+        basis = "page_text_alias" if canonical is not None else None
+
+    if canonical is not None:
+        ctx.derived.set("vendor_canonical", canonical)
+        ctx.derived.set("carrier_canonical", canonical)
+        ctx.derived.set("vendor_basis", basis)
+        display = _pack_display_names(ctx).get(canonical)
+        if display is not None and letterhead is None:
+            ctx.derived.set("vendor_name", display)
+            ctx.log(f"s6: vendor_name {display!r} from the alias table (not printed)")
+        if payee is not None and letterhead is not None and (
+            payee.casefold() != letterhead.casefold()
+        ):
+            ctx.log(
+                f"s6: remittance payee {payee!r} differs from letterhead "
+                f"{letterhead!r}; both collapse to {canonical!r} (F5)"
+            )
+        return ctx
+
+    # No alias table entry matched. Fall back to the printed names themselves,
+    # preferring the payee - the legal entity survives rebrands, the logo does not.
+    fallback = payee or letterhead
+    if fallback is not None:
+        ctx.derived.set("vendor_canonical", fallback)
+        ctx.derived.set("vendor_basis", "remit_payee" if payee else "letterhead")
+        if payee is not None and letterhead is not None and (
+            payee.casefold() != letterhead.casefold()
+        ):
+            # Logged on this path too. An unrecognized vendor printing two
+            # different names is exactly the case that most needs to be visible -
+            # it is a new alias-table entry waiting to be written.
             ctx.log(
                 f"s6: remittance payee {payee!r} differs from letterhead "
                 f"{letterhead!r}; the payee wins (F5)"
             )
-        return ctx
-
-    if letterhead is not None:
-        ctx.derived.set("vendor_canonical", letterhead)
-        ctx.derived.set("vendor_basis", "letterhead")
     return ctx
+
+
+def _canonical_from_page(ctx: JobContext, table: dict[str, str]) -> str | None:
+    """The canonical key implied by anything printed on a primary page.
+
+    Substring matching against the alias table's own keys, which is safe because
+    those keys are whole company names rather than common words.
+    """
+    if not table:
+        return None
+    haystack = re.sub(r"[^a-z0-9]+", " ", _primary_text(ctx).casefold())
+    best: tuple[int, str] | None = None
+    for printed, canonical in table.items():
+        key = re.sub(r"[^a-z0-9]+", " ", printed.casefold()).strip()
+        if key and key in haystack:
+            # Longest match wins: `level 3 communications llc` is more specific
+            # than `level 3 communications`, and both beat a bare brand token.
+            if best is None or len(key) > best[0]:
+                best = (len(key), canonical)
+    return best[1] if best is not None else None
+
+
+def _pack_display_names(ctx: JobContext) -> dict[str, str]:
+    pack = ctx.pack if ctx.pack is not None else getattr(ctx.persona, "pack", None)
+    table = getattr(pack, "display_names", None)
+    if not isinstance(table, dict):
+        return {}
+    return {str(k): str(v) for k, v in table.items()}
 
 
 def _clean(value: Any) -> str | None:

@@ -3,14 +3,8 @@
   "status": "active",
   "sender_fingerprint": "northstar|veritiv",
   "doc_type": "standard_invoice",
-  "notes": "Labels appear twice - once on the remittance stub and once in the body - so the body occurrences are reached with all_matches plus dedupe.",
+  "notes": "Labels appear twice - once on the remittance stub and once in the body - so the body occurrences are reached with all_matches plus dedupe. No vendor_name selector: the letterhead shares a flattened line with the invoice header block, so the pack's display-name table supplies it.",
   "field_selectors": [
-    {
-      "field": "vendor_name",
-      "anchor": "VERITIV OPERATING COMPANY",
-      "region": "same-row",
-      "pattern": "text"
-    },
     {
       "field": "invoice_number",
       "region": "header-block",
@@ -58,7 +52,8 @@
         "crosscheck_total_composition",
         "crosscheck_line_sum",
         "crosscheck_filename",
-        "infer_currency"
+        "infer_currency",
+        "resolve_vendor_alias"
       ]
     },
     {
