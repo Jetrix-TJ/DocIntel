@@ -370,3 +370,56 @@ def test_validate_rejects_a_numeric_scanline():
     rec["scanline"] = 25600770871000367962
     with pytest.raises(ContractError, match="scanline"):
         validate_record(rec)
+
+
+# ==========================================================================
+# Identity keys (C3). Carried over from the Task A5 review: it could not be
+# enforced during Part A because no derive op produced these values yet.
+# ==========================================================================
+
+
+def test_a_processed_record_must_carry_both_identity_keys():
+    """They exist solely so downstream dedup works for the 3 of 10 corpus
+    documents that print no invoice number (F6). A processed record without them
+    silently starves the duplicate decision."""
+    rec = build_record(_ctx())
+    del rec["derived"]["document_identity"]
+    with pytest.raises(ContractError, match="document_identity"):
+        validate_record(rec)
+
+
+def test_a_processed_record_missing_only_identity_basis_is_also_rejected():
+    rec = build_record(_ctx())
+    del rec["derived"]["identity_basis"]
+    with pytest.raises(ContractError, match="identity_basis"):
+        validate_record(rec)
+
+
+def test_a_null_identity_is_valid_because_absence_and_None_differ():
+    """None means "we looked and could not build one" — materially different
+    from "this pipeline never tried", and the only one of the two a reviewer can
+    act on. Requiring a non-null value would also break the
+    count(intaken) == count(emitted) invariant, since a document whose identity
+    cannot be built still has to be emitted and routed to review."""
+    ctx = _ctx()
+    ctx.derived.set("document_identity", None)
+    ctx.derived.set("identity_basis", None)
+    rec = build_record(ctx)
+    validate_record(rec)
+    assert rec["derived"]["document_identity"] is None
+
+
+def test_a_skipped_record_needs_no_identity():
+    """Nothing was extracted, so there is nothing to dedup against."""
+    ctx = new_context(document_id="d1", source_path="/tmp/a.pdf")
+    ctx.disposition = "skipped"
+    ctx.skip_reason = "not_an_invoice"
+    rec = build_record(ctx)
+    validate_record(rec)
+
+
+def test_a_dead_letter_record_needs_no_identity():
+    ctx = new_context(document_id="d1", source_path="/tmp/a.pdf")
+    ctx.disposition = "dead_letter"
+    rec = build_record(ctx)
+    validate_record(rec)

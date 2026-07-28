@@ -194,6 +194,12 @@ class JobContext:
     # capture + gate (s6, s7)
     confidence: dict[str, float] = field(default_factory=dict)
     modifiers: list[str] = field(default_factory=list)
+    # Corroboration counts per field, raised by the section 4.3 cross-check ops.
+    # Kept separate from `modifiers` because modifiers are document-wide and
+    # multiplicative while a boost is per-field and capped (core.confidence):
+    # three agreeing renderings of an OCR'd number can still all be wrong the
+    # same way, so corroboration may never lift a field to certainty.
+    boosts: dict[str, int] = field(default_factory=dict)
     lane: str | None = None
     review_flag: bool = False
     regen_flag: bool = False

@@ -180,6 +180,14 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         Assertion("text_source", cls["text_source"], lambda r: r["text_source"]),
         Assertion("review_flag", routing["review_flag"], lambda r: r["review_flag"]),
         Assertion("regen_flag", routing["regen_flag"], lambda r: r["regen_flag"]),
+        # `lane` is specified in all ten gold files and was never asserted - the
+        # same blind-spot class as the tags/reference_list/page_roles gaps before
+        # it. The lane IS the routing decision, so a scorecard that checks the
+        # two boolean flags but not which lane a document landed in cannot tell
+        # a correctly-routed document from a wrongly-routed one. Implementing it
+        # is C4's job (`s7_gate` is still a stub); measuring it starts now, so
+        # C4 has a visible target instead of an unstated one.
+        Assertion("lane", routing["lane"], lambda r: r.get("lane")),
         # F10 / page_roles: this appears on every emitted record and in every
         # gold file, but was never asserted here - the same blind-spot class
         # as the tags/reference_list gap noted above. kind="exact" (not

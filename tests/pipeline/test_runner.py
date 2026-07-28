@@ -2,20 +2,28 @@ import pytest
 from docintel.core.contract import validate_record
 from docintel.core.errors import PackError, PermanentError, TransientError
 from docintel.core.models import JobContext
+from docintel.grammar.ops.derive import derive_document_identity
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 
 
 def _classified(ctx: JobContext) -> JobContext:
-    """Stand in for stage 3, which every real run performs before emit.
+    """Stand in for the stages every real run performs before emit.
 
     validate_record requires a non-empty doc_type on a record whose disposition
     is "processed". A stage double that never classifies would therefore
     (correctly) degrade to dead_letter, so these doubles set it the way the real
     Classify stage does.
+
+    Since C3 the same is true of `document_identity` / `identity_basis`: a
+    processed record must carry both, because downstream dedup needs them for the
+    documents that print no invoice number (F6). Stage 6 always derives them, so
+    a double that skips Stage 6 stands in for it here rather than these tests
+    asserting a contract violation they are not about.
     """
     if ctx.doc_type is None:
         ctx.doc_type = "standard_invoice"
+    derive_document_identity(ctx)
     return ctx
 
 

@@ -14,7 +14,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 28,
+      "total_count": 29,
       "assertions": [
         {
           "name": "doc_type",
@@ -43,6 +43,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -270,7 +277,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 28,
+      "total_count": 29,
       "assertions": [
         {
           "name": "doc_type",
@@ -299,6 +306,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -512,7 +526,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 26,
+      "total_count": 27,
       "assertions": [
         {
           "name": "doc_type",
@@ -541,6 +555,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -732,7 +753,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 26,
+      "total_count": 27,
       "assertions": [
         {
           "name": "doc_type",
@@ -761,6 +782,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -950,7 +978,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 22,
+      "total_count": 23,
       "assertions": [
         {
           "name": "doc_type",
@@ -979,6 +1007,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "medium",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -1150,7 +1185,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 19,
+      "total_count": 20,
       "assertions": [
         {
           "name": "doc_type",
@@ -1179,6 +1214,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -1311,7 +1353,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 23,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -1340,6 +1382,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -1503,7 +1552,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 20,
+      "total_count": 21,
       "assertions": [
         {
           "name": "doc_type",
@@ -1532,6 +1581,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "review",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -1689,7 +1745,7 @@
       ],
       "passed": false,
       "passed_count": 7,
-      "total_count": 23,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -1718,6 +1774,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "review",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -1913,7 +1976,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 27,
+      "total_count": 28,
       "assertions": [
         {
           "name": "doc_type",
@@ -1942,6 +2005,13 @@
           "expected": false,
           "actual": false,
           "passed": true
+        },
+        {
+          "name": "lane",
+          "kind": "exact",
+          "expected": "high",
+          "actual": "low",
+          "passed": false
         },
         {
           "name": "page_roles",
@@ -2124,6 +2194,6 @@
     "passed": 0,
     "failed": 10,
     "assertions_passed": 39,
-    "assertions_total": 242
+    "assertions_total": 252
   }
 }

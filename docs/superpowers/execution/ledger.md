@@ -804,3 +804,107 @@ PROCESS NOTE: defect (3) was found only because the cluster ended with an
   STANDING RULE candidate: a cluster that adds a pipeline capability must finish
   with one test that exercises the whole path, not only its units.
 Cluster C2b: COMPLETE (0 fix rounds). Full detail in task-c2b-report.md.
+Cluster C3: EXECUTED INLINE. Delivers the 23 adjust ops (base/derive/crosscheck/
+  infer), an unconditional derive_document_identity, a real s6_capture, the
+  carried-over validate_record identity requirement, and tests/test_f1_
+  antiregression.py. 436 new tests, suite 994/994 in 7.9s, mypy strict clean over
+  18 files, ruff clean, gold 95 green. Scorecard 39/242 -> 39/252 (the +10 is the
+  lane assertion, finding 1).
+SCORE DID NOT MOVE and the plan predicted it would. "Score after: some derived.*"
+  was optimistic: every op only runs when a persona declares it in `adjust`, and
+  no personas exist until C5. U-PAK's two derived assertions ALREADY passed before
+  C3 (its gold expects null and a .get on an absent key also returns None), so
+  there was nothing for C3 to win. Verified per-document, not assumed.
+SPEC CORRECTION: §4.2 words the closure check as prior_balance + current_charges
+  != total_printed. That predates F1b and is only correct for net_of_payments.
+  Measured on all 5 corpus documents with a prior balance, the closure holds
+  against the CARRIED balance: Centracom 20123.80+13752.60, EDCO 298.34+69.62,
+  Comcast/Lumen/Windstream 0.00+printed. Against the RAW prior, Comcast reads
+  212.87+221.11=433.98 vs a printed 221.11 — a false mismatch on a completely
+  correct extraction. Written against carried, which reduces to the spec's wording
+  in the net_of_payments case. Pinned by a named test.
+CONTROLLER DECISION: two op shapes, one closed enum. base.VALUE_OPS is
+  Callable[[Any],Any] (§4.1, one field's value); OPS is Callable[[JobContext],
+  JobContext] (§4.2-4.4, reasons across fields). test_registry asserts
+  ALL_OP_NAMES == schema.BASE_ADJUST_OPS in BOTH directions, because either drift
+  is silent: declared-but-unimplemented means the validator accepts a persona and
+  s6 skips the op, so a document is scored as if a cross-check passed when nothing
+  ran; implemented-but-undeclared means the op is unreachable.
+RULING: op order is pinned by ops.ORDER, NOT the persona's declaration order. A
+  persona listing derive_amount_payable before resolve_carried_balance would read
+  a carried_balance that does not exist yet and fall back to the printed total —
+  THE F1 BUG, REACHABLE PURELY BY HOW A PERSONA WAS WRITTEN. Test lists the three
+  ops backwards and asserts Centracom still comes out at 13752.60. Value ops DO
+  run in declaration order, because there the composition is the author's intent.
+CONTROLLER DECISION: derive_document_identity is NOT an adjust op. The plan's
+  carried-over requirement demands validate_record require document_identity/
+  identity_basis, but the plan lists no op producing them. Rather than adding a
+  24th name to a closed enum §4 does not contain, it is an unconditional Stage 6
+  step — a persona must not be able to opt out of something the contract requires
+  by omitting a name. Ladder measured against gold: invoice_number, else
+  NORMALIZED account + '|' + period, else both keys None. The normalization is the
+  point of F6: Comcast prints '8495 44 462 0365242', gold identity is
+  '8495444620365242'; a key from the printed form would not join.
+RESOLVED (looked like a sequencing problem, was not): the identity requirement
+  demands PRESENCE, not a non-null value. A non-null requirement would dead-letter
+  all ten documents until C5 and destroy the loop's signal for two clusters.
+  derive_document_identity always sets both keys, using None for "looked and could
+  not build one" — materially different from "never tried", and the only one of the
+  two a reviewer can act on. Non-null would also break count(intaken) ==
+  count(emitted), since a document whose identity cannot be built still has to be
+  emitted and routed. Fixing the 3 tests this broke followed the precedent already
+  documented in tests/pipeline/test_runner.py's `_classified` helper, which stands
+  in for stages a double skips.
+MEASURED: two vendors compose their totals differently and no single formula
+  covers both. U-PAK subtotal 8119.44 + charges 6670.33 == 14789.77 (its 2325.69
+  H.S.T. already inside those parts); Veritiv subtotal 4608.45 + tax 299.55 ==
+  4908.00 with no surcharges. crosscheck_total_composition therefore tries every
+  plausible decomposition and boosts if ANY closes, flagging only when none does.
+  Picking one formula would false-flag whichever vendor did not use it, and a false
+  mismatch on a correct extraction is worse than a missed corroboration — it trains
+  reviewers to ignore the flag.
+EDCO TRAP (flagged by C2b) turned out safe by construction: crosscheck_line_sum
+  requires a printed `subtotal` and EDCO prints none, so its self-summing table
+  (805.54 of amount columns vs a printed 367.96) is SKIPPED rather than flagged.
+  Only Veritiv exercises the op in the corpus. A test asserts EDCO is skipped, so a
+  future change that loosens the subtotal requirement fails loudly.
+RULING: infer_currency leaves 9 of 10 documents with NO currency, and that is
+  correct rather than a gap. "Most invoices are USD" is a PACK POLICY, not
+  something the document says, so the rung supplying it is pack_default and packs
+  arrive in C5. Only U-PAK is CAD and says so via its H.S.T. line (rung 2). VAT is
+  deliberately not a currency signal — it spans the UK and the whole euro area, so
+  inferring either would be a guess wearing a basis.
+DEFECT (1, mine, in a test): a synthetic partially-paid fixture was arithmetically
+  impossible — prior 500 gross, payments -400, current 100, printed 600. Carried is
+  100, so 100+100 != 600 and derive_amount_payable correctly refused; the test was
+  asserting a payable the arithmetic forbids. Printed corrected to 200 with the
+  arithmetic spelled out. STANDING RULE 7 LANDING FROM THE OTHER DIRECTION: in C2a
+  bad fixtures made tests PASS for the wrong reason; here one made a correct
+  implementation look broken.
+FINDING 1 (FIXED): `lane` was never asserted. All ten gold files specify
+  expected_routing.lane; the scorecard asserted only review_flag and regen_flag.
+  The lane IS the routing decision, so a scorecard checking the two booleans but
+  not the lane cannot tell a correctly-routed document from a wrongly-routed one —
+  same blind-spot class as the tags/reference_list/page_roles gaps. Now asserted
+  (+10, all failing since s7_gate is a stub). Implementing it is C4's; MEASURING it
+  starts now so C4 has a visible target rather than an unstated one.
+FINDING 2 (NOT FIXED, NEEDS A DECISION): every gold file carries an `assertions`
+  array the scorecard NEVER READS — 68 entries across 55 distinct `check` names, of
+  which 37 carry a machine-checkable `equals`. Some duplicate existing coverage
+  (amount_payable, payable_basis, line_sum) but several are exactly C3's output and
+  are uncovered: balance_composition (5 docs), total_composition (2),
+  current_charges_composition, duplicate_anchor_agrees (2),
+  scanline_agrees_with_printed_total, filename_crosscheck, currency_inferred,
+  arith_balance_mismatch_applied. UNDERNEATH IT IS A BIGGER GAP:
+  `confidence_modifiers` is not asserted AT ALL — the entire §5 mechanism, 16
+  modifiers of which C3 emits 8, is unmeasured, and nothing would notice if
+  arith_balance_mismatch stopped being applied. Same class as standing rule 3, so
+  10/10 GREEN STILL DOES NOT FULLY MEAN THE CORPUS IS SATISFIED: the caveat C2b
+  discharged for the four contract keys reappears here for modifiers and routing.
+  Not fixed in C3 because it is real work with its own design (expr strings need
+  evaluating or ignoring; 55 check names map to record locations non-uniformly;
+  ~18 prose-only entries are about C4/C5 capabilities) and doing it inside C3 would
+  have been an unreviewed scope expansion. RECOMMENDATION: a small C3b before C4,
+  wiring the 37 `equals` entries plus a confidence_modifiers superset assertion.
+  Est. 150-250 src lines, mostly a check-name -> getter table.
+Cluster C3: COMPLETE (0 fix rounds). Full detail in task-c3-report.md.

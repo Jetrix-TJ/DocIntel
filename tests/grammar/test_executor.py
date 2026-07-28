@@ -642,6 +642,7 @@ def test_a_validated_persona_reaches_the_record_through_all_four_new_keys() -> N
     from docintel.core.contract import build_record, validate_record
     from docintel.grammar.validator import validate_persona
     from docintel.pipeline.stages.s5a_cached import ApplyCachedRules
+    from docintel.pipeline.stages.s6_capture import CaptureFields
 
     raw = {
         "sender_fingerprint": "edcodisposal.com|edco",
@@ -683,6 +684,11 @@ def test_a_validated_persona_reaches_the_record_through_all_four_new_keys() -> N
     ctx = ApplyCachedRules().run(ctx)
     assert ctx.extraction_route == "5a_cached"
 
+    # Stage 6 too: since C3 a processed record must carry document_identity, and
+    # running the real stage here is what makes this a whole-path test rather
+    # than a Stage 5a test that happens to build a record.
+    ctx = CaptureFields().run(ctx)
+
     record = build_record(ctx)
     validate_record(record)
 
@@ -691,6 +697,10 @@ def test_a_validated_persona_reaches_the_record_through_all_four_new_keys() -> N
     assert record["charges"] == [{"label": "FUEL", "amount": "1218.04"}]
     assert record["scanline"] == "25600770871000367962"
     assert record["sub_account"] == []
+    # Stage 6 derived the identity from the invoice-number rung being absent and
+    # no account number extracted, so it recorded that it looked and could not.
+    assert "document_identity" in record["derived"]
+    assert "identity_basis" in record["derived"]
 
 
 def test_a_row_count_violation_is_logged_and_never_silently_truncates() -> None:

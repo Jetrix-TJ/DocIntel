@@ -109,6 +109,33 @@ def validate_record(rec: dict[str, Any]) -> None:
                 f"doc_type must be a non-empty string for processed records, got {rec['doc_type']!r}"
             )
 
+    # Carried over from the Task A5 review, unblocked by C3's derive ops. A
+    # processed record MUST carry both identity keys in `derived`.
+    #
+    # These two exist solely so downstream dedup works for the 3 of 10 corpus
+    # documents that print no invoice number (F6). A processed record without
+    # them silently starves the duplicate decision - the exact failure the delta
+    # was written to prevent.
+    #
+    # PRESENCE is required, not a non-null value. `derive_document_identity`
+    # always sets both, using None to mean "looked and could not build one",
+    # which is a materially different statement from "this pipeline never
+    # tried" - and it is the only one of the two a reviewer can act on. Demanding
+    # a non-null value would also break the count(intaken) == count(emitted)
+    # invariant, since a document whose identity cannot be built still has to be
+    # emitted and routed to review.
+    if rec["disposition"] == "processed":
+        missing_identity = [
+            key for key in ("document_identity", "identity_basis")
+            if key not in rec["derived"]
+        ]
+        if missing_identity:
+            raise ContractError(
+                f"processed record is missing {missing_identity} from derived; "
+                "downstream dedup needs them for the documents that print no "
+                "invoice number (F6). None is a valid value, absence is not"
+            )
+
     # FINDING 5: document_id must be a non-empty string
     if not isinstance(rec["document_id"], str) or not rec["document_id"]:
         raise ContractError(
