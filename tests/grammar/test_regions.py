@@ -332,13 +332,30 @@ def test_remittance_block_falls_back_to_the_bottom_thirty_percent() -> None:
     assert _words_in(span) == {"stub"}
 
 
-def test_remittance_block_is_taken_from_the_last_page() -> None:
-    """The stub is on the final page of a multi-page bill."""
-    p1 = _page(1, ("body", 10.0, 700.0))
-    p2 = _page(2, ("stub", 10.0, 700.0))
+def test_remittance_block_searches_page_1_before_the_last_page() -> None:
+    """CORRECTED BY THE CORPUS. An earlier version of this test asserted the stub
+    was on the FINAL page, on the reasoning that a stub sits at the foot of a
+    document. Every scan line in the corpus is on page 1 - you detach the top of
+    the first page and mail it - so Centracom's is on page 1 of 10 and Comcast's on
+    page 1 of 6. Searching the last page found per-line service detail and reported
+    a confident miss on all five documents that print one.
+
+    Order is the assertion, not merely membership: `totals-block` searches the last
+    page first for the mirror-image reason (F9), and neither region may assume.
+    """
+    p1 = _page(1, ("stub", 10.0, 700.0))
+    p2 = _page(2, ("detail", 10.0, 700.0))
     pages = (p1, p2)
-    (span,) = resolve("remittance-block")(pages, _meta(*pages), None)
-    assert span.page_number == 2 and _words_in(span) == {"stub"}
+    spans = resolve("remittance-block")(pages, _meta(*pages), None)
+    assert [s.page_number for s in spans] == [1, 2]
+    assert _words_in(spans[0]) == {"stub"}
+
+
+def test_remittance_block_on_a_one_page_document_yields_one_span() -> None:
+    """Page 1 and the last page are the same page; it must not be searched twice."""
+    p = _page(1, ("stub", 10.0, 700.0))
+    spans = resolve("remittance-block")((p,), _meta(p), None)
+    assert [s.page_number for s in spans] == [1]
 
 
 # --------------------------------------------------------------------------

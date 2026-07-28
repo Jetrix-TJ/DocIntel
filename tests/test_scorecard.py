@@ -142,7 +142,10 @@ def test_a_transcribed_field_gets_the_text_kind():
     from docintel.scorecard import _field_kind
 
     assert _field_kind("vendor_name", "D.T.S.S., Inc.") == "text"
-    assert _field_kind("service_location", "Hunter Industries") == "text"
+    assert _field_kind("payment_terms", "Due on receipt") == "text"
+    # `service_location` moved to the `address` kind - it is a site description
+    # whose punctuation gold normalizes the same way it does a postal address.
+    assert _field_kind("service_location", "Hunter Industries") == "address"
 
 
 def test_a_non_string_gold_value_is_compared_exactly():
@@ -150,3 +153,70 @@ def test_a_non_string_gold_value_is_compared_exactly():
     from docintel.scorecard import _field_kind
 
     assert _field_kind("has_something", True) == "exact"
+
+
+# ==========================================================================
+# The `address` comparison kind
+# ==========================================================================
+
+
+def test_an_address_forgives_the_comma_gold_inserts():
+    """Gold systematically adds a comma between city and state that the documents
+    do not print. `join_lines_comma` joins LINES, so no op can insert one inside a
+    line - and an address is the same address whichever way the punctuation falls."""
+    from docintel.scorecard import matches
+
+    assert matches(
+        "PO Box 1550, Durant, OK 74702-1550", "PO BOX 1550, DURANT OK 74702-1550",
+        "address",
+    )
+    assert matches(
+        "387 S 520 W STE 210, Lindon, UT 84042-1960",
+        "387 S 520 W STE 210, LINDON UT 84042-1960",
+        "address",
+    )
+
+
+def test_an_address_does_NOT_forgive_extra_content():
+    """The property that keeps the assertion meaningful. An over-reaching capture
+    pulls the next block into the value, and that must still fail."""
+    from docintel.scorecard import matches
+
+    assert not matches(
+        "5555 Perimeter Dr, Dublin, OH 43017-3219",
+        "5555 PERIMETER DR, DUBLIN OH 43017-3219, How to reach Lumen:",
+        "address",
+    )
+
+
+def test_an_address_does_NOT_forgive_missing_content():
+    from docintel.scorecard import matches
+
+    assert not matches(
+        "500 North Defiance Trail, Spencerville, OH 45887",
+        "500 North Defiance Trail",
+        "address",
+    )
+
+
+def test_an_address_does_not_forgive_a_wrong_address():
+    from docintel.scorecard import matches
+
+    assert not matches("PO Box 188, East Longmeadow, MA 01028",
+                       "PO Box 7, Fairview, UT 84629", "address")
+
+
+def test_address_fields_get_the_address_kind():
+    from docintel.scorecard import _field_kind
+
+    for name in ("bill_to_address", "vendor_address", "remit_address",
+                 "return_address", "service_location"):
+        assert _field_kind(name, "somewhere") == "address"
+
+
+def test_a_company_name_is_not_treated_as_an_address():
+    """`remit_payee` is a legal entity, and `Level 3 Communications, LLC` versus
+    `Level 3 Communications LLC` is a different name, not different punctuation."""
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("remit_payee", "Level 3 Communications, LLC") == "text"

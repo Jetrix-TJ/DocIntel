@@ -35,6 +35,9 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
       exact    - plain equality. For our own vocabulary: enums, basis strings.
       text     - transcribed text, case-insensitive and whitespace-collapsed.
                  See the block below for why, and for what was rejected.
+      address  - a postal address, compared on alphanumeric content alone.
+                 Forgives the punctuation gold inserts; still catches wrong,
+                 extra or missing content.
       money    - value equality via Decimal. Gold holds 33876.4 (JSON drops the
                  trailing zero) while the record serializes Decimal("33876.40")
                  as "33876.40"; both denote the same amount.
@@ -74,6 +77,25 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
         if expected is None or actual is None:
             return expected == actual
         return _text_key(expected) == _text_key(actual)
+    if kind == "address":
+        # An address, compared on its alphanumeric content alone.
+        #
+        # Gold systematically inserts a comma between city and state that the
+        # documents do not print: `DURANT OK 74702-1550` is labelled
+        # `Durant, OK 74702-1550`, `LINDON UT 84042-1960` becomes
+        # `Lindon, UT 84042-1960`. It is the same class of labelling convention as
+        # the casing decided in C5b - a transcription choice, not a fact about the
+        # document - and `join_lines_comma` joins LINES, so no op can insert a
+        # comma inside one.
+        #
+        # An address is the same address whichever way the punctuation falls. What
+        # this must NOT forgive is different CONTENT, and it does not: extra or
+        # missing tokens change the alphanumeric string, so an over-reaching
+        # capture like `5555 PERIMETER DR, DUBLIN OH 43017-3219, How to reach...`
+        # still fails. That property is what keeps the assertion meaningful.
+        if expected is None or actual is None:
+            return expected == actual
+        return _alnum_key(expected) == _alnum_key(actual)
     if kind == "superset":
         if actual is None:
             return not expected
@@ -87,6 +109,19 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
 
 def _text_key(value: Any) -> str:
     return " ".join(str(value).split()).casefold()
+
+
+def _alnum_key(value: Any) -> str:
+    """Alphanumeric content only: no case, no punctuation, no whitespace."""
+    return "".join(ch for ch in str(value).casefold() if ch.isalnum())
+
+
+# Fields whose value is a postal address or a site description. Compared on
+# content rather than punctuation - see the `address` kind in `matches`.
+ADDRESS_FIELDS: frozenset[str] = frozenset({
+    "bill_to_address", "vendor_address", "remit_address", "return_address",
+    "service_location",
+})
 
 
 # Fields whose value is OUR OWN vocabulary rather than text transcribed off a
@@ -343,6 +378,8 @@ def _field_kind(name: str, expected: Any) -> str:
     """How a gold field should be compared: money, transcribed text, or exactly."""
     if name in MONEY_FIELDS:
         return "money"
+    if name in ADDRESS_FIELDS:
+        return "address"
     if isinstance(expected, str) and name not in EXACT_TEXT_FIELDS:
         return "text"
     return "exact"

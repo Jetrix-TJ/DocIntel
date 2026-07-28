@@ -71,7 +71,7 @@
     },
     {
       "scanline": true,
-      "region": "remittance-block",
+      "region": "page:1",
       "asserts": [
         {
           "field": "total_printed",

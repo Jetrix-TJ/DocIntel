@@ -317,13 +317,32 @@ def _totals_block(
 def _remittance_block(
     pages: tuple[PageText, ...], meta: tuple[PageMeta, ...], anchor: Anchor | None
 ) -> tuple[Span, ...]:
-    """Below the detach rule on the last page, else that page's bottom 30%."""
+    """Below the detach rule, page 1 first and then the last page.
+
+    **Page 1 first, and that ordering is the whole correction.** An earlier draft
+    searched only the last page, on the reasoning that a stub sits at the foot of a
+    document. The corpus says otherwise: you detach the top of the FIRST page and
+    mail it, so Centracom's scan line is on page 1 of 10 and Comcast's on page 1 of
+    6. Searching the last page found the final page of per-line service detail and
+    reported a confident miss on all five documents that print a scan line.
+
+    Same shape as `totals-block`, which searches the last page first for the
+    mirror-image reason (F9). Both regions have a preferred page and a fallback;
+    neither can assume.
+    """
     if not pages:
         return ()
-    p = pages[-1]
-    cut = _label_y(p, _DETACH_RE)
-    top = (cut + _LINE_TOLERANCE) if cut is not None else p.height * REMITTANCE_FRACTION
-    return (_band(p, top, p.height),)
+    order = [pages[0]] if len(pages) == 1 else [pages[0], pages[-1]]
+    out: list[Span] = []
+    for page in order:
+        cut = _label_y(page, _DETACH_RE)
+        top = (
+            cut + _LINE_TOLERANCE
+            if cut is not None
+            else page.height * REMITTANCE_FRACTION
+        )
+        out.append(_band(page, top, page.height))
+    return tuple(out)
 
 
 def _table_body(pages: tuple[PageText, ...], anchor: Anchor) -> Span | None:
