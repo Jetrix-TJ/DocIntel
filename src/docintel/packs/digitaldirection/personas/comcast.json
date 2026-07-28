@@ -15,10 +15,7 @@
       "field": "account_number",
       "anchor": "Account number",
       "region": "near-anchor",
-      "pattern": "account_number",
-      "adjust": [
-        "strip_internal_whitespace"
-      ]
+      "pattern": "account_number"
     },
     {
       "field": "bill_date",
@@ -47,7 +44,7 @@
     {
       "field": "service_location",
       "anchor": "For service at:",
-      "region": "near-anchor",
+      "region": "label-block",
       "pattern": "text_block",
       "adjust": [
         "join_lines_comma"
@@ -103,6 +100,26 @@
           "as": "digits_only"
         }
       ]
+    },
+    {
+      "field": "remit_address",
+      "anchor": "COMCAST",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "account_number_normalized",
+      "anchor": "Account number",
+      "region": "near-anchor",
+      "pattern": "text",
+      "adjust": [
+        "strip_internal_whitespace"
+      ],
+      "required": false
     }
   ],
   "layout_fingerprint": {

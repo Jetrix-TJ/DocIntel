@@ -34,9 +34,8 @@
     },
     {
       "field": "bill_to_name",
-      "anchor": "NORTHSTAR RECYCLING COMPANY LLC",
-      "region": "same-row",
-      "pattern": "text"
+      "region": "any-page",
+      "pattern": "(NORTHSTAR RECYCLING COMPANY LLC)"
     },
     {
       "field": "due_date",
@@ -84,6 +83,26 @@
         "max": 40
       },
       "allow_empty_cells": true
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "NORTHSTAR RECYCLING COMPANY LLC",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "VERITIV OPERATING COMPANY",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
     }
   ],
   "layout_fingerprint": {

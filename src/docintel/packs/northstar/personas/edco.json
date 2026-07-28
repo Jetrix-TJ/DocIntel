@@ -61,7 +61,7 @@
     {
       "field": "service_location",
       "anchor": "FOR SERVICE AT:",
-      "region": "near-anchor",
+      "region": "label-block",
       "pattern": "text_block",
       "adjust": [
         "join_lines_comma"
@@ -82,6 +82,26 @@
       "field": "vendor_phone",
       "region": "any-page",
       "pattern": "phone",
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "EDCO WASTE & RECYCLING SERVICE",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "NORTHSTAR RECYCLING",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
       "required": false
     }
   ],

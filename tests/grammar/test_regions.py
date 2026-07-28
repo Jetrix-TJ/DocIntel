@@ -74,18 +74,19 @@ def _words_in(span: Span) -> set[str]:
 # --------------------------------------------------------------------------
 
 
-def test_all_fourteen_regions_exist() -> None:
+def test_all_fifteen_regions_exist() -> None:
     """The region vocabulary is closed - selector-grammar.md section 2.
 
-    `page:N` is parameterized and so is not a RESOLVERS key; it is handled by
-    `resolve()`. These are the fourteen fixed names.
+    Fourteen from the spec, plus `label-block` added after C5b: addresses were the
+    single largest remaining class of failure and no existing region could reach
+    them. `page:N` is parameterized and so is not a RESOLVERS key.
     """
     assert set(RESOLVERS) == {
         "last-page", "first-page", "any-page",
         "top-left", "top-right", "top-center",
         "header-block", "totals-block", "remittance-block",
         "last-table-row", "line_items",
-        "near-anchor", "same-row", "same-cell",
+        "near-anchor", "label-block", "same-row", "same-cell",
     }
 
 
@@ -348,6 +349,7 @@ def test_remittance_block_is_taken_from_the_last_page() -> None:
 def test_anchor_required_regions_are_declared() -> None:
     assert ANCHOR_REQUIRED == frozenset({
         "near-anchor", "same-row", "same-cell", "line_items", "last-table-row",
+        "label-block",
     })
 
 
@@ -444,3 +446,89 @@ def test_line_items_uses_the_anchors_own_page() -> None:
     spans = resolve("line_items")(pages, _meta(*pages), anchor)
     assert spans[0].page_number == 3
     assert "right" in spans[0].text and "wrong" not in spans[0].text
+
+
+# --------------------------------------------------------------------------
+# label-block - the anchor's column, down to the next blank line
+# --------------------------------------------------------------------------
+
+
+def test_label_block_reaches_a_whole_multi_line_address() -> None:
+    """What `near-anchor` could not do. Its 40pt window covers the street line
+    but not the city line beneath it, which is why every gold address failed."""
+    p = _page(
+        1,
+        ("Bill", 30.0, 100.0), ("To", 60.0, 100.0),
+        ("Northstar", 30.0, 114.0), ("Recycling", 95.0, 114.0),
+        ("P.O.", 30.0, 128.0), ("Box", 60.0, 128.0), ("188", 90.0, 128.0),
+        ("East", 30.0, 142.0), ("Longmeadow,", 60.0, 142.0), ("MA", 140.0, 142.0),
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Bill To", 30.0, 100.0))
+    assert "P.O. Box 188" in span.text
+    assert "East Longmeadow, MA" in span.text
+
+
+def test_label_block_stays_inside_its_own_column() -> None:
+    """Every telecom bill in the corpus is a two-column layout flattened into one
+    interleaved line stream, so a full-width region picks up the other column."""
+    p = _page(
+        1,
+        ("Remit", 30.0, 100.0), ("To:", 70.0, 100.0), ("Total", 400.0, 100.0),
+        ("CENTRACOM", 30.0, 114.0), ("Amount", 400.0, 114.0), ("Due", 460.0, 114.0),
+        ("PO", 30.0, 128.0), ("BOX", 55.0, 128.0), ("7", 90.0, 128.0),
+        ("33,876.40", 400.0, 128.0),
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Remit To:", 30.0, 100.0))
+    assert "CENTRACOM" in span.text
+    assert "PO BOX 7" in span.text
+    assert "33,876.40" not in span.text
+    assert "Amount" not in span.text
+
+
+def test_a_line_blank_in_THIS_column_ends_the_block() -> None:
+    """Blank means blank in the column, not blank on the page. That is what makes
+    the region column-aware rather than merely narrow."""
+    p = _page(
+        1,
+        ("Bill", 30.0, 100.0), ("To", 60.0, 100.0),
+        ("Acme", 30.0, 114.0), ("Widgets", 70.0, 114.0),
+        # nothing in the left column on this line, only the right
+        ("Page", 400.0, 128.0), ("1", 440.0, 128.0),
+        # ...so this must NOT be reached
+        ("SHOULD", 30.0, 142.0), ("NOT", 90.0, 142.0), ("APPEAR", 130.0, 142.0),
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Bill To", 30.0, 100.0))
+    assert "Acme Widgets" in span.text
+    assert "SHOULD" not in span.text
+
+
+def test_a_large_vertical_gap_ends_the_block() -> None:
+    p = _page(
+        1,
+        ("Remit", 30.0, 100.0), ("To:", 70.0, 100.0),
+        ("CENTRACOM", 30.0, 114.0),
+        ("PO", 30.0, 128.0), ("BOX", 55.0, 128.0), ("7", 90.0, 128.0),
+        ("UNRELATED", 30.0, 220.0),
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Remit To:", 30.0, 100.0))
+    assert "PO BOX 7" in span.text
+    assert "UNRELATED" not in span.text
+
+
+def test_label_block_is_capped_so_it_never_becomes_the_page() -> None:
+    words = [("Bill", 30.0, 100.0), ("To", 60.0, 100.0)]
+    for i in range(40):
+        words.append((f"line{i}", 30.0, 114.0 + i * 14.0))
+    p = _page(1, *words)
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Bill To", 30.0, 100.0))
+    assert span.bbox[3] - span.bbox[1] <= 160.0
+
+
+def test_label_block_needs_an_anchor() -> None:
+    p = _page(1, ("x", 10.0, 10.0))
+    with pytest.raises(ValidationError, match="anchor"):
+        resolve("label-block")((p,), _meta(p), None)
+
+
+def test_label_block_narrows_so_a_bare_digit_pattern_is_legal_in_it() -> None:
+    assert "label-block" not in NON_NARROWING

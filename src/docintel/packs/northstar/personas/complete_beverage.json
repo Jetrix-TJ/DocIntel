@@ -91,6 +91,26 @@
         "max": 40
       },
       "allow_empty_cells": true
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "BILL TO",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "Complete Beverage Destruction, LLC",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
     }
   ],
   "layout_fingerprint": {

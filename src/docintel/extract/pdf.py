@@ -8,9 +8,28 @@ which path produced a given `PageText` (see `core.models.PageText`).
 
 from __future__ import annotations
 
+import re
+
 import pdfplumber
 
 from docintel.core.models import PageMeta, PageText, Word
+
+# Unicode Private Use Area. A codepoint in this range has NO portable meaning -
+# it means whatever the producing font says it means, and nothing downstream can
+# know that. Comcast's bill is the corpus case: its total arrives as
+# `\ue024221.11`, where U+E024 is the font's glyph for `$`. Left in place it
+# defeats `parse_money` entirely and the total silently fails to extract, which
+# then cascades into a refused `amount_payable` and a forced review.
+#
+# Stripped here, at the boundary where pdfplumber output enters the system, so
+# that no pattern, op or persona has to know about font encodings. Losing the `$`
+# costs nothing: the currency comes from the F14 inference ladder, not from the
+# symbol.
+_PRIVATE_USE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010fffd]")
+
+
+def _clean(text: str) -> str:
+    return _PRIVATE_USE.sub("", text)
 
 
 def read_pages(path: str) -> tuple[PageText, ...]:
@@ -19,8 +38,11 @@ def read_pages(path: str) -> tuple[PageText, ...]:
     with pdfplumber.open(path) as doc:
         for page in doc.pages:
             words = tuple(
-                Word(text=w["text"], x0=w["x0"], y0=w["top"], x1=w["x1"], y1=w["bottom"])
+                Word(text=cleaned, x0=w["x0"], y0=w["top"], x1=w["x1"], y1=w["bottom"])
                 for w in page.extract_words()
+                # A word that was ENTIRELY private-use glyphs carried no readable
+                # text to begin with, so it is dropped rather than kept as "".
+                if (cleaned := _clean(w["text"]))
             )
             pages.append(
                 PageText(

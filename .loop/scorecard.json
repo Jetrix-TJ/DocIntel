@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 25,
+      "passed_count": 26,
       "total_count": 39,
       "assertions": [
         {
@@ -133,8 +133,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "CentraCom",
-          "actual": null,
-          "passed": false
+          "actual": "CENTRACOM",
+          "passed": true
         },
         {
           "name": "fields.carrier_canonical",
@@ -217,7 +217,7 @@
           "name": "fields.remit_address",
           "kind": "text",
           "expected": "PO Box 7, Fairview, UT 84629-0007",
-          "actual": null,
+          "actual": "CENTRACOM, PO BOX 7, FAIRVIEW UT 84629-0007",
           "passed": false
         },
         {
@@ -350,7 +350,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 17,
+      "passed_count": 23,
       "total_count": 38,
       "assertions": [
         {
@@ -385,7 +385,7 @@
           "name": "lane",
           "kind": "exact",
           "expected": "high",
-          "actual": "review",
+          "actual": "medium",
           "passed": false
         },
         {
@@ -413,8 +413,8 @@
           "name": "fields.total_printed",
           "kind": "money",
           "expected": 221.11,
-          "actual": null,
-          "passed": false
+          "actual": "221.11",
+          "passed": true
         },
         {
           "name": "fields.current_charges",
@@ -525,8 +525,8 @@
           "name": "fields.account_number_normalized",
           "kind": "text",
           "expected": "8495444620365242",
-          "actual": null,
-          "passed": false
+          "actual": "8495444620365242",
+          "passed": true
         },
         {
           "name": "fields.bill_to_address",
@@ -546,7 +546,7 @@
           "name": "fields.remit_address",
           "kind": "text",
           "expected": "PO Box 60533, City of Industry, CA 91716-0533",
-          "actual": null,
+          "actual": "Business services 217.89",
           "passed": false
         },
         {
@@ -567,15 +567,15 @@
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 221.11,
-          "actual": null,
-          "passed": false
+          "actual": "221.11",
+          "passed": true
         },
         {
           "name": "derived.payable_basis",
           "kind": "exact",
           "expected": "total_printed",
-          "actual": null,
-          "passed": false
+          "actual": "total_printed",
+          "passed": true
         },
         {
           "name": "derived.document_identity",
@@ -634,15 +634,15 @@
           "name": "arithmetic.balance_closed",
           "kind": "exact",
           "expected": true,
-          "actual": false,
-          "passed": false
+          "actual": true,
+          "passed": true
         },
         {
           "name": "arithmetic.total_closed",
           "kind": "exact",
           "expected": true,
-          "actual": false,
-          "passed": false
+          "actual": true,
+          "passed": true
         },
         {
           "name": "reference_list.values",
@@ -849,7 +849,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "5555 Perimeter Dr, Dublin, OH 43017-3219",
-          "actual": null,
+          "actual": "5555 PERIMETER DR, DUBLIN OH 43017-3219, How to reach, 1-877-453-8353, Billing@Lumen.com, Invoice of Level 3 Communications, LLC, a CenturyLink company, Bill-At-A-Glance, Manage your services your way, Previous, Payment, Manage your services online! View and pay your invoice,, Credits/Adjustments, manage repair tickets, check order status and much more.",
           "passed": false
         },
         {
@@ -877,7 +877,7 @@
           "name": "fields.remit_address",
           "kind": "text",
           "expected": "PO Box 52015, Phoenix, AZ 85072-2015",
-          "actual": null,
+          "actual": "PO Box 52015 \u2022 Detach and enclose, Phoenix, AZ 85072-2015 \u2022 Make check payable, \u2022 Write the invoice, \u2022 Mail check to address",
           "passed": false
         },
         {
@@ -1154,7 +1154,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "PO Box 1550, Durant, OK 74702-1550",
-          "actual": null,
+          "actual": "PO BOX 1550, DURANT OK 74702-1550",
           "passed": false
         },
         {
@@ -1419,7 +1419,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "P.O. Box 188, East Longmeadow, MA 01028, United States",
-          "actual": null,
+          "actual": "NorthStar Recycling Company, LLC, Refresco, Acline, P.O. Box 188, East Longmeadow, MA 01028, United States, DATE TOTAL DUE DUE DATE, 10/24/2025 $1,177.70 11/23/2025, PLEASE DETACH TOP PORTION AND RETURN WITH YOUR",
           "passed": false
         },
         {
@@ -1433,7 +1433,7 @@
           "name": "fields.vendor_address",
           "kind": "text",
           "expected": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
-          "actual": null,
+          "actual": "Invoice",
           "passed": false
         },
         {
@@ -1555,8 +1555,8 @@
         "F11",
         "F17"
       ],
-      "passed": false,
-      "passed_count": 23,
+      "passed": true,
+      "passed_count": 24,
       "total_count": 24,
       "assertions": [
         {
@@ -1686,8 +1686,8 @@
           "name": "fields.vendor_address",
           "kind": "text",
           "expected": "500 North Defiance Trail, Spencerville, OH 45887",
-          "actual": "500 North Defiance Trail",
-          "passed": false
+          "actual": "500 North Defiance Trail, Spencerville, OH 45887",
+          "passed": true
         },
         {
           "name": "derived.amount_payable",
@@ -1758,7 +1758,7 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 18,
+      "passed_count": 19,
       "total_count": 35,
       "assertions": [
         {
@@ -1909,7 +1909,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "PO Box 188, East Longmeadow, MA 01028",
-          "actual": null,
+          "actual": "EDCO, HUNTER INDUST P.O., PO BOX 188 BUENA, EAST LONGMEADOW MA 01028",
           "passed": false
         },
         {
@@ -1923,8 +1923,8 @@
           "name": "fields.vendor_address",
           "kind": "text",
           "expected": "224 S Las Posas Rd, San Marcos, CA 92078",
-          "actual": null,
-          "passed": false
+          "actual": "224 S LAS POSAS RD, SAN MARCOS, CA 92078",
+          "passed": true
         },
         {
           "name": "fields.remit_address",
@@ -2179,7 +2179,7 @@
           "name": "fields.remit_address",
           "kind": "text",
           "expected": "Post Office Box 203505, Dallas, TX 75320-3505",
-          "actual": null,
+          "actual": "Bank Swift, Federal International Recycling and Waste Solutions, LLC Account Number:, Post Office Box 203505, Dallas, TX 75320-3505, TERMS & CONDITIONS, PAST DUE AMOUNTS SUBJECT TO INTEREST FEES IN THE AMOUNT OF 18.99% ANNUALLY OR, LOWER.",
           "passed": false
         },
         {
@@ -2433,14 +2433,14 @@
           "name": "fields.bill_to_name",
           "kind": "text",
           "expected": "Northstar Recycling Company LLC",
-          "actual": null,
+          "actual": "NORTHSTAR RECYCLING COMPANY",
           "passed": false
         },
         {
           "name": "fields.service_location",
           "kind": "text",
           "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
-          "actual": null,
+          "actual": "SHEARER'S FOOD CANADA INC N.S",
           "passed": false
         },
         {
@@ -2461,7 +2461,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "94 Maple St, East Longmeadow, MA 01028",
-          "actual": null,
+          "actual": "745 SOUTH, LLC, MASTER, 94 MAPLE ST, GUELPH, EAST LONGMEADOW MA 01028",
           "passed": false
         },
         {
@@ -2729,7 +2729,7 @@
         "F19"
       ],
       "passed": false,
-      "passed_count": 20,
+      "passed_count": 22,
       "total_count": 37,
       "assertions": [
         {
@@ -2866,8 +2866,8 @@
           "name": "fields.bill_to_name",
           "kind": "text",
           "expected": "Northstar Recycling Company LLC",
-          "actual": "VERITIV OPERATING COMPANY",
-          "passed": false
+          "actual": "NORTHSTAR RECYCLING COMPANY LLC",
+          "passed": true
         },
         {
           "name": "fields.service_location",
@@ -2908,15 +2908,15 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "94 Maple St, East Longmeadow, MA 01028-2744",
-          "actual": null,
+          "actual": "VERITIV, 94 MAPLE ST P.O. BOX, EAST LONGMEADOW,MA 01028-2744 ATLANTA,",
           "passed": false
         },
         {
           "name": "fields.vendor_address",
           "kind": "text",
           "expected": "6120 South Gilmore Road, Fairfield, OH 45014",
-          "actual": null,
-          "passed": false
+          "actual": "6120 South Gilmore Road, Fairfield, OH 45014",
+          "passed": true
         },
         {
           "name": "fields.remit_address",
@@ -3014,9 +3014,9 @@
   ],
   "summary": {
     "total": 10,
-    "passed": 0,
-    "failed": 10,
-    "assertions_passed": 211,
+    "passed": 1,
+    "failed": 9,
+    "assertions_passed": 222,
     "assertions_total": 339
   }
 }

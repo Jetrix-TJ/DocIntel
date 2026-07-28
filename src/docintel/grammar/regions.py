@@ -49,6 +49,27 @@ NEAR_ANCHOR_LEFT = 12.0
 NEAR_ANCHOR_BELOW = 40.0    # points below the anchor
 CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
 
+# `label-block`: the anchor's own column, from its line down to the next blank
+# line. Added after C5b, where addresses were the single largest remaining class
+# of failure across both packs.
+#
+# Neither existing region could reach them. `near-anchor` stops 40pt below the
+# label, which covers a street line but not the city line beneath it.
+# `header-block` and the page regions span the FULL page width, and every
+# telecom bill in the corpus is a two-column layout flattened into one
+# interleaved line stream - so a full-width region picks up the other column:
+#
+#     To log in or register, go to https://www.lumen.com/login/. Balance 0.00
+#     131 W MATTHEWS ST. Amount Due $1,230.14
+#
+# So this region is x-bounded like `near-anchor` (it stays in the column) and
+# y-unbounded until the block genuinely ends (it reaches the whole address).
+LABEL_BLOCK_LEFT = 12.0     # same left tolerance as near-anchor
+LABEL_BLOCK_RIGHT = 300.0   # same column width as near-anchor
+LABEL_BLOCK_MAX = 140.0     # hard ceiling, ~10 lines: a block, not a page
+LABEL_BLOCK_GAP_FACTOR = 2.0  # multiples of the block's own line pitch that end it
+LABEL_BLOCK_GAP_FLOOR = 24.0  # keeps a tight-leaded block from breaking early
+
 
 @dataclass(frozen=True)
 class Anchor:
@@ -106,6 +127,7 @@ Resolver = Callable[
 # anchor is absent - which the validator can check statically (V5's neighbour).
 ANCHOR_REQUIRED: frozenset[str] = frozenset({
     "near-anchor", "same-row", "same-cell", "line_items", "last-table-row",
+    "label-block",
 })
 
 # Regions that do NOT narrow the search. V6 keys off this: a bare-digit regex
@@ -360,6 +382,59 @@ def _same_row(
     return (_band(page, a.word.y0 - _LINE_TOLERANCE, a.word.y0 + _LINE_TOLERANCE),)
 
 
+def _label_block(
+    pages: tuple[PageText, ...], meta: tuple[PageMeta, ...], anchor: Anchor | None
+) -> tuple[Span, ...]:
+    """The anchor's column, from its line down to the next blank line.
+
+    "Blank" means blank *in this column* - a line with words only in the other
+    column ends the block, which is what makes the region column-aware rather
+    than merely narrow. Three further stops keep it a block rather than a page: a
+    vertical gap much larger than the block's own line pitch, the
+    `LABEL_BLOCK_MAX` ceiling, and the foot of the page.
+
+    The anchor's own line is included. The executor excludes the anchor's words
+    from its candidates, so a `text_block` capture yields the address beneath the
+    label rather than the label itself.
+    """
+    a = _require(anchor, "label-block")
+    page = _page_of(pages, a)
+    if page is None:
+        return ()
+
+    x0 = a.word.x0 - LABEL_BLOCK_LEFT
+    x1 = a.word.x0 + LABEL_BLOCK_RIGHT
+    top = a.word.y0 - _LINE_TOLERANCE
+
+    kept: list[Word] = []
+    bottom = a.word.y1
+    prev_y: float | None = None
+    pitch: float | None = None
+
+    for line in page.lines():
+        y = line[0].y0
+        if y < top:
+            continue
+        if y - a.word.y0 > LABEL_BLOCK_MAX:
+            break
+        band = [w for w in line if x0 <= w.x0 < x1]
+        if not band:
+            break  # nothing in this column on this line: the block has ended
+        if prev_y is not None:
+            gap = y - prev_y
+            if pitch is None:
+                pitch = gap
+            elif gap > max(LABEL_BLOCK_GAP_FLOOR, pitch * LABEL_BLOCK_GAP_FACTOR):
+                break
+            else:
+                pitch = min(pitch, gap)
+        kept.extend(band)
+        bottom = max(bottom, max(w.y1 for w in band))
+        prev_y = y
+
+    return (_span(page, tuple(kept), (x0, top, x1, bottom)),)
+
+
 def _same_cell(
     pages: tuple[PageText, ...], meta: tuple[PageMeta, ...], anchor: Anchor | None
 ) -> tuple[Span, ...]:
@@ -418,6 +493,7 @@ RESOLVERS: dict[str, Resolver] = {
     "line_items": _line_items,
     "last-table-row": _last_table_row,
     "near-anchor": _near_anchor,
+    "label-block": _label_block,
     "same-row": _same_row,
     "same-cell": _same_cell,
 }
