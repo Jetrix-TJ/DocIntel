@@ -12,9 +12,9 @@ cross-checks that means double-counting a confidence boost.
 | `assignPageRoles` | `s2_filter` (C1b). Same. |
 | `northstarLadder` | **here**, at `classifySignals` |
 | `resolveVendorAlias` | **here**, at `beforePersonaLookup` |
-| `deriveAmountPayable` | each persona's `adjust` list, run by Stage 6 |
-| `runArithmeticCrosschecks` | same |
-| `inferCurrency` | same |
+| `deriveAmountPayable` | deferred: no Northstar persona's `adjust` list calls it any more - `amount_payable` is DERIVED_ONLY and no longer registered. See the printed-fields-only spec. |
+| `runArithmeticCrosschecks` | deferred: same reason - the crosscheck ops it named (`crosscheck_total_composition`, `crosscheck_balance_composition`, `crosscheck_line_sum`, `crosscheck_scanline`, `crosscheck_filename`) are gone from every persona's `adjust` list along with the arithmetic they scored. |
+| `inferCurrency` | deferred: supplied `currency`, which printed-fields-only drops entirely - it was never ink on the page. |
 | `collectReferences` | **here**, at `afterExtraction` |
 | `northstarThresholds` | `ConfidenceGate` reads `ctx.pack.thresholds` |
 | `attachAllocationMetadata` | already on the record: `service_location` is a field, `sub_account` a row group |

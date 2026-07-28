@@ -80,6 +80,39 @@ def test_register_all_registers_into_real_sockets() -> None:
     assert registered["afterExtraction"]
 
 
+def _selector_adjust_ops(selector: object) -> tuple[str, ...]:
+    """Every op named in one selector's `adjust`, whichever shape it took.
+
+    Section 1.1 allows `adjust` as a bare string or a list, and a `row_group`
+    selector may carry its own `adjust` alongside a plain field selector's
+    (`grammar.validator._check_adjust` is called for both) - so this reads
+    `adjust` off whatever mapping it is handed rather than assuming the
+    selector is a scalar field.
+    """
+    if not isinstance(selector, dict):
+        return ()
+    raw = selector.get("adjust")
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        return (raw,)
+    return tuple(raw)
+
+
+def _pack_derives_amount_payable(pack: Pack) -> bool:
+    """Does any persona this pack ships still call `derive_amount_payable`?
+
+    Walks every selector in every persona - not just plain field selectors,
+    since a `row_group` selector is a sibling entry in the same
+    `field_selectors` list and may carry its own `adjust`.
+    """
+    return any(
+        "derive_amount_payable" in _selector_adjust_ops(selector)
+        for persona in pack.personas()
+        for selector in persona["field_selectors"]
+    )
+
+
 def test_pack_thresholds_cover_the_fields_that_decide_payment() -> None:
     """Asserts the INVARIANT, not either pack's numbers.
 
@@ -90,16 +123,21 @@ def test_pack_thresholds_cover_the_fields_that_decide_payment() -> None:
     came from, and both bars must be high, because a wrong total is a wrong
     payment.
 
-    Northstar no longer derives `amount_payable` at all (printed-fields-only:
-    no persona's `adjust` list still calls `derive_amount_payable`), so it has
-    no threshold entry for it and there is nothing to compare - the `in` guard
-    is what keeps this an invariant over packs that still derive the field,
-    rather than a demand that every pack must.
+    The guard is keyed on **whether the pack's personas still call
+    `derive_amount_payable`**, not on whether `thresholds` happens to have the
+    key. Keying it on the dict under test would make the dict self-certifying -
+    deleting `"amount_payable"` from a pack that still derives it would silence
+    this check instead of failing it. Northstar no longer derives the field at
+    all (printed-fields-only: no persona's `adjust` list calls
+    `derive_amount_payable` any more), so it is correctly exempt; Digital
+    Direction's four personas still do, so it is still held to the invariant
+    in full, including the "the key must exist at all" half.
     """
     for pack in load_packs():
         t = pack.thresholds
         assert t["total_printed"] >= 0.90, pack.name
-        if "amount_payable" in t:
+        if _pack_derives_amount_payable(pack):
+            assert "amount_payable" in t, pack.name
             assert t["amount_payable"] >= 0.95, pack.name
             assert t["amount_payable"] >= t["total_printed"], pack.name
 
