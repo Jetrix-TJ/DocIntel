@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 30,
+      "passed_count": 31,
       "total_count": 39,
       "assertions": [
         {
@@ -302,8 +302,21 @@
               "13611.5"
             ]
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            [
+              "Internet Charges",
+              "140.9"
+            ],
+            [
+              "Internet Taxes, Surcharges, & Fees",
+              "0.2"
+            ],
+            [
+              "Special Circuit Charges",
+              "13611.5"
+            ]
+          ],
+          "passed": true
         },
         {
           "name": "scanline.raw",
@@ -353,7 +366,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 25,
+      "passed_count": 26,
       "total_count": 38,
       "assertions": [
         {
@@ -549,7 +562,7 @@
           "name": "fields.remit_address",
           "kind": "text",
           "expected": "PO Box 60533, City of Industry, CA 91716-0533",
-          "actual": "Business services 217.89",
+          "actual": "Business services 217.89, Taxes and fees 3.22",
           "passed": false
         },
         {
@@ -623,8 +636,17 @@
               "3.22"
             ]
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            [
+              "Comcast Business services",
+              "217.89"
+            ],
+            [
+              "Taxes and fees",
+              "3.22"
+            ]
+          ],
+          "passed": true
         },
         {
           "name": "scanline.raw",
@@ -1444,7 +1466,7 @@
           "name": "fields.vendor_address",
           "kind": "text",
           "expected": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
-          "actual": "Invoice",
+          "actual": "Invoice, 9921 Old Lakeland Hwy, Dade City, FL 33525 US",
           "passed": false
         },
         {
@@ -2169,7 +2191,7 @@
           "name": "fields.bill_to_address",
           "kind": "text",
           "expected": "PO Box 188, East Longmeadow, MA 01028, UNITED STATES",
-          "actual": null,
+          "actual": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01, UNITED STATES",
           "passed": false
         },
         {
@@ -2320,7 +2342,7 @@
         "F20"
       ],
       "passed": false,
-      "passed_count": 18,
+      "passed_count": 19,
       "total_count": 32,
       "assertions": [
         {
@@ -2451,8 +2473,8 @@
           "name": "fields.service_location",
           "kind": "text",
           "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
-          "actual": "SHEARER'S FOOD CANADA INC N.S",
-          "passed": false
+          "actual": "SHEARER'S FOOD CANADA INC N.S, 745 SOUTH GATE, MASTER ACC, GUELPH ON N1G 4N4",
+          "passed": true
         },
         {
           "name": "fields.currency",
@@ -3027,7 +3049,7 @@
     "total": 10,
     "passed": 1,
     "failed": 9,
-    "assertions_passed": 236,
+    "assertions_passed": 239,
     "assertions_total": 339
   }
 }

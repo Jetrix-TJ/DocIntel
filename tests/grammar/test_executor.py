@@ -733,3 +733,121 @@ def test_a_satisfied_row_count_logs_nothing() -> None:
         "row_count": {"min": 1, "max": 40},
     })
     assert not any("outside the declared range" in e for e in ctx.events)
+
+
+# --------------------------------------------------------------------------
+# Header-less row groups — label/amount ladders with no header row
+# --------------------------------------------------------------------------
+
+
+def _ladder_ctx() -> JobContext:
+    """Centracom's charges block, reduced: a right-hand column with no header row."""
+    return _ctx(_page(
+        1,
+        ("This", 421.0, 147.0), ("Month", 447.0, 147.0),
+        ("Internet", 325.0, 161.0), ("Charges", 364.0, 161.0), ("140.90", 549.0, 161.0),
+        ("Special", 325.0, 175.0), ("Circuit", 358.0, 175.0), ("Charges", 391.0, 175.0),
+        ("13,611.50", 536.0, 175.0),
+        ("Subtotal", 325.0, 189.0), ("Current", 370.0, 189.0), ("Charges", 407.0, 189.0),
+        ("$13,752.60", 527.0, 189.0),
+    ))
+
+
+def test_a_row_group_with_no_column_headers_reads_a_label_amount_ladder() -> None:
+    """Three gold files carry `charges` and none of their tables has a header row:
+
+        Internet Charges                              140.90
+        Comcast Business services                     217.89
+
+    The row-group model builds its column grid from a header row, so there was
+    nothing to build from. Absent `column_headers`, each line is split as
+    label-then-trailing-amount instead.
+    """
+    ctx = _run(_ladder_ctx(), {
+        "row_group": "charges", "table_anchor": "Internet Charges",
+        "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    assert ctx.row_groups["charges"] == [
+        {"label": "Internet Charges", "amount": Decimal("140.90")},
+        {"label": "Special Circuit Charges", "amount": Decimal("13611.50")},
+    ]
+
+
+def test_a_roll_up_row_inside_the_ladder_is_not_a_charge() -> None:
+    """Centracom prints `Subtotal Current Charges $13,752.60` inside the same block
+    as its three real charges, and its gold `charges` label contains only the three.
+    A row that sums a list is not a member of it."""
+    ctx = _run(_ladder_ctx(), {
+        "row_group": "charges", "table_anchor": "Internet Charges",
+        "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    labels = [r["label"] for r in ctx.row_groups["charges"]]
+    assert not any(label.startswith("Subtotal") for label in labels)
+
+
+def test_the_RIGHTMOST_money_token_is_the_amount() -> None:
+    """A charge line reads name-then-number, so an id or a date earlier on the line
+    must not be mistaken for the amount."""
+    ctx = _ctx(_page(
+        1,
+        ("Circuit", 325.0, 100.0), ("4351003276", 380.0, 100.0), ("750.00", 540.0, 100.0),
+    ))
+    ctx = _run(ctx, {
+        "row_group": "charges", "table_anchor": "Circuit", "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    (row,) = ctx.row_groups["charges"]
+    assert row["amount"] == Decimal("750.00")
+    assert row["label"] == "Circuit 4351003276"
+
+
+def test_a_line_with_no_amount_is_not_a_charge_row() -> None:
+    ctx = _ctx(_page(
+        1,
+        ("New", 317.0, 100.0), ("charges", 339.0, 100.0),
+        ("Comcast", 317.0, 114.0), ("services", 380.0, 114.0), ("217.89", 542.0, 114.0),
+    ))
+    ctx = _run(ctx, {
+        "row_group": "charges", "table_anchor": "New charges", "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    assert ctx.row_groups["charges"] == [
+        {"label": "Comcast services", "amount": Decimal("217.89")},
+    ]
+
+
+def test_a_line_with_only_an_amount_is_not_a_charge_row() -> None:
+    """No label means nothing to bill it against."""
+    ctx = _ctx(_page(1, ("Total", 325.0, 100.0), ("99.00", 540.0, 114.0)))
+    ctx = _run(ctx, {
+        "row_group": "charges", "table_anchor": "Total", "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    assert ctx.row_groups.get("charges", []) == []
+
+
+def test_header_less_mode_needs_exactly_two_columns_one_of_them_money() -> None:
+    """Not an arbitrary restriction - it IS the shape. `Internet Charges 140.90`
+    has a name and a number and nothing else, so a third column has nothing to
+    read from."""
+    ctx = _run(_ladder_ctx(), {
+        "row_group": "charges", "table_anchor": "Internet Charges",
+        "region": "label-block",
+        "columns": {"label": "text", "extra": "text", "amount": "currency"},
+    })
+    assert ctx.row_groups.get("charges", []) == []
+
+
+def test_declared_headers_that_match_nothing_are_an_error_not_a_fallback() -> None:
+    """A typo'd `column_headers` must not silently produce plausible output through
+    the header-less path - that would hide the typo behind a result."""
+    ctx = _run(_ladder_ctx(), {
+        "row_group": "charges", "table_anchor": "Internet Charges",
+        "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+        "column_headers": {"label": "DESCRIPTION", "amount": "AMOUNT"},
+    })
+    assert ctx.row_groups.get("charges", []) == []
+    assert any("none matched" in e for e in ctx.events)

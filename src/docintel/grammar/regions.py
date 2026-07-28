@@ -69,6 +69,20 @@ LABEL_BLOCK_RIGHT = 300.0   # same column width as near-anchor
 LABEL_BLOCK_MAX = 140.0     # hard ceiling, ~10 lines: a block, not a page
 LABEL_BLOCK_GAP_FACTOR = 2.0  # multiples of the block's own line pitch that end it
 LABEL_BLOCK_GAP_FLOOR = 24.0  # keeps a tight-leaded block from breaking early
+# How many rows that are empty IN THIS COLUMN may sit inside a block.
+#
+# One, not zero. A single empty row is a GAP rather than the end: on Comcast's
+# bill the left column's `Account number` label is taller than the right column's
+# content beside it, so the charges ladder reads
+#
+#     New charges
+#     Comcast Business services            217.89
+#     <- nothing in the right column on this row
+#     Taxes and fees                         3.22
+#
+# and a zero-tolerance rule stopped after the first charge. Two consecutive empty
+# rows is the end. Over-reach is still bounded by the gap rule and the max cap.
+LABEL_BLOCK_BLANK_TOLERANCE = 1
 
 
 @dataclass(frozen=True)
@@ -410,6 +424,7 @@ def _label_block(
     bottom = a.word.y1
     prev_y: float | None = None
     pitch: float | None = None
+    blanks = 0
 
     for line in page.lines():
         y = line[0].y0
@@ -419,7 +434,11 @@ def _label_block(
             break
         band = [w for w in line if x0 <= w.x0 < x1]
         if not band:
-            break  # nothing in this column on this line: the block has ended
+            blanks += 1
+            if blanks > LABEL_BLOCK_BLANK_TOLERANCE:
+                break  # two empty rows in this column: the block has ended
+            continue
+        blanks = 0
         if prev_y is not None:
             gap = y - prev_y
             if pitch is None:

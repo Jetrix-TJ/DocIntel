@@ -121,6 +121,20 @@
         "strip_internal_whitespace"
       ],
       "required": false
+    },
+    {
+      "row_group": "charges",
+      "table_anchor": "New charges",
+      "region": "label-block",
+      "columns": {
+        "label": "text",
+        "amount": "currency"
+      },
+      "row_count": {
+        "min": 1,
+        "max": 20
+      },
+      "allow_empty_cells": true
     }
   ],
   "layout_fingerprint": {

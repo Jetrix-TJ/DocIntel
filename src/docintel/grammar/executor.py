@@ -30,6 +30,7 @@ routinely lands on a continuation page that is legitimately `supporting`.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from time import perf_counter
@@ -69,6 +70,18 @@ QUALITY_REGION_ONLY = 0.90
 # closure check would be meaningless.
 TABLE_BREAK_FACTOR = 2.5   # multiples of the established row pitch
 TABLE_BREAK_FLOOR = 24.0   # points; keeps a tight-leaded table from breaking early
+
+# Patterns that make a column the AMOUNT in a header-less row group.
+MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
+
+# A roll-up row inside a label/amount ladder is not a member of the list it sums.
+# Centracom prints `Subtotal Current Charges $13,752.60` and `Previous Balance
+# $20,123.80` inside the same block as its three real charges, and its gold
+# `charges` label correctly contains only the three. This is a property of ladders
+# in general rather than of one vendor, which is why it lives here.
+_ROLLUP_LABEL = re.compile(
+    r"^\s*(sub\s?total|total|amount\s+due|balance|please\s+pay)\b", re.IGNORECASE
+)
 
 
 
@@ -345,6 +358,71 @@ class Executor:
                 bounds.append((column, column_cell[1], column_cell[2]))
         return bounds
 
+    def _headerless_columns(self, selector: RowGroupSelector) -> tuple[str, str] | None:
+        """(label column, amount column) for a header-less ladder, or None.
+
+        A header-less row group must declare exactly two columns, one of them with
+        a money pattern. That is not an arbitrary restriction - it is the whole
+        shape: `Internet Charges 140.90` has a name and a number and nothing else,
+        so a third column would have nothing to read.
+        """
+        if len(selector.columns) != 2:
+            return None
+        money = [n for n, p in selector.columns.items() if p in MONEY_PATTERNS]
+        if len(money) != 1:
+            return None
+        amount = money[0]
+        label = next(n for n in selector.columns if n != amount)
+        return label, amount
+
+    def _headerless_row(
+        self,
+        selector: RowGroupSelector,
+        line: list[Word],
+        matchers: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Split one line as `label... amount`, the last money token being the amount.
+
+        Used when a row group declares no `column_headers` and the table prints no
+        header row - the shape Centracom and Comcast both use for their charges:
+
+            Internet Charges                              140.90
+            Internet Taxes, Surcharges, & Fees              0.20
+            Comcast Business services                    217.89
+
+        **This relies on the region being column-bounded.** On a two-column layout
+        flattened into one line stream, a full-width region would put the other
+        column's text into the label - `For All Billing Inquiries, call
+        435-427-3331 Internet Taxes, Surcharges, & Fees`. `label-block` is the
+        region that makes this honest.
+        """
+        names = self._headerless_columns(selector)
+        if names is None:
+            return {}
+        label_column, amount_column = names
+        matcher = matchers[amount_column]
+
+        # Rightmost money token wins: a charge line reads name-then-number, and an
+        # id or a date earlier on the line must not be mistaken for the amount.
+        split_at = None
+        for index in range(len(line) - 1, -1, -1):
+            if matcher(line[index].text) is not None:
+                split_at = index
+                break
+        if split_at is None or split_at == 0:
+            return {}  # no amount, or no label: not a charge row
+
+        label = " ".join(w.text for w in line[:split_at]).strip()
+        if not label or _ROLLUP_LABEL.match(label):
+            return {}
+
+        amount = matcher(line[split_at].text)
+        label_matcher = matchers[label_column]
+        label_value = label_matcher(label)
+        if label_value is None:
+            return {}
+        return {label_column: label_value, amount_column: amount}
+
     def _sub_group_value(
         self, sub: SubGroup, line: list[Word], deadline: float
     ) -> str | None:
@@ -373,8 +451,22 @@ class Executor:
         )
         headers = dict(selector.column_headers) or {name: name for name in selector.columns}
         bounds = self._column_bounds(header_line, headers, page.width)
+
+        headerless = False
         if not bounds:
-            return
+            if selector.column_headers:
+                # Headers were declared and none of them matched a cell of the
+                # header row. That is an authoring error, not a header-less table:
+                # silently falling back would hide a typo behind plausible output.
+                ctx.log(
+                    f"s5a: row_group {selector.row_group!r} declared column_headers "
+                    f"{sorted(selector.column_headers)} but none matched the "
+                    f"{selector.table_anchor!r} row"
+                )
+                return
+            headerless = self._headerless_columns(selector) is not None
+            if not headerless:
+                return
 
         region = selector.region or "line_items"
         spans = regions.resolve(region)(ctx.pages, ctx.page_meta, header.as_anchor())
@@ -417,6 +509,12 @@ class Executor:
                         if rows:
                             rows[-1][selector.sub_group.field] = value
                         continue
+
+                if headerless:
+                    ladder_row = self._headerless_row(selector, line, matchers)
+                    if ladder_row:
+                        rows.append(ladder_row)
+                    continue
 
                 row: dict[str, Any] = {}
                 for column, left, right in bounds:

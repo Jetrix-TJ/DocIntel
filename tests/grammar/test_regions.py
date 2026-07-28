@@ -485,21 +485,44 @@ def test_label_block_stays_inside_its_own_column() -> None:
     assert "Amount" not in span.text
 
 
-def test_a_line_blank_in_THIS_column_ends_the_block() -> None:
-    """Blank means blank in the column, not blank on the page. That is what makes
-    the region column-aware rather than merely narrow."""
+def test_TWO_lines_blank_in_THIS_column_end_the_block() -> None:
+    """Blank means blank in the column, not blank on the page - that is what makes
+    the region column-aware rather than merely narrow.
+
+    Two rows, not one. A single empty row is a GAP: on Comcast's bill the left
+    column's `Account number` label is taller than the right column's content
+    beside it, and a zero-tolerance rule stopped the charges ladder after its
+    first row. See LABEL_BLOCK_BLANK_TOLERANCE.
+    """
     p = _page(
         1,
         ("Bill", 30.0, 100.0), ("To", 60.0, 100.0),
         ("Acme", 30.0, 114.0), ("Widgets", 70.0, 114.0),
-        # nothing in the left column on this line, only the right
+        # two consecutive rows with nothing in the LEFT column
         ("Page", 400.0, 128.0), ("1", 440.0, 128.0),
+        ("of", 400.0, 142.0), ("6", 440.0, 142.0),
         # ...so this must NOT be reached
-        ("SHOULD", 30.0, 142.0), ("NOT", 90.0, 142.0), ("APPEAR", 130.0, 142.0),
+        ("SHOULD", 30.0, 156.0), ("NOT", 90.0, 156.0), ("APPEAR", 130.0, 156.0),
     )
     (span,) = resolve("label-block")((p,), _meta(p), _anchor("Bill To", 30.0, 100.0))
     assert "Acme Widgets" in span.text
     assert "SHOULD" not in span.text
+
+
+def test_ONE_line_blank_in_this_column_is_only_a_gap() -> None:
+    """Comcast's charges ladder, reduced. The row between the two charges carries
+    only left-column content, and the ladder continues past it."""
+    p = _page(
+        1,
+        ("New", 317.0, 93.0), ("charges", 339.0, 93.0),
+        ("Comcast", 317.0, 107.0), ("services", 395.0, 107.0), ("217.89", 542.0, 107.0),
+        ("Account", 35.0, 121.0), ("number", 80.0, 121.0),
+        ("Taxes", 317.0, 135.0), ("fees", 361.0, 135.0), ("3.22", 552.0, 135.0),
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("New charges", 317.0, 93.0))
+    assert "217.89" in span.text
+    assert "3.22" in span.text
+    assert "Account" not in span.text
 
 
 def test_a_large_vertical_gap_ends_the_block() -> None:

@@ -112,7 +112,7 @@
     },
     {
       "row_group": "charges",
-      "table_anchor": "This Month",
+      "table_anchor": "Internet Charges",
       "columns": {
         "label": "text",
         "amount": "currency"
@@ -121,7 +121,8 @@
         "min": 1,
         "max": 20
       },
-      "allow_empty_cells": true
+      "allow_empty_cells": true,
+      "region": "label-block"
     },
     {
       "scanline": true,
