@@ -12,10 +12,16 @@ a single low-confidence bill is weak evidence of rule drift and two consecutive
 months is strong evidence. The AP-oriented pile-up trigger is too twitchy for a
 monthly rhythm.
 
-`applyBillingConventions` and `refineProseBalanceTags` are both deferred by the
-printed-fields-only narrowing: the first supplies `prior_balance_basis`, a derived
-classification, and the second retags on `carried_balance`, which Stage 6 no
-longer produces. Both implementations stay in the tree.
+`applyBillingConventions` is deferred by the printed-fields-only narrowing: it
+supplies `prior_balance_basis`, a derived classification. The implementation
+stays in the tree (`conventions.py`).
+
+`refineProseBalanceTags` is NOT deferred, though an earlier pass of the narrowing
+unregistered it on the grounds that it retagged on `carried_balance`. That left
+`ladder.tags_for`'s unrefined guess as the pipeline's final answer, and the guess
+is made on anchor text - which says `prior_balance_cleared` on Centracom while
+20,123.80 is outstanding. It is re-registered here reading the two PRINTED
+amounts instead, which is squarely inside the narrowed scope.
 """
 
 from __future__ import annotations
@@ -78,7 +84,19 @@ def collect_references(ctx: JobContext, next_: Next) -> JobContext:
     return next_(references.collect(ctx))
 
 
+def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
+    """Upgrade `prior_balance_present` to `prior_balance_cleared` on the amounts.
+
+    `beforeConfidenceGate` rather than `afterExtraction` for the same reason
+    `collect_references` is: the amounts it reads must be the ones the record
+    carries, after Stage 6's value ops (`normalize_credit_sign` in particular -
+    a payment printed `212.87CR` is not a negative number until that has run).
+    """
+    return next_(ladder.retag_prior_balance(ctx))
+
+
 def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", telecom_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_carrier_fingerprint, PACK_NAME)
+    registry.register("beforeConfidenceGate", refine_prior_balance_tags, PACK_NAME)
     registry.register("beforeConfidenceGate", collect_references, PACK_NAME)

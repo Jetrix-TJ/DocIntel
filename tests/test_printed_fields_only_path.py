@@ -124,6 +124,40 @@ def test_centracom_emits_the_printed_total_not_the_payable(
     assert "amount_payable" not in centracom_record.get("derived", {})
 
 
+def test_centracom_prior_balance_tag_matches_gold_exactly(
+    centracom_record: dict,
+) -> None:
+    """The tag the scorecard's superset check structurally cannot police.
+
+    Centracom's gold `tags` assertion is a SUPERSET, and it is already red on
+    `no_invoice_number` and `past_due`. A wrong tag appearing among the extras
+    therefore moves it FAIL -> FAIL and nothing anywhere notices - which is
+    exactly how the pipeline came to ship `prior_balance_cleared` on a document
+    with 20,123.80 outstanding.
+
+    So this pins the pair EXACTLY, and against gold rather than a retyped
+    literal. An inversion fails here on its own, whatever the other tags do.
+    """
+    with open(os.path.join(GOLD_DIR, f"{DIGITALDIRECTION_GOLD}.json")) as fh:
+        gold = json.load(fh)
+    expected = [
+        t for t in gold["classification"]["tags"] if t.startswith("prior_balance_")
+    ]
+    assert expected == ["prior_balance_present"], (
+        "gold no longer labels Centracom's prior balance as outstanding; this "
+        "test is only meaningful while it does"
+    )
+
+    actual = [
+        t for t in centracom_record.get("tags", []) if t.startswith("prior_balance_")
+    ]
+    assert actual == expected, (
+        f"Centracom's prior-balance tag is {actual}, gold says {expected}. "
+        "20,123.80 is outstanding; claiming it cleared points a downstream "
+        "consumer at the opposite of the truth."
+    )
+
+
 def test_both_records_are_schema_valid(
     northstar_record: dict, centracom_record: dict
 ) -> None:
