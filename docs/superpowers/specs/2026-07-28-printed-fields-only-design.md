@@ -1,10 +1,46 @@
 # Printed fields only — narrowing extraction scope
 
-**Status:** design, awaiting approval
+**Status:** implemented 2026-07-29. See the errata below before trusting §7's numbers.
 **Date:** 2026-07-28
 **Branch:** `feat/pipeline`
 **Supersedes:** nothing. Narrows the field scope set in
 `docs/packs/northstar-recycling.md` §2 and `docs/packs/digital-direction.md` §3.
+
+---
+
+## Errata — 2026-07-29, after implementation
+
+The body below is left exactly as written. A forecast edited to match its outcome
+destroys the evidence that it was wrong, and two of these were wrong in ways worth
+keeping visible.
+
+1. **§7's "roughly 175–200 of ~230" did not happen.** The measured end state is
+   **193/262 assertions, 1/10 documents green** (DTSS at 19/19). The prediction was
+   also mis-applied during execution: the implementation plan used it as the
+   expected result of a single task, when it was only ever an end-state figure.
+   Every assertion retired in that task was already passing, so its numerator could
+   not fall at all.
+
+2. **§7's "10/10 becomes reachable for the first time" is not established.** One
+   document passes. Narrowing removed the derived assertions that were blocking
+   several documents, but it did not by itself make the remaining nine green, and
+   nothing measured here shows that it will.
+
+3. **§5's hook list was wrong about where the derived work lived.** Corrected
+   in-place in §5 before implementation began, because it would have sent the work
+   to the wrong files — the ops were in each persona's `adjust` list, not in hooks.
+
+4. **§7's proposed `DEFERRED_DERIVED` classification was unnecessary and, as a
+   single bucket, would have hidden something.** `GOLD_ASSERTION_COVERAGE` already
+   had a `deferred:<why>` verdict. More importantly the deferral list needed to be
+   *three* buckets, not one: derived (5 fields), printed-but-dropped-for-
+   deliverability (6), and **printed-but-never-selected (2 — `tax_id`,
+   `vendor_parent_reference`)**. The third is pre-existing extraction debt, not a
+   spec decision; collapsing it in with the others removed two known-failing fields
+   from the denominator and inflated the pass rate. Those two are back in
+   measurement and still failing, deliberately.
+
+The authoritative current state is `docs/superpowers/RESUME.md`, not this file.
 
 ---
 
