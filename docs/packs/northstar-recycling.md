@@ -49,20 +49,50 @@ stops (spec Stage 3).
 
 ## 2. Field set
 
-### Required — every `doc_type`
+> **Narrowed to printed values.** Everything below is what the pack extracts
+> today, which is a strict subset of what this section originally specified. The
+> reason, the full list of what left, and how to bring it back are in
+> [`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md`](../superpowers/specs/2026-07-28-printed-fields-only-design.md).
+> Anchors are unchanged — they were never the thing that was wrong.
+
+### `REQUIRED` is not a flat set
+
+The Required level says "**any** parseable date" and "**at least one** money
+amount", which V13 set-membership cannot express. `fields.py` encodes it as one
+unconditional name plus two any-of groups (spec §3):
+
+```python
+REQUIRED       = {"bill_to_name"}
+REQUIRED_ANY_OF = (
+    {"invoice_date", "bill_date"},                                        # any date
+    {"total_printed", "balance_due", "please_pay",                        # >= 1 amount
+     "current_charges", "subtotal"},
+)
+```
+
+`bill_to_name` is the only unconditional requirement because it carries the
+**guard** that the billed party resolves to Northstar. Requiring `invoice_date`
+outright would make EDCO — which prints a billing date and no invoice date —
+unwritable; requiring `total_printed` outright would exclude every vendor that
+prints no total.
+
+`vendor_name` is deliberately *not* required. It stays in `FIELDS` (a readable
+letterhead is still captured) but the sender domain is the primary source; see
+`core/senders.py` and spec §4.
+
+### Printed — every `doc_type`
 
 | Field | Notes | Anchors observed |
 |---|---|---|
-| `vendor_name` | Letterhead; prefer remittance payee | letterhead block |
+| `vendor_name` | Letterhead; prefer remittance payee. Not required — see above | letterhead block |
 | `invoice_number` | | `Invoice #` · `Invoice No.` · `INVOICE #` · `No.` |
 | `invoice_date` | | `Date` · `Invoice Date` · `DATE` |
-| `total_printed` | The headline figure, as printed | `Total` · `Balance Due` · `Total Amount Due` · `TOTAL` · `Amount Due` · `Total Invoice` |
-| `amount_payable` | **derived only** (`derived_only`, V10) | — |
-| `currency` | Inference ladder per F14 | — |
+| `bill_date` | EDCO's shape: a billing date and no invoice date | `Billing Date` · `Bill Date` |
+| `total_printed` | The headline figure, **as printed** — never adjusted toward a payable | `Total` · `Balance Due` · `Total Amount Due` · `TOTAL` · `Amount Due` · `Total Invoice` |
 | `bill_to_name` | **Guard**: must resolve to Northstar | `Bill To` · `FOR` · `SOLD TO` |
 | `reference_list[]` | Objects with provenance (F11) | see §3 |
 
-### Required — commercial terms
+### Printed — commercial terms
 
 | Field | Anchors |
 |---|---|
@@ -70,18 +100,44 @@ stops (spec Stage 3).
 | `payment_terms` | `Terms` · `PAYMENT TERMS` |
 | `prior_balance` *(optional)* | `BALANCE FORWARD` · `Balance from last statement` · `Previous Balance` |
 | `current_charges` *(optional)* | `CURRENT CHARGES:` · `Current Charges` |
+| `payments_credits` *(optional)* | `Payments` · `Payments/Credits` — stored negative |
+| `balance_due` `please_pay` | `Balance Due` · `Please Pay` |
 | `subtotal` | `Subtotal` · `Sub Total` |
 | `tax_amount` | `Total Tax` · `Taxes` · `H.S.T.` · `G.S.T.` |
 | `charges[]` | `{label, amount}` pairs for surcharges (F14) |
 | `discount_date` `discount_amount` | `Discount Date` · `Discount Amount` |
 
-### Required — allocation
+Every one of these is transcribed. No op reconciles them against each other and
+no op composes them into a figure to pay — that is `amount_payable`'s job and
+`amount_payable` is deferred, below.
+
+### Printed — allocation and addresses
 
 | Field | Anchors | Why |
 |---|---|---|
 | `service_location` | `SHIP TO` · `Location:` · `FOR SERVICE AT:` · `Service Address` | The end site the cost belongs to (F13) |
-| `vendor_account_number` | `Account No.` · `Account Number` | |
-| `sub_account[]` | `** SUB ACCT:` | U-Pak's 70+-identity nesting (F13) |
+| `vendor_account_number` `account_number` | `Account No.` · `Account Number` | |
+| `bill_to_address` `bill_to_attention` `bill_to_email` | header addressee block | |
+| `remit_payee` `remit_address` `return_address` `vendor_address` | `Remit To` · `Make check payable to` · envelope block | |
+| `customer_po` `seal_number` `bol_number` | see §3 | Match keys |
+| `sub_account[]` | `** SUB ACCT:` | U-Pak's 70+-identity nesting (F13); a row group, not a field |
+
+### Not in scope — deferred, not deleted
+
+Nothing here was removed from the gold files, and every module and unit test that
+produced it is still on disk. Re-enabling is a wiring change.
+
+| Field | Why it left |
+|---|---|
+| `amount_payable` `payable_basis` `carried_balance` | Derived. `DERIVED_ONLY` by construction (V10); guardrails 2 and 6 are `skip`ped with the reason as the message |
+| `currency` `currency_basis` | Produced by the F14 inference ladder, not printed. Lumen is the only document that prints a literal `(USD)` |
+| `vendor_account_number_normalized` `account_number_normalized` | Computed forms of a printed value |
+| `vendor_legal_name` `vendor_phone` `vendor_email` `vendor_website` `billing_group` | Printed, and had working selectors. These left for deliverability, so this is the group that shrinks first when scope widens |
+| `tax_id` | **Extraction debt, not a deferral.** U-Pak's H.S.T. number is literal page text and no persona has ever had a selector for it. It stays asserted, and stays failing, in `tests/test_scorecard_coverage.py:EXTRACTION_DEBT` |
+
+`document_identity` and `identity_basis` are derived and **retained**:
+`core/contract.py` requires their presence, so dropping them would break
+`count(intaken) == count(emitted)`. See spec §5.
 
 ### Line items — `row_group`
 

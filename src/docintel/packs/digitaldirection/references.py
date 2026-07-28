@@ -12,16 +12,18 @@ one does the opposite: the keys are already extracted as first-class identity
 fields, and what is missing is their **provenance as reference hits** so downstream
 matching can join on them.
 
-Promoting an extracted field rather than re-scanning text is not a shortcut - it is
-the only way to get the right value on Comcast. Its account number is printed
-`8495 44 462 0365242` and its gold reference hit is `8495444620365242`, the
-joinable form (F6). A text scan would capture the printed spacing and fail to join.
+Promoting an extracted field rather than re-scanning text is what the pack shape
+asks for: these keys are printed plainly and are already captured as identity
+fields, so re-scanning would re-derive a value the pipeline is holding and would
+have to re-decide, per carrier, which label owns it.
 
-The joinable form is made here, from the printed value, rather than read out of a
-second field. `_first` strips internal whitespace and nothing else. Until the
-printed-fields-only narrowing a separate `account_number_normalized` field was
-tried ahead of `account_number`; it was a derived name and is gone, and the
-stripping moved into this module rather than being lost with it.
+Getting the joinable form is a separate job, and it happens here rather than
+upstream. Comcast prints its account number `8495 44 462 0365242`; its gold
+reference hit is `8495444620365242` (F6). `_first` strips internal whitespace and
+nothing else. Until the printed-fields-only narrowing a separate
+`account_number_normalized` field was tried ahead of `account_number`; it was a
+derived name and is gone, and the stripping moved into this module rather than
+being lost with it.
 
 Whitespace only, deliberately - not `AccountNumber.normalized`, which strips
 hyphens too. Lumen's `5-QXH7QKM7` keeps its hyphen in gold, so the two carriers

@@ -67,49 +67,110 @@ than never looking.
 
 ## 3. Field set
 
-### Identity — the part that differs most from AP
+> **Narrowed to printed values.** Everything below is what the pack extracts
+> today, which is a strict subset of what this section originally specified. The
+> reason, the full list of what left, and how to bring it back are in
+> [`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md`](../superpowers/specs/2026-07-28-printed-fields-only-design.md).
+> Anchors are unchanged — they were never the thing that was wrong.
+>
+> A finding from that spec belongs here specifically: **four of this section's
+> eight original "Required" fields were not printed values at all.** Three are
+> closed-list classifications (`service_type`, `charge_type`, the row-type flag)
+> and one is envelope metadata (`invoice_file_name`). They were derivations
+> wearing field names, so they left with `amount_payable` rather than with a
+> selector.
+
+### `REQUIRED` is not a flat set
+
+```python
+REQUIRED       = {"account_number"}
+REQUIRED_ANY_OF = (
+    {"bill_date", "invoice_date", "service_period"},                      # any date
+    {"total_printed", "balance_due", "please_pay",                        # >= 1 amount
+     "current_charges", "amount_previously_due"},
+)
+```
+
+`account_number` is a stronger unconditional requirement than anything Northstar
+can make: it is present on 100% of readable invoices and it is this pack's
+identity key, because three of the four carriers print no invoice number at all
+(F6). `vendor_name` is excluded for the same reason as Northstar's — the sender
+domain is its primary source (spec §4).
+
+### Printed identity — the part that differs most from AP
 
 | Field | Notes |
 |---|---|
-| `account_number` | Required. `strip_internal_whitespace` — Comcast prints `8495 44 462 0365242` |
+| `account_number` | Required. Printed form is kept on the record; only the **reference hit** is whitespace-stripped, because Comcast prints `8495 44 462 0365242` and joins on `8495444620365242` (F6). See `packs/digitaldirection/references.py` |
+| `account_name` | Header account holder — Centracom `CLYDE COMPANIES` |
 | `invoice_number` | **Optional.** Present only on Lumen (`752233001`) |
-| `bill_date` | Required. `Bill date` · `Invoice date` · `Bill Date:` |
+| `bill_date` | `Bill date` · `Invoice date` · `Bill Date:` |
 | `service_period` | `Services from Dec 14, 2025 to Jan 13, 2026` (Comcast) |
-| `document_identity` | Derived: `invoice_number ?? account_number + "|" + bill_date_iso` (F6) |
-| `identity_basis` | `invoice_number` \| `account_period` |
 | `telephone_number` | Secondary identity — Windstream `918-653-3103` |
 | `circuit_id` | Centracom `Special Circuit: 4351003276` |
 
-### Amounts — the F1 core
+`document_identity` (`invoice_number ?? account_number + "|" + bill_date_iso`, F6)
+and `identity_basis` (`invoice_number` \| `account_period`) are **derived and
+retained** — `core/contract.py` requires their presence, so dropping them would
+break `count(intaken) == count(emitted)`. They are the one exception to the
+narrowing (spec §5).
 
-All four are **required** on every bill, because the whole point is that they differ:
+### Printed amounts — the F1 core
+
+Each is transcribed exactly as printed. The whole point is still that they
+differ; what changed is that **nothing in this pack reconciles them any more.**
 
 | Field | Anchors observed |
 |---|---|
 | `prior_balance` | `Previous Balance` · `Previous balance` · `Previous Bill` · `Previous Statement Balance` · `Balance from last statement` · `Previous Balance Due` |
-| `prior_balance_basis` | Derived, required: `gross` \| `net_of_payments` (F1b) |
+| `balance_from_last_statement` | `Balance from last statement` — Centracom prints both this and a net prior |
 | `payments_credits` | `Payments Received` · `Payments/Adjustments thru MM/DD` · `Payment Received - Thank You!` · `Credit Card Payment` — **always stored negative** |
+| `credits_adjustments` | `Credits` · `Adjustments` |
 | `current_charges` | `Subtotal Current Charges` · `Current Charges` · `Current Charges Due` · `New charges` |
+| `amount_previously_due` | `Amount previously due` · `Past Due` |
 | `total_printed` | `Total Amount Due` · `Amount due` · `Please pay` · `Balance Due Includes Past Due Amount` |
-| `amount_payable` | **derived only** (V10) |
 | `taxes_and_fees` | `Taxes and fees` · `Internet Taxes, Surcharges, & Fees` |
 | `charges[]` | `{label, amount}` — Centracom splits `Internet Charges` / `Special Circuit Charges` |
 
-### Allocation — the product
+**Read §7's regression note before touching this table.** Centracom prints
+`33,876.40` and is payable `13,752.60`; under printed-fields-only the record
+carries `33,876.40` and says nothing whatever about the payable. That is the
+consequence this design accepts — extraction transcribes, downstream interprets —
+and it is pinned by `tests/test_printed_fields_only_path.py`.
+
+### Printed allocation and addresses
 
 | Field | Anchors | Why |
 |---|---|---|
 | `service_location` | `For service at:` · `FOR SERVICE AT:` · service address block | The chargeback key (F13) |
-| `bill_to_name` | Header addressee | **Guard** — must resolve to a managed client |
-| `remit_payee` | `Make check payable to` · `payable to` | Drives alias resolution (F5) |
-| `carrier_canonical` | — | Output of the alias table |
+| `bill_to_name` `bill_to_address` `bill_to_attention` `bill_to_email` | Header addressee | **Guard** — `bill_to_name` must resolve to a managed client |
+| `remit_payee` `remit_address` | `Make check payable to` · `payable to` | Drives alias resolution (F5) |
+| `vendor_name` `vendor_address` `return_address` | Letterhead, envelope block | |
 
 ### Dates
 
-`payment_due` / `due_date` — `Payment due` · `Due date` · `Payment Due` · `Due Date:`
+`due_date` — `Payment due` · `Due date` · `Payment Due` · `Due Date:`.
+`payments_included_through` — `Payments/Adjustments thru MM/DD`.
 
 Centracom's due date is **`25TH OF THE MONTH`** — not a date at all. Use `date_loose`; pass it through
 unparsed with a confidence penalty rather than inventing a day.
+
+### Not in scope — deferred, not deleted
+
+Nothing here was removed from the gold files, and every module and unit test that
+produced it is still on disk. Re-enabling is a wiring change.
+
+| Field | Why it left |
+|---|---|
+| `amount_payable` `payable_basis` `carried_balance` | Derived. Guardrails 2 (`test_f1_antiregression.py`) and 6 (`test_f1_centracom_trap.py`) are `skip`ped with the reason as the message — un-skip them in the same change that re-registers the op |
+| `prior_balance_basis` | A derived classification of which label supplied the balance (F1b), not a printed value |
+| `carrier_canonical` | Output of the §4 alias table — derived from the printed name, not printed |
+| `currency` `currency_basis` | F14 inference ladder. Lumen is the only carrier that prints a literal `(USD)` |
+| `account_number_normalized` | Computed form of a printed value |
+| `service_type` `charge_type`, the row-type flag | Closed-list classifications of a row |
+| `invoice_file_name` | Envelope metadata; already on the record as the attachment ID |
+| `vendor_legal_name` `vendor_phone` `vendor_email` `vendor_website` `billing_group` | Printed, and had working selectors. These left for deliverability, so this is the group that shrinks first when scope widens |
+| `vendor_parent_reference` | **Extraction debt, not a deferral.** Lumen's `a CenturyLink company` clause is literal page text on page 1 and no persona has ever had a selector for it. It stays asserted, and stays failing, in `tests/test_scorecard_coverage.py:EXTRACTION_DEBT` |
 
 ---
 

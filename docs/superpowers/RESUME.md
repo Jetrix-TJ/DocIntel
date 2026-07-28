@@ -1,22 +1,37 @@
 # Resume here
 
-Stopped deliberately on 2026-07-27 partway through the convergence loop. Everything
-needed to pick up is in git. Nothing is half-committed.
+Stopped deliberately on 2026-07-29 after the printed-fields-only narrowing.
+Everything needed to pick up is in git. Nothing is half-committed.
 
 ## State in one block
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-tests       1,377 passing in ~7.2s
+tests       1,407 passing, 12 skipped, in ~8.5s
 mypy        python3 -m mypy        -> 0 errors (core/, grammar/, adapters/vision/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   1/10 documents green, 274/339 assertions
+scorecard   1/10 documents green, 193/262 assertions
 ```
+
+**All 12 skips are guardrails 2 and 6**, skipped with the deferral reason as the
+skip message. Nothing else in the suite is skipped, and no skip is
+unexplained — see "printed-fields-only" below.
+
+Per document, measured 2026-07-29:
+
+| Document | | Document | |
+|---|--:|---|--:|
+| Centracom | 25/29 | EDCO | 17/26 |
+| Comcast | 25/29 | Complete Beverage | 17/24 |
+| Lumen | 24/29 | Veritiv | 16/31 |
+| Windstream | 24/27 | Federal Recycling | 14/23 |
+| **DTSS** | **19/19 PASS** | U-PAK | 12/25 |
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
 contract keys; C3b closed it for the confidence modifiers, 29 unasserted gold
-fields and the `lane`. 339 is the honest denominator.
+fields and the `lane`. 262 is the honest denominator today; it was 339 before the
+narrowing removed the derived and arithmetic assertions from it.
 
 `tests/test_scorecard_coverage.py` (**GUARDRAIL 3**) now makes this mechanical
 rather than something to remember: every gold fact must be asserted or explicitly
@@ -86,6 +101,30 @@ under injected failures at every stage.
   10/10 exit criterion required cassettes hand-authored from gold, which scores the
   gold answer against itself. Read `execution/task-c6-report.md` before touching the
   vision path.
+- **printed-fields-only** — both packs narrowed to values printed on the
+  document. `REQUIRED_ANY_OF` + a V13 any-of clause, so EDCO's bill_date-only
+  shape stays writable. Derived work is **deferred, not deleted**: every module
+  and unit test is on disk, guardrails 2 and 6 are `skip` with the reason as the
+  message, and gold still records the derived answers. Re-enabling is a wiring
+  change. See `specs/2026-07-28-printed-fields-only-design.md`.
+
+  **The plan's predictions were wrong in both directions, and the measured
+  numbers are the ones to trust.** The spec forecast 175–200 of ~230 assertions
+  and said 10/10 became reachable; the actual end state is **193/262 with 1/10
+  green.** The denominator is 32 higher than forecast because two rounds of
+  review refused to over-defer — most sharply in Task 4, where three fields that
+  had never had a selector were moved *back* into the denominator, dropping the
+  rate from 73.8% to 73.7% on purpose. 10/10 is not close: nine documents each
+  still miss 2–15 assertions, almost all of them per-document selector work.
+
+  `tests/test_scorecard_coverage.py` now splits the accounting three ways, and
+  the distinction is the thing a future reader most needs:
+
+  | List | n | What it means |
+  |---|--:|---|
+  | `DEFERRED_DERIVED_FIELDS` | 5 | Not printed at all. Cannot come back without re-enabling derivation and its guardrails. |
+  | `DEFERRED_PRINTED_FIELDS` | 6 | Printed, and had a *working* selector until the narrowing. Left for deliverability. **This is the list that shrinks first when scope widens.** |
+  | `EXTRACTION_DEBT` | 2 | `tax_id`, `vendor_parent_reference`. Printed, gold-labelled, and never given a selector by any persona — before this spec or after. **Deliberately still in `CHECKED_FIELDS`, still measured, still failing.** Moving either into a deferral list would delete a pre-existing gap from the denominator and call it a spec decision. |
 
 **Read `execution/task-c5b-report.md`'s "What is still failing" before continuing.**
 The `label-block` region it proposed **is shipped**, and it closed most of the
@@ -105,18 +144,26 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **per-document persona polish** | selectors for the ~65 remaining assertions | 100–200 | most of the remaining 65 |
+| 1 | **per-document persona polish** | selectors for the 69 remaining assertions | 100–200 | most of the remaining 69 |
 | 2 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | fast lane |
 | 3 | *(decision)* | should an OCR document get a vision second opinion? | — | unlocks C6's machinery |
+| 4 | *(decision)* | re-enable derivation downstream of extraction | — | un-skips guardrails 2 and 6 |
 
 **Every stage is now real.** `--vision cassette` (the default) replays recorded
-calls; `--vision live` calls the API. **Both F1 traps derive correctly on the real
-PDFs** — EDCO 69.62 rather than 367.96, and Centracom 13,752.60 rather than
-33,876.40, the latter against a scan line that encodes the trap value.
+calls; `--vision live` calls the API.
 
-**274/339 assertions, 1/10 documents green** (DTSS passes at 24/24). Per document:
-Centracom 35/39, Comcast 34/38, Lumen 34/39, Windstream 33/36, EDCO 28/35,
-Veritiv 24/37, Complete Beverage 22/30, Federal Recycling 20/29, U-PAK 20/32.
+**Both F1 traps still derive correctly — but the pipeline no longer runs the
+derivation.** `derive_amount_payable` and its unit tests are intact and green
+logic; they are simply not in any persona's `adjust` list. On the real PDFs the
+record now carries EDCO's printed 367.96 and Centracom's printed 33,876.40, and
+says nothing about the 69.62 and 13,752.60 that are actually payable. That gap is
+downstream's to close, by design, and
+`tests/test_printed_fields_only_path.py::test_centracom_emits_the_printed_total_not_the_payable`
+pins it so it cannot flip back silently without guardrails 2 and 6 coming back
+with it.
+
+**193/262 assertions, 1/10 documents green** (DTSS passes at 19/19). Per-document
+breakdown is in "State in one block" above.
 
 **C6's machinery is built and unused, on purpose.** All ten documents extract
 through `5a_cached` and none collapses, so nothing reaches Stage 5b. Making vision
@@ -126,9 +173,9 @@ That is a policy decision, not a wiring one, which is why C6 did not make it
 silently. Windstream's `return_address` and Lumen's logo vendor name are the two
 gaps persona work genuinely cannot close; they are what that decision would buy.
 
-**The prove-it-on-one-document reorder is done and paid off:** DTSS passes 24/24, so
-the whole chain — pack claim, persona lookup, grammar execution, op derivation,
-confidence pricing, gate, contract — is demonstrated green end to end on a real PDF.
+**The prove-it-on-one-document reorder is done and paid off:** DTSS passes 19/19, so
+the whole chain — pack claim, persona lookup, grammar execution, confidence
+pricing, gate, contract — is demonstrated green end to end on a real PDF.
 Everything remaining is per-document selector work against that proven chain.
 
 ## How to dispatch a cluster
@@ -195,6 +242,11 @@ ledger → commit.
    end-to-end test that ran a real validated persona through Stage 5a into a validated
    Stage 8 record. Unit tests confirm the units; only the whole path shows what the units
    compose into.
+11. **Retire expectations before capabilities.** Narrowing `FIELDS` before
+   re-verdicting the scorecard leaves the tree red for two whole tasks, and worse:
+   V1 rejects the personas, a rejected persona is a lookup MISS, and all ten
+   documents silently fall back to vision. Scorecard first, then field sets, then
+   personas — in the same commit as their field set.
 
 ## Deferred, with homes
 
@@ -204,8 +256,12 @@ ledger → commit.
 - ~~**`has_flattened_annotations` → forced review**~~ — **DONE in C4.** The full chain
   runs and Federal Recycling reaches its gold routing. Pinned by GUARDRAIL 4
   (`tests/test_f3_forced_review.py`).
-- **`document_identity` / `identity_basis` validation** — `validate_record` cannot require
-  them yet because no derive op produces them. Scheduled into C3.
+- ~~**`document_identity` / `identity_basis` validation**~~ — **DONE in C3.**
+  `derive_document_identity` runs unconditionally and `validate_record` requires
+  both keys to be PRESENT (`None` is a valid value, absence is not). This is why
+  they are the one derived thing the printed-fields-only narrowing kept: dropping
+  them would break `count(intaken) == count(emitted)`. Pinned by
+  `tests/test_printed_fields_only_path.py`.
 - **Minor deferred items** — collected in the ledger, one line each, for the final
   whole-branch review to triage.
 
@@ -219,10 +275,18 @@ of the same invoice both arrive.
 
 | # | Test | Would otherwise happen silently |
 |---|---|---|
-| 2 | `test_f1_antiregression.py` | a selector pointed straight at `amount_payable` looks right on 7/10 documents |
+| 2 | `test_f1_antiregression.py` **(`skip`ped)** | a selector pointed straight at `amount_payable` looks right on 7/10 documents |
 | 3 | `test_scorecard_coverage.py` | an assertion satisfied by a pipeline that computed nothing |
 | 4 | `test_f3_forced_review.py` | values invisible to the text layer emitted without a human ever looking |
 | 5 | `test_personas_validate.py` | a rejected persona is a lookup *miss*, so the document falls back to vision quietly |
-| 6 | `test_f1_centracom_trap.py` | every corroboration signal points at the wrong number |
+| 6 | `test_f1_centracom_trap.py` **(`skip`ped)** | every corroboration signal points at the wrong number |
 | 7 | `test_vision_policy.py` | a vision model gains the power to route a document's lane |
 | 8 | `test_cassette_provenance.py` | a hand-authored answer scores against the gold it was copied from |
+
+Guardrails 2 and 6 are the only skipped tests in the suite. The skip message on
+each is the deferral reason and the instruction: un-skip them in the same change
+that re-registers `derive_amount_payable`. While they are off,
+`tests/test_printed_fields_only_path.py` holds their position from the other
+side — it asserts that Centracom emits the *printed* 33,876.40 and that no
+`amount_payable` reaches the record at all, so re-enabling derivation without
+re-enabling its guardrails fails immediately instead of quietly.

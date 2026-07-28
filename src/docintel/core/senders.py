@@ -12,15 +12,20 @@ exists to avoid.
 
 from __future__ import annotations
 
-# Deliberately short. A domain earns a place here only when a real document has
-# arrived through it, because a false entry costs a vendor name on every
-# document from that sender.
+# Deliberately short, because a false entry costs a vendor name on every document
+# from that sender. Nothing here is corpus-backed - no corpus document arrives
+# from an aggregator at all - so the bar is the architecture spec instead: the
+# first three are the ones `pipeline-v2.md:169` names. The last two are category
+# inferences from those (Intuit is QuickBooks' parent, Coupa is the same class of
+# procurement platform as Ariba), and are marked as such so nobody reads the
+# list as evidence. Drop an inferred entry rather than defend it if it ever
+# swallows a real vendor name.
 AGGREGATOR_DOMAINS: frozenset[str] = frozenset({
     "bill.com",
     "ariba.com",
     "quickbooks.com",
-    "intuit.com",
-    "coupahost.com",
+    "intuit.com",  # inferred, not spec-named
+    "coupahost.com",  # inferred, not spec-named
 })
 
 

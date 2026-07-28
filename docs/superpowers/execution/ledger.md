@@ -1226,3 +1226,118 @@ NOT VERIFIED: the live request shape. anthropic is not installed and no key exis
   truncation, non-JSON, missing text block, invented fields). Not pinned: that the
   SDK accepts that request. First live call should be `--vision record` on one doc.
 Cluster C6: COMPLETE (0 fix rounds). Full detail in task-c6-report.md.
+
+## Printed-fields-only — narrowing extraction to what the page prints (2026-07-28/29)
+
+Spec: specs/2026-07-28-printed-fields-only-design.md. Plan:
+plans/2026-07-28-printed-fields-only.md. Six tasks, commits 367d126..HEAD.
+
+THE NARROWING: both packs now extract only values printed on the document.
+  Anything computed - amount_payable and its basis, the carried balance, the F14
+  currency ladder, prior_balance_basis, carrier_canonical, the *_normalized forms
+  - left FIELDS, left every persona's `adjust` list, and left the scorecard's
+  numerator AND denominator. Nothing was deleted: every module and unit test is
+  on disk, gold still records the derived answers, and re-enabling is a wiring
+  change. GUARDRAILs 2 and 6 are `skip`ped with the deferral reason as the skip
+  message rather than removed, so the un-skip is the reminder.
+DESIGN: `REQUIRED` could not stay a flat set. The field spec says "any parseable
+  date" and "at least one money amount"; V13 checks set membership. Encoding the
+  literal names would have made EDCO (bill date, no invoice date) and every
+  vendor that prints no total unwritable. `REQUIRED_ANY_OF:
+  tuple[frozenset[str], ...]` plus one V13 clause is the minimum change that lets
+  the spec's own wording be expressed.
+DESIGN: `derive_document_identity` is the one derived thing that stays.
+  core/contract.py requires the PRESENCE of document_identity and identity_basis
+  - None is a valid value, absence is not - so dropping them would have broken
+  count(intaken) == count(emitted), the one invariant this project refuses to
+  bend. Pinned end to end in tests/test_printed_fields_only_path.py.
+
+SPEC ERRATUM 1 (found in planning): the derived work does not live in hooks, as
+  the spec's §5 framing implied. It lives in each persona's `adjust` list. Two
+  hooks did come out, but the bulk of the unwiring was per-persona JSON.
+SPEC ERRATUM 2 (found in planning): GOLD_ASSERTION_COVERAGE already carried a
+  `deferred:<why>` verdict. No new mechanism was needed to retire the derived
+  assertions - only a new reason string, DEFERRED_REASON.
+FINDING (found in planning, and the one that changed the shape of the work):
+  FOUR of the field spec's eight "Required" Digital Direction fields are not
+  printed values at all. Three are closed-list row classifications
+  (service_type, charge_type, the row-type flag) and one is envelope metadata
+  (invoice_file_name). They are derivations wearing field names. The spec's
+  "Required" level had been read as a printed-field list for the whole project.
+
+PLAN DEFECT 1 (corrected mid-run, Task 2): the plan gave Task 2 a score
+  expectation of 175-200/~230. That is the spec's END-STATE prediction, applied
+  to a single task by mistake. The implementer refused to over-defer to hit it
+  and was right to. Plan Step 6 was rewritten: at Task 2 the numerator drop must
+  EQUAL the denominator drop, because every assertion being retired was passing.
+  Measured 274/339 -> 239/304, exactly 35 and 35.
+PLAN DEFECT 2 (corrected mid-run, Task 2): nothing in the plan told Tasks 3 or 4
+  what to do with CHECKED_FIELDS. Narrowing FIELDS without narrowing
+  CHECKED_FIELDS leaves GUARDRAIL 3 red. Assigned to a new Task 4 Step 6b, once
+  both packs were narrowed, with a DEFERRED_FIELDS mechanism mirroring Task 2's
+  DEFERRED_DERIVED_KEYS.
+
+DEVIATION UPHELD (Task 4): the brief instructed the implementer to use
+  AccountNumber.normalized for the Comcast reference hit. It refused, because
+  .normalized strips hyphens (patterns.py:140, re.sub(r"[\s\-]")) and Lumen's
+  gold hit 5-QXH7QKM7 keeps its hyphen - the instruction would have fixed Comcast
+  and silently broken Lumen. Used strip_internal_whitespace instead. The
+  re-reviewer patched .normalized back in and independently confirmed it
+  hard-fails Lumen. The instruction was wrong.
+CORRECTION (Task 4, and the accounting distinction that matters most): the first
+  DEFERRED_FIELDS conflated three different things behind one name. Split into
+  DEFERRED_DERIVED_FIELDS (5 - not printed, cannot come back without derivation),
+  DEFERRED_PRINTED_FIELDS (6 - printed, had a working selector, left for
+  deliverability; the list that shrinks first when scope widens) and
+  EXTRACTION_DEBT (2 - tax_id and vendor_parent_reference: printed, gold-labelled,
+  and never given a selector by ANY persona, before this spec or after). The last
+  two went back into CHECKED_FIELDS (44 -> 46) and are still failing, which is
+  correct. Deferring them would have deleted a pre-existing coverage gap from the
+  denominator and called it a spec decision - raising the rate by measuring less.
+  Rate went 73.8% -> 73.7%, the honest direction. vendor_parent_reference was
+  re-verified as literal printed text on Lumen page 1.
+FINDING (Task 5): the aggregator branch is structurally unreachable on this
+  corpus - FilesystemIntake never sets sender_email. Scored zero change, as
+  predicted, and is guarded by tests rather than by the gold set. Only two sender
+  domains map to a vendor (cbd-usa.com, lumen.com), both backed by a printed
+  vendor_email in gold; every other vendor honestly returns None. The reviewer
+  tried bill.com.evil.com, xbill.com, bill.comx and ariba.com.attacker.net and
+  could not construct a miss.
+
+DOC FIX (Task 6): packs/digitaldirection/references.py's first paragraph still
+  claimed field promotion was "the only way to get the right value on Comcast"
+  and that "a text scan would capture the printed spacing and fail to join".
+  Task 4 replaced that mechanism with whitespace-stripping in `_first`; correct
+  paragraphs were appended after the stale one rather than replacing it, so the
+  docstring contradicted itself. Rewritten to say one true thing: promotion is
+  what the pack SHAPE asks for (the keys are printed plainly and already
+  extracted), and the joinable form is a separate job done in `_first`.
+DOC FIX (Task 6): core/senders.py said "a domain earns a place here only when a
+  real document has arrived through it" while listing five domains, none of which
+  any corpus document arrives from. Policy restated to match reality: three are
+  named by pipeline-v2.md:169, the other two (intuit.com, coupahost.com) are
+  category inferences and are now marked inline as such.
+
+SCORE, measured rather than predicted: 274/339 with 1/10 green before, 193/262
+  with 1/10 green after. The spec predicted 175-200 of ~230 and said 10/10 would
+  become reachable. BOTH PREDICTIONS WERE WRONG and the measured numbers are the
+  ones to trust. The denominator landed 32 above forecast because two review
+  rounds refused to over-defer. 10/10 is not close: nine documents each still
+  miss 2-15 assertions. Per document - Centracom 25/29, Comcast 25/29, Lumen
+  24/29, Windstream 24/27, DTSS 19/19 PASS, EDCO 17/26, Complete Beverage 17/24,
+  Veritiv 16/31, Federal Recycling 14/23, U-PAK 12/25.
+WHOLE-PATH TEST (standing rule 10): tests/test_printed_fields_only_path.py, one
+  real PDF per pack to a validated Stage 8 record. Asserts no DERIVED_ONLY name
+  reaches either record, that both identity contract keys still do, and - the
+  point of the file - that Centracom emits the PRINTED 33,876.40 and carries no
+  amount_payable. That is the consequence this design accepts: extraction
+  transcribes, downstream interprets, and the $20,123.80 gap is downstream's to
+  catch. If the assertion ever flips, derivation was re-enabled without
+  guardrails 2 and 6.
+NEW STANDING RULE 11: retire expectations before capabilities. Narrowing FIELDS
+  before re-verdicting the scorecard leaves the tree red for two tasks and, worse,
+  V1 rejects the personas - and a rejected persona is a lookup MISS, so all ten
+  documents fall back to vision silently. This plan was ordered scorecard, then
+  field sets, then personas in the same commit as their field set, specifically
+  to avoid that.
+Printed-fields-only: COMPLETE. Six tasks, two fix rounds (Tasks 3 and 4).
