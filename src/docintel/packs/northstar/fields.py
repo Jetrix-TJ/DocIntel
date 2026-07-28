@@ -144,6 +144,10 @@ REQUIRED: frozenset[str] = frozenset({
     "bill_to_name",
 })
 
+# Populated when the field set narrows to printed values only. Empty here means
+# V13's any-of clause is a no-op, so this task changes no behaviour.
+REQUIRED_ANY_OF: tuple[frozenset[str], ...] = ()
+
 # Section 2 marks exactly one field derived-only. `core.models.DERIVED_ONLY`
 # already covers `amount_payable` and its companions; this set is for names the
 # PACK adds on top, and Northstar adds none.
@@ -173,6 +177,10 @@ def fields_for(doc_type: str) -> frozenset[str]:
 
 def required_fields(doc_type: str) -> frozenset[str]:
     return REQUIRED
+
+
+def required_any_of(doc_type: str) -> tuple[frozenset[str], ...]:
+    return REQUIRED_ANY_OF
 
 
 def derived_only_fields(doc_type: str) -> frozenset[str]:

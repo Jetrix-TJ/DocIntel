@@ -81,6 +81,9 @@ class DigitalDirectionPack:
     def required_fields(self, doc_type: str) -> frozenset[str]:
         return fields.required_fields(doc_type)
 
+    def required_any_of(self, doc_type: str) -> tuple[frozenset[str], ...]:
+        return fields.required_any_of(doc_type)
+
     def derived_only_fields(self, doc_type: str) -> frozenset[str]:
         return fields.derived_only_fields(doc_type)
 

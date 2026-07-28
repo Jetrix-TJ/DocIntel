@@ -110,6 +110,17 @@ class Pack(Protocol):
         """Fields that must have a selector before a write can leave `draft`. V13."""
         ...
 
+    def required_any_of(self, doc_type: str) -> tuple[frozenset[str], ...]:
+        """Groups where at least one member must have a selector. Backs V13's
+        any-of clause.
+
+        A flat `required_fields` cannot express "any parseable date" or "at least
+        one money amount" - both of which the field spec states outright, and both
+        of which name fields that a fifth of real documents do not print. Each
+        group here is satisfied by one covered member.
+        """
+        ...
+
     def derived_only_fields(self, doc_type: str) -> frozenset[str]:
         """Fields no selector may target, beyond `core.models.DERIVED_ONLY`. V10."""
         ...

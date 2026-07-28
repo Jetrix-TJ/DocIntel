@@ -326,6 +326,11 @@ def _check_required_coverage(
     Derived-only required fields are exempt: `amount_payable` is both required
     and forbidden to select, so demanding a selector for it would make V10 and
     V13 jointly unsatisfiable.
+
+    Two shapes of requirement. A flat name in `required_fields` must be covered.
+    An any-of group in `required_any_of` needs one covered member - which is how
+    "any parseable date" and "at least one money amount" are expressed, since
+    neither can be pinned to a single field name that every document prints.
     """
     if persona.get("status") == "draft":
         return
@@ -336,6 +341,20 @@ def _check_required_coverage(
             f"persona status is {persona.get('status')!r} but required fields have no "
             f"selector: {missing} (V13). Leave the write as 'draft' until they do"
         )
+
+    for group in pack.required_any_of(doc_type):
+        satisfiable = group - exempt
+        # A group of nothing but derived-only names cannot be met by any selector.
+        # Raising would make the persona unwritable, which is the same trap the
+        # `exempt` subtraction above exists to avoid.
+        if not satisfiable:
+            continue
+        if not (satisfiable & covered):
+            raise ValidationError(
+                f"persona status is {persona.get('status')!r} but no selector covers "
+                f"any of {sorted(satisfiable)} (V13 any-of). Leave the write as "
+                "'draft' until one does"
+            )
 
 
 def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> None:

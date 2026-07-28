@@ -39,17 +39,22 @@ class FakePack:
         required: set[str] | None = None,
         derived_only: set[str] | None = None,
         ops: set[str] | None = None,
+        any_of: tuple[frozenset[str], ...] = (),
     ) -> None:
         self._fields = frozenset(fields or {"total_printed", "vendor_name", "invoice_number"})
         self._required = frozenset(required or set())
         self._derived_only = frozenset(derived_only or set())
         self._ops = frozenset(ops or set())
+        self._any_of = any_of
 
     def fields_for(self, doc_type: str) -> frozenset[str]:
         return self._fields
 
     def required_fields(self, doc_type: str) -> frozenset[str]:
         return self._required
+
+    def required_any_of(self, doc_type: str) -> tuple[frozenset[str], ...]:
+        return self._any_of
 
     def derived_only_fields(self, doc_type: str) -> frozenset[str]:
         return self._derived_only
@@ -610,6 +615,69 @@ def test_V13_a_row_group_column_satisfies_a_required_field() -> None:
     }])
     pack = FakePack(fields={"description", "amount"}, required={"amount"})
     validate_persona(p, pack=pack)
+
+
+def test_v13_any_of_passes_when_one_group_member_is_covered() -> None:
+    """EDCO's shape: a bill_date selector and no invoice_date."""
+    pack = FakePack(
+        fields={"bill_date", "invoice_date", "total_printed"},
+        required=frozenset(),
+        any_of=(frozenset({"invoice_date", "bill_date"}),),
+    )
+    persona = {
+        "status": "active",
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "bill_date", "region": "top-right", "pattern": "date"},
+        ],
+    }
+    validate_persona(persona, pack)  # must not raise
+
+
+def test_v13_any_of_fails_when_no_group_member_is_covered() -> None:
+    pack = FakePack(
+        fields={"bill_date", "invoice_date", "total_printed"},
+        required=frozenset(),
+        any_of=(frozenset({"invoice_date", "bill_date"}),),
+    )
+    persona = {
+        "status": "active",
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "region": "first-page", "pattern": "currency"},
+        ],
+    }
+    with pytest.raises(ValidationError, match="any of"):
+        validate_persona(persona, pack)
+
+
+def test_v13_any_of_is_skipped_for_draft_personas() -> None:
+    pack = FakePack(
+        fields={"invoice_date", "bill_date"},
+        required=frozenset(),
+        any_of=(frozenset({"invoice_date", "bill_date"}),),
+    )
+    persona = {"status": "draft", "doc_type": "standard_invoice", "field_selectors": []}
+    validate_persona(persona, pack)  # must not raise
+
+
+def test_v13_any_of_group_of_only_derived_names_is_not_a_trap() -> None:
+    """A group whose every member is derived-only cannot be satisfied by any
+    selector, so it must be skipped rather than making the persona unwritable -
+    the same reasoning that exempts derived-only names from flat REQUIRED."""
+    pack = FakePack(
+        fields={"total_printed"},
+        required=frozenset(),
+        any_of=(frozenset({"amount_payable", "carried_balance"}),),
+    )
+    persona = {
+        "status": "active",
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "region": "first-page", "pattern": "currency"},
+        ],
+    }
+    validate_persona(persona, pack)  # must not raise
 
 
 # --- structural / whole-persona -------------------------------------------
