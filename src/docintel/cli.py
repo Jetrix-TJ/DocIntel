@@ -8,17 +8,55 @@ import sys
 from collections import Counter
 
 from docintel.adapters.intake.filesystem import FilesystemIntake
-from docintel.adapters.vision.fake import FakeVision
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_pipeline
 
+# Where recorded vision calls live by default. Under `tests/fixtures` because a
+# cassette IS a fixture: it is checked in, it is what makes a run reproducible, and
+# it has no meaning outside a run that replays it.
+DEFAULT_CASSETTE = "tests/fixtures/cassettes/corpus.json"
 
-def _build_runner() -> Runner:
-    return build_pipeline(vision=FakeVision())
+VISION_MODES = ("cassette", "fake", "live", "record")
+
+
+def _build_vision(mode: str, cassette: str) -> object:
+    """The vision adapter for this run.
+
+    `cassette` is the default because it is the only mode that is both real and
+    reproducible: it replays what a model actually said, offline, with no key. The
+    other three are each deliberately worse in one specific way - `fake` answers
+    nothing, `live` answers differently every run and costs money, `record`
+    rewrites a checked-in fixture.
+    """
+    if mode == "fake":
+        from docintel.adapters.vision.fake import FakeVision
+
+        return FakeVision()
+
+    from docintel.adapters.vision.cassette import CassetteVision
+
+    if mode == "cassette":
+        # inner=None: a replay must not be able to fall through to a live call.
+        # That fallthrough is how a "deterministic" run quietly starts billing and
+        # stops being reproducible.
+        return CassetteVision(inner=None, path=cassette, mode="replay")
+
+    from docintel.adapters.vision.anthropic_adapter import MODEL, AnthropicVision
+
+    live = AnthropicVision()
+    if mode == "live":
+        return live
+    return CassetteVision(inner=live, path=cassette, mode="record", model=MODEL)
+
+
+def _build_runner(args: argparse.Namespace | None = None) -> Runner:
+    mode = getattr(args, "vision", None) or "cassette"
+    cassette = getattr(args, "cassette", None) or DEFAULT_CASSETTE
+    return build_pipeline(vision=_build_vision(mode, cassette))
 
 
 def _cmd_process(args: argparse.Namespace) -> int:
-    runner = _build_runner()
+    runner = _build_runner(args)
     dispositions: Counter[str] = Counter()
 
     for item in FilesystemIntake(args.paths).items():
@@ -54,7 +92,7 @@ def _cmd_process(args: argparse.Namespace) -> int:
 def _cmd_replay_gold(args: argparse.Namespace) -> int:
     from docintel.scorecard import replay_gold
 
-    card = replay_gold(runner_factory=_build_runner)
+    card = replay_gold(runner_factory=lambda: _build_runner(args))
     if args.json:
         print(json.dumps(card, indent=2))
     else:
@@ -64,6 +102,25 @@ def _cmd_replay_gold(args: argparse.Namespace) -> int:
         s = card["summary"]
         print(f"\n{s['passed']}/{s['total']} documents green")
     return 0 if card["summary"]["failed"] == 0 else 1
+
+
+def _add_vision_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--vision",
+        choices=VISION_MODES,
+        default="cassette",
+        help=(
+            "cassette: replay recorded calls (default; offline, deterministic). "
+            "fake: return nothing, for wiring checks. "
+            "live: call the API. "
+            "record: call the API and write the result into the cassette."
+        ),
+    )
+    parser.add_argument(
+        "--cassette",
+        default=DEFAULT_CASSETTE,
+        help=f"cassette file for --vision cassette/record (default: {DEFAULT_CASSETTE})",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,10 +139,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("paths", nargs="+")
     p.add_argument("--json", action="store_true")
+    _add_vision_args(p)
     p.set_defaults(func=_cmd_process)
 
     g = sub.add_parser("replay-gold", help="run the gold corpus and score it")
     g.add_argument("--json", action="store_true")
+    _add_vision_args(g)
     g.set_defaults(func=_cmd_replay_gold)
 
     args = parser.parse_args(argv)

@@ -7,12 +7,11 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        063254f                clean tree, 42 commits
-tests       1,242 passing in ~7.2s
-mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
+tests       1,377 passing in ~7.2s
+mypy        python3 -m mypy        -> 0 errors (core/, grammar/, adapters/vision/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 211/339 assertions
+scorecard   1/10 documents green, 274/339 assertions
 ```
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
@@ -78,14 +77,21 @@ under injected failures at every stage.
 - C5b — the Digital Direction pack, 4 carrier personas, the claim-gating fix, and
   GUARDRAIL 6. 0 rounds. **130 → 211 assertions**, and Centracom's $20,123.80 trap
   now derives correctly; see `execution/task-c5b-report.md`.
+- *(polish rounds)* — the `label-block` region, header-less row groups, PUA-glyph
+  stripping at the pdfplumber boundary, the page-1-first remittance search, and four
+  cross-check bugs that were penalizing correct extractions. **211 → 274 assertions.**
+- C6 — `AnthropicVision`, `CassetteVision`, the vision privilege boundary
+  (`adapters/vision/policy.py`), `--vision {cassette,fake,live,record}`, and
+  GUARDRAILs 7 and 8. 0 rounds. **Scorecard deliberately unchanged** — the plan's
+  10/10 exit criterion required cassettes hand-authored from gold, which scores the
+  gold answer against itself. Read `execution/task-c6-report.md` before touching the
+  vision path.
 
 **Read `execution/task-c5b-report.md`'s "What is still failing" before continuing.**
-The remaining 128 failures are dominated by **addresses and vendor names**, not
-extraction logic. One change would close most of the address failures: a region
-between `near-anchor` and `header-block` — call it `label-block`, the anchor's own
-column from the anchor line down to the next blank line. Two vendor names
-(Lumen's logo, Windstream's `Windstre am`) are not in the text layer at all and
-cannot be captured by any pattern.
+The `label-block` region it proposed **is shipped**, and it closed most of the
+address failures (211 → 274). The two vendor names it flagged as unreachable
+(Lumen's logo, Windstream's `Windstre am`) are still not in the text layer and
+still cannot be captured by any pattern — they are vision's job, not a persona's.
 
 The title-case question C5a raised **is decided and shipped**: the scorecard now
 compares transcribed text case-insensitively (`kind="text"`). A `title_case` op
@@ -99,24 +105,31 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **persona polish** *(new)* | a `label-block` region + address/vendor selectors | 100–200 | most of the remaining 128 |
-| 2 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | — |
-| 3 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | fast lane |
+| 1 | **per-document persona polish** | selectors for the ~65 remaining assertions | 100–200 | most of the remaining 65 |
+| 2 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | fast lane |
+| 3 | *(decision)* | should an OCR document get a vision second opinion? | — | unlocks C6's machinery |
 
-Every stage is now real except Stage 5b (the vision adapter is still the fake).
-**Both F1 traps derive correctly on the real PDFs** — EDCO 69.62 rather than
-367.96, and Centracom 13,752.60 rather than 33,876.40, the latter against a
-scan line that encodes the trap value.
+**Every stage is now real.** `--vision cassette` (the default) replays recorded
+calls; `--vision live` calls the API. **Both F1 traps derive correctly on the real
+PDFs** — EDCO 69.62 rather than 367.96, and Centracom 13,752.60 rather than
+33,876.40, the latter against a scan line that encodes the trap value.
 
-**Of the 128 still failing, the large majority are addresses and vendor names.**
-No document is fully green; DTSS is closest at 23/24, failing only on a two-line
-vendor address. Neither C6 nor C7 is on the critical path for the score — the
-next real gain is persona polish.
+**274/339 assertions, 1/10 documents green** (DTSS passes at 24/24). Per document:
+Centracom 35/39, Comcast 34/38, Lumen 34/39, Windstream 33/36, EDCO 28/35,
+Veritiv 24/37, Complete Beverage 22/30, Federal Recycling 20/29, U-PAK 20/32.
 
-**Optional reorder, now actionable:** hand-author ONE persona for the cleanest
-document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
-chain end-to-end at 1/10 before building both packs out. Costs a little rework, buys
-much earlier signal. C2b's end-to-end test is a working template for the shape.
+**C6's machinery is built and unused, on purpose.** All ten documents extract
+through `5a_cached` and none collapses, so nothing reaches Stage 5b. Making vision
+pay off requires deciding when a vision second opinion is worth its cost — most
+plausibly for OCR-sourced documents, whose text layer is the thing we distrust.
+That is a policy decision, not a wiring one, which is why C6 did not make it
+silently. Windstream's `return_address` and Lumen's logo vendor name are the two
+gaps persona work genuinely cannot close; they are what that decision would buy.
+
+**The prove-it-on-one-document reorder is done and paid off:** DTSS passes 24/24, so
+the whole chain — pack claim, persona lookup, grammar execution, op derivation,
+confidence pricing, gate, contract — is demonstrated green end to end on a real PDF.
+Everything remaining is per-document selector work against that proven chain.
 
 ## How to dispatch a cluster
 
@@ -201,3 +214,15 @@ ledger → commit.
 Unchanged from `docs/README.md`: confidence thresholds, audit-sample rate, review SLAs,
 regeneration cadence, U-Pak's unexplained −$48.92, and whether annotated and clean copies
 of the same invoice both arrive.
+
+## Guardrails, and what each one is guarding against
+
+| # | Test | Would otherwise happen silently |
+|---|---|---|
+| 2 | `test_f1_antiregression.py` | a selector pointed straight at `amount_payable` looks right on 7/10 documents |
+| 3 | `test_scorecard_coverage.py` | an assertion satisfied by a pipeline that computed nothing |
+| 4 | `test_f3_forced_review.py` | values invisible to the text layer emitted without a human ever looking |
+| 5 | `test_personas_validate.py` | a rejected persona is a lookup *miss*, so the document falls back to vision quietly |
+| 6 | `test_f1_centracom_trap.py` | every corroboration signal points at the wrong number |
+| 7 | `test_vision_policy.py` | a vision model gains the power to route a document's lane |
+| 8 | `test_cassette_provenance.py` | a hand-authored answer scores against the gold it was copied from |

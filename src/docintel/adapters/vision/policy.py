@@ -1,0 +1,114 @@
+"""What a vision model is allowed to say, and what happens to the rest.
+
+**This file is to the vision path what `grammar/validator.py` is to the persona
+path: the security boundary.** The persona path's rule is "the agent writes data,
+never code", enforced by V1-V13. The vision path needs its own, because a
+`VisionResult` is not inert - Stage 5b writes its `fields` into `ExtractedFields`
+and its `irregularities` into the document's modifier and tag lists, and Stage 7
+routes lanes off those lists. An unfiltered string from a model would therefore be
+able to move a document between queues.
+
+Three rules, each closing a specific hole:
+
+1. **Only the fields that were asked for.** A model that returns
+   `amount_payable` would hit `ExtractedFields.set`'s derived-only guard (V10) and
+   crash the stage; one that returns `notes` would put a key in the emitted record
+   that no consumer knows about. `field_names` is the allowlist, and DERIVED_ONLY
+   is rejected a second time in case a caller ever passes one.
+
+2. **Only irregularities a camera could actually see.** `VISION_OBSERVABLE` is a
+   deliberately tiny subset of the section 5 enum. Handwriting and skew are
+   properties of the image, so a vision model is the *best* available witness. The
+   arithmetic modifiers (`arith_*`, `scanline_mismatch`, `filename_disagree`) are
+   computed by ops that do real comparisons, and letting a model assert them would
+   replace arithmetic with an opinion. `flattened_annotations` is excluded for a
+   sharper reason: Stage 6 detects it structurally from the PDF's annotation
+   count, and it is one of the two FORCING modifiers - so admitting it here would
+   hand a model the power to force every document to human review.
+
+   Note what that exclusion buys: **neither surviving name is in
+   `s7_gate.FORCING_MODIFIERS`**, so no vision response can route a document to
+   the review lane on its own. It can only lower confidence, and the gate decides
+   what low confidence means.
+
+3. **Confidence is clamped, not trusted.** JSON Schema cannot express
+   `minimum`/`maximum` (the API's supported-keyword subset omits them), so the
+   bound is enforced here. `CEILING` applies for the same reason it applies
+   everywhere else: this pipeline never reports certainty about a value read off a
+   document.
+
+`sanitize` drops rather than raises. A model that returns one bad key alongside
+nine good values should give us the nine - the alternative is throwing away a
+usable extraction over a field nobody asked for. What it must never do is pass
+the bad key through.
+"""
+
+from __future__ import annotations
+
+from docintel.adapters.vision.port import VisionResult
+from docintel.core.confidence import CEILING, MODIFIERS
+from docintel.core.models import DERIVED_ONLY
+
+# Section 5 modifiers a vision model is a competent witness for. See rule 2.
+VISION_OBSERVABLE: frozenset[str] = frozenset({
+    "handwriting_detected",
+    "high_skew",
+})
+
+# Confidence assigned to a value the model returned without one. Matches
+# `FakeVision` and `s5b`'s own default: a vision read is a starting point, not a
+# strong one.
+DEFAULT_CONFIDENCE = 0.50
+
+_CEILING = float(CEILING)
+
+
+def _clean_value(value: object) -> str | None:
+    """A usable transcription, or None. Whitespace-only is absence, not a value."""
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _clean_confidence(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return min(_CEILING, max(0.0, float(value)))
+
+
+def sanitize(result: VisionResult, field_names: list[str]) -> VisionResult:
+    """The subset of `result` the pipeline is allowed to act on."""
+    allowed = {n for n in field_names if n not in DERIVED_ONLY}
+
+    fields: dict[str, str] = {}
+    for name in field_names:
+        if name not in allowed:
+            continue
+        cleaned = _clean_value(result.fields.get(name))
+        if cleaned is not None:
+            fields[name] = cleaned
+
+    confidence: dict[str, float] = {}
+    for name in fields:
+        scored = _clean_confidence(result.confidence.get(name))
+        confidence[name] = DEFAULT_CONFIDENCE if scored is None else scored
+
+    irregularities = [
+        flag
+        for flag in dict.fromkeys(result.irregularities)  # de-dupe, keep order
+        if isinstance(flag, str) and flag in VISION_OBSERVABLE
+    ]
+
+    return VisionResult(
+        fields=fields, confidence=confidence, irregularities=irregularities
+    )
+
+
+# Sanity check at import time rather than in a test: the whole argument for rule 2
+# is that these names are real section 5 modifiers, so a typo here would silently
+# make an observation inert (Stage 5b would file it as a tag) instead of applying
+# its penalty.
+_unknown = VISION_OBSERVABLE - set(MODIFIERS)
+if _unknown:  # pragma: no cover - a coding error, not a runtime condition
+    raise ValueError(f"VISION_OBSERVABLE names are not section 5 modifiers: {_unknown}")

@@ -31,6 +31,22 @@ line-length = 100
 target-version = "py312"
 
 [tool.mypy]
-files = ["src/docintel/core", "src/docintel/grammar"]
+files = [
+    "src/docintel/core",
+    "src/docintel/grammar",
+    # The vision adapters are checked because they sit on an external SDK
+    # boundary: every value that crosses it is untyped, and the whole design of
+    # `policy.py` is about not trusting it.
+    "src/docintel/adapters/vision",
+]
 python_version = "3.12"
 strict = true
+
+# `anthropic` is an optional extra (`pip install 'docintel[vision]'`). It is
+# absent in the default dev environment on purpose - `--vision fake` and
+# `--vision cassette` must work without it - so the import is unresolvable here
+# rather than wrong. The lazy `import anthropic` inside `_resolve_client` is the
+# only reference, and its result is handled as `Any` regardless.
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*"]
+ignore_missing_imports = true

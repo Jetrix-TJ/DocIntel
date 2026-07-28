@@ -1160,3 +1160,69 @@ KNOWN GAPS, all formatting rather than extraction (see task-c5a-report.md):
   a persona cannot capture its own anchor text as a value, which is what
   bill_to_name needs when the label IS the value.
 Cluster C5a: COMPLETE (0 fix rounds). Full detail in task-c5a-report.md.
+
+## Cluster C6 — the real vision adapter, with cassettes
+
+RULING (mine, and the important one): the plan's C6 exit criterion — "replay-gold
+  reaches 10/10", via cassettes "hand-authored from the gold files" — is NOT MET and
+  should not be. Two reasons, and the second dominates. (1) No corpus document
+  reaches Stage 5b: all ten extract through 5a_cached and none collapses, so a
+  cassette would never be consulted. (2) A cassette authored FROM gold and then
+  scored AGAINST that same gold file is circular. The run would go green and measure
+  nothing — and a green replay-gold would become indistinguishable from a working
+  one. replay-gold is the only instrument this project trusts; inflating it is the
+  most expensive available shortcut. corpus.json therefore ships EMPTY and
+  GUARDRAIL 8 fails on any entry not marked provenance: recorded. Authoring one
+  stays available — author it, change the test, write down why. Same rule as gold.
+DESIGN: the vision response is a PRIVILEGE BOUNDARY, and adapters/vision/policy.py
+  is to the vision path what grammar/validator.py is to the persona path. A
+  VisionResult is not inert: s5b writes its fields into ExtractedFields and its
+  irregularities into the modifier/tag lists, and s7 routes lanes off those lists.
+  VISION_OBSERVABLE = {handwriting_detected, high_skew} — properties of the IMAGE,
+  where a vision model is the best available witness. Everything else is excluded on
+  principle: the arith_*/scanline/filename modifiers are computed by ops doing real
+  comparisons (delegating them replaces arithmetic with an opinion), and
+  flattened_annotations is excluded because s6 already detects it structurally AND it
+  is one of the two FORCING_MODIFIERS. The property that buys: NEITHER surviving name
+  can force review, so no vision response can route a lane by itself. GUARDRAIL 7
+  asserts VISION_OBSERVABLE & FORCING_MODIFIERS == {} so nobody widens it silently.
+  sanitize() runs on BOTH the live response and cassette replay — a cassette is a
+  JSON file a human edits, which makes it untrusted in exactly the same way.
+SPEC/PLAN DEVIATION 1: send the PDF as a base64 document block rather than "rendering
+  pages to PNG". Rasterizing would add a pdfium/poppler dependency to produce a
+  strictly WORSE input — a re-render can drop the flattened annotation overlays F3 is
+  entirely about, page indices would have to be re-derived and kept in step with
+  page_meta, and any resampling choice would silently become part of extraction
+  accuracy. Guarded at 20MB raw (base64 inflates 4/3 vs the API's 32MB ceiling).
+SPEC/PLAN DEVIATION 2: the port gained `source_path` (keyword-only, optional).
+  PageText is the TEXT LAYER, and on the two documents that most need vision it is
+  OCR output — the very thing we are checking. An adapter handed only PageText would
+  be doing a text call and calling it vision. AnthropicVision has NO text-layer
+  fallback: a missing source is a PermanentError, because falling back would return a
+  plausible VisionResult from a model that never saw the page.
+SPEC/PLAN DEVIATION 3: module named anthropic_adapter.py (the plan's file list says
+  anthropic.py; its interface list says anthropic_adapter). A module named
+  anthropic.py inside the package self-shadows the moment anyone runs the file
+  directly. Not worth the trap.
+DESIGN: cassette keys follow the document's CONTENT, not its path — same lesson as
+  C1a's cache-key fix. A cassette survives the corpus moving and goes stale, as a
+  loud miss, the moment the PDF changes. Source-byte and text-layer keys are
+  domain-separated so they can never collide.
+DESIGN: a replay miss RAISES. The tempting alternative — an empty VisionResult — is
+  the silent-degradation pattern this project keeps removing (C1a's dead cache
+  bypass; the rejected persona that became a silent vision fallback). An empty result
+  makes "vision ran and found nothing" indistinguishable from "vision never ran". The
+  Runner's emit-always guarantee is what makes raising affordable: one dead letter
+  with an actionable reason, and count(intaken) == count(emitted) still holds.
+FIX (pre-existing, found here): s5b filed vision irregularities as TAGS. Filing
+  handwriting_detected as a tag puts the observation on the emitted record and leaves
+  every field's confidence untouched — honoured in appearance only. Names in the
+  section 5 enum now go to add_modifier; anything else stays a tag.
+GOTCHA: mypy's per-module `ignore_missing_imports = true` is DEFEATED by
+  `follow_untyped_imports = true` in the same override block. Cost a few minutes.
+NOT VERIFIED: the live request shape. anthropic is not installed and no key exists,
+  so every test injects a fake client. Pinned: the request we build and what we do
+  with each response shape (refusal checked BEFORE reading content, max_tokens
+  truncation, non-JSON, missing text block, invented fields). Not pinned: that the
+  SDK accepts that request. First live call should be `--vision record` on one doc.
+Cluster C6: COMPLETE (0 fix rounds). Full detail in task-c6-report.md.
