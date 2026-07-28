@@ -41,6 +41,11 @@ TOTALS_FALLBACK = 0.60      # totals fallback: bottom 40%
 TOTALS_BAND = 80.0          # points below the totals label to include
 TOTALS_LEAD = 2.0           # a hair above the label line, so the label is inside the band
 NEAR_ANCHOR_RIGHT = 300.0   # points right of the anchor
+# ...and a little to the LEFT. Section 2 says "within 300pt right of", but a value
+# printed BELOW its label is left-aligned with it, and layout jitter routinely puts
+# it a point or two further left. Strict equality dropped `Northstar Recycling
+# Company, LLC` from under its own `Bill To` label. One cell gap is enough.
+NEAR_ANCHOR_LEFT = 12.0
 NEAR_ANCHOR_BELOW = 40.0    # points below the anchor
 CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
 
@@ -338,8 +343,9 @@ def _near_anchor(
     page = _page_of(pages, a)
     if page is None:
         return ()
-    x0, top = a.word.x0, a.word.y0 - _LINE_TOLERANCE
-    x1 = x0 + NEAR_ANCHOR_RIGHT
+    top = a.word.y0 - _LINE_TOLERANCE
+    x0 = a.word.x0 - NEAR_ANCHOR_LEFT
+    x1 = a.word.x0 + NEAR_ANCHOR_RIGHT
     bottom = a.word.y0 + NEAR_ANCHOR_BELOW
     return (_box(page, x0, top, x1, bottom),)
 

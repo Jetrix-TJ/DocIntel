@@ -37,7 +37,7 @@ def _base(**over: object) -> dict[str, object]:
 # --------------------------------------------------------------------------
 
 
-def test_base_adjust_ops_are_the_twenty_three_from_section_4() -> None:
+def test_base_adjust_ops_are_the_closed_enum_from_section_4() -> None:
     """The op vocabulary is closed. C3 implements these; the validator needs
     only the names, so it can reject an unregistered op today."""
     assert BASE_ADJUST_OPS == frozenset({
@@ -45,6 +45,7 @@ def test_base_adjust_ops_are_the_twenty_three_from_section_4() -> None:
         "strip_internal_whitespace", "strip_currency_symbols", "parens_to_negative",
         "trailing_cr_to_negative", "normalize_date_iso", "uppercase", "lowercase",
         "trim", "collapse_internal_spaces", "dedupe_preserve_order",
+        "join_lines_comma",
         # 4.2 derivation - the F1 machinery
         "derive_amount_payable", "resolve_carried_balance", "normalize_credit_sign",
         "subtract_prior_balance_if_present", "prefer_current_charges_line",
@@ -55,7 +56,7 @@ def test_base_adjust_ops_are_the_twenty_three_from_section_4() -> None:
         # 4.4 inference
         "infer_currency", "resolve_vendor_alias",
     })
-    assert len(BASE_ADJUST_OPS) == 23
+    assert len(BASE_ADJUST_OPS) == 24
 
 
 # --------------------------------------------------------------------------

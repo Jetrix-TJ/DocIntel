@@ -126,6 +126,26 @@ def trim(value: Any) -> Any:
     return value.strip() if isinstance(value, str) else value
 
 
+def join_lines_comma(value: Any) -> Any:
+    """`500 North Defiance Trail\nSpencerville, OH 45887` -> the two joined by `, `.
+
+    GRAMMAR EXTENSION, added deliberately in C5a. Section 4.1 had no way to turn a
+    `text_block` capture into the single comma-joined string every gold label uses
+    for an address - `collapse_internal_spaces` flattens the newline to a space and
+    loses the separator entirely. Ten gold files carry `bill_to_address` and eight
+    carry `vendor_address`, so without this op roughly eighteen assertions were
+    unreachable by any legal persona.
+
+    The spec's own rule for adding an op is that it needs review and a reason
+    rather than an agent's say-so (section 10). This is that reason. It is a pure
+    formatting op: it moves no value between fields and makes no business decision.
+    """
+    if not isinstance(value, str):
+        return value
+    parts = [line.strip() for line in value.splitlines() if line.strip()]
+    return ", ".join(parts)
+
+
 def dedupe_preserve_order(value: Any) -> Any:
     """Drop repeats from an `all_matches` list, keeping first-seen order.
 
@@ -152,5 +172,6 @@ VALUE_OPS: dict[str, Callable[[Any], Any]] = {
     "lowercase": lowercase,
     "trim": trim,
     "collapse_internal_spaces": collapse_internal_spaces,
+    "join_lines_comma": join_lines_comma,
     "dedupe_preserve_order": dedupe_preserve_order,
 }

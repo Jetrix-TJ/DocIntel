@@ -48,6 +48,19 @@ def _serialize(value: Any) -> Any:
     """
     if isinstance(value, Decimal):
         return format(value, "f")
+    # The two structured results a named pattern can produce. Duck-typed rather
+    # than imported: `core` must not depend on `grammar`, and the attribute names
+    # are the contract between them.
+    #
+    # A `DateResult` reaches here whenever a persona uses the `date` pattern
+    # without `normalize_date_iso`, which is legal - and an unparsed date keeps
+    # its raw text on purpose (F9: Centracom prints "25TH OF THE MONTH").
+    # An `AccountNumber` crosses as its PRINTED form; the joinable form is a
+    # separate field (`*_normalized`), because they are two different facts (F6).
+    if hasattr(value, "iso") and hasattr(value, "raw"):
+        return value.iso if value.iso else value.raw
+    if hasattr(value, "normalized") and hasattr(value, "raw"):
+        return value.raw
     if isinstance(value, Mapping):
         return {k: _serialize(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

@@ -163,6 +163,10 @@ class JobContext:
     text_source: str = "native"
 
     # classification (s3)
+    # The domain pack that claimed this document, resolved from the bill-to on
+    # the page. `None` is a real answer: an invoice addressed to somebody else is
+    # processed generically and tagged, never forced into whichever pack is first.
+    pack: Any | None = None
     doc_type: str | None = None
     tags: list[str] = field(default_factory=list)
     classification_confidence: float | None = None
@@ -200,6 +204,14 @@ class JobContext:
     # three agreeing renderings of an OCR'd number can still all be wrong the
     # same way, so corroboration may never lift a field to certainty.
     boosts: dict[str, int] = field(default_factory=dict)
+    # Modifiers that belong to ONE field rather than to the document. Section 5
+    # calls modifiers "multiplicative" without saying what they multiply, and
+    # applying every one to every field is wrong: `currency_inferred_weak` says
+    # the CURRENCY was inferred from a weak signal, which is no reason to trust
+    # the invoice number less. Applying it document-wide put every field of every
+    # pack-default document at 0.90 against a 0.95 total threshold, so no
+    # document could ever reach the `high` lane.
+    field_modifiers: dict[str, list[str]] = field(default_factory=dict)
     lane: str | None = None
     review_flag: bool = False
     regen_flag: bool = False
@@ -212,8 +224,21 @@ class JobContext:
     events: list[str] = field(default_factory=list)
 
     def add_modifier(self, name: str) -> None:
+        """Record a modifier that applies to the whole document."""
         if name not in self.modifiers:
             self.modifiers.append(name)
+
+    def add_field_modifier(self, field_name: str, name: str) -> None:
+        """Record a modifier that applies to one field only.
+
+        Still appended to `modifiers` so it reaches the emitted record - the
+        record lists every modifier that fired, which is what makes a confidence
+        number auditable - but Stage 6 multiplies it into that one field alone.
+        """
+        scoped = self.field_modifiers.setdefault(field_name, [])
+        if name not in scoped:
+            scoped.append(name)
+        self.add_modifier(name)
 
     def add_tag(self, name: str) -> None:
         if name not in self.tags:

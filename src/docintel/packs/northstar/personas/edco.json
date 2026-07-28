@@ -1,0 +1,96 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "sender_fingerprint": "northstar|edco",
+  "doc_type": "standard_invoice",
+  "notes": "THE F1 TRAP. 367.96 is printed in the largest box on the page; the payable is 69.62. prior_balance_basis comes from the pack's billing-convention table, not from the page - EDCO prints no payment line at all.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "top-left",
+      "pattern": "text"
+    },
+    {
+      "field": "bill_to_name",
+      "region": "any-page",
+      "pattern": "(NORTHSTAR RECYCLING)"
+    },
+    {
+      "field": "vendor_account_number",
+      "anchor": "FOR BILLING INQUIRIES OR SERVICE,",
+      "region": "any-page",
+      "pattern": "(25-3A [0-9]{6})"
+    },
+    {
+      "field": "bill_date",
+      "region": "header-block",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "BALANCE FORWARD",
+      "region": "same-row",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "current_charges",
+      "anchor": "CURRENT CHARGES:",
+      "region": "same-row",
+      "pattern": "currency",
+      "required": false,
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_balance_composition",
+        "infer_currency"
+      ]
+    },
+    {
+      "field": "total_printed",
+      "region": "header-block",
+      "pattern": "currency",
+      "adjust": [
+        "crosscheck_scanline",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "service_location",
+      "anchor": "FOR SERVICE AT:",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        {
+          "field": "total_printed",
+          "as": "digits_no_decimal"
+        }
+      ]
+    },
+    {
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "phone",
+      "required": false
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 1,
+      "max": 2
+    },
+    "has_table": true,
+    "text_source": "native"
+  }
+}

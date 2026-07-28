@@ -16,16 +16,28 @@ from docintel.pipeline.stages.s8_emit import EmitRecord
 __all__ = [
     "AgentEscalation", "ApplyCachedRules", "AttachmentFilter", "CaptureFields",
     "Classify", "ConfidenceGate", "EmitRecord", "Intake", "PersonaLookup",
-    "VisionOneShot", "build_default_stages",
+    "VisionOneShot", "build_default_stages", "build_pipeline",
 ]
 
 
-def build_default_stages(vision: object) -> list[object]:
+def build_default_stages(
+    vision: object,
+    hooks: object | None = None,
+    packs: object | None = None,
+    store: object | None = None,
+) -> list[object]:
+    """The eight stages, wired to whatever packs are loaded.
+
+    `hooks` is threaded into `Classify` because `classifySignals` fires *inside*
+    Stage 3 rather than at a stage boundary - a pack's ladder has to run before
+    the default classification, not after it. Every other socket is a boundary
+    the Runner owns.
+    """
     return [
         Intake(),
         AttachmentFilter(),
-        Classify(),
-        PersonaLookup(),
+        Classify(hooks=hooks, packs=packs),      # type: ignore[arg-type]
+        PersonaLookup(store=store),
         ApplyCachedRules(),
         VisionOneShot(vision=vision),
         AgentEscalation(),
@@ -33,3 +45,29 @@ def build_default_stages(vision: object) -> list[object]:
         ConfidenceGate(),
         EmitRecord(),
     ]
+
+
+def build_pipeline(vision: object) -> object:
+    """A Runner with every pack loaded, its hooks registered and its personas indexed.
+
+    One function so the three things that must agree cannot drift: the packs whose
+    hooks are registered, the packs `Classify` resolves against, and the packs
+    whose personas Stage 4 can find.
+    """
+    from docintel.packs.registry import load_packs, register_all
+    from docintel.packs.store import PackPersonaStore
+    from docintel.pipeline.hooks import HookRegistry
+    from docintel.pipeline.runner import Runner
+
+    packs = load_packs()
+    hooks = HookRegistry()
+    register_all(hooks, packs)
+    return Runner(
+        stages=build_default_stages(
+            vision=vision,
+            hooks=hooks,
+            packs=packs,
+            store=PackPersonaStore(packs),
+        ),
+        hooks=hooks,
+    )

@@ -44,6 +44,11 @@ BASE_ADJUST_OPS: frozenset[str] = frozenset({
     "lowercase",
     "trim",
     "collapse_internal_spaces",
+    # Added in C5a, deliberately: no other op turns a multi-line `text_block`
+    # into the comma-joined single string every gold address label uses, and
+    # `collapse_internal_spaces` loses the separator. See ops.base for the full
+    # justification.
+    "join_lines_comma",
     "dedupe_preserve_order",
     # 4.2 derivation - the F1 machinery
     "derive_amount_payable",

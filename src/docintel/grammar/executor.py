@@ -266,7 +266,7 @@ class Executor:
                     # never a wedged worker. Whatever was found so far is
                     # discarded - a partial all_matches list is worse than a
                     # visible miss, because it looks complete.
-                    ctx.add_modifier("pattern_timeout")
+                    ctx.add_field_modifier(selector.field, "pattern_timeout")
                     ctx.log(f"s5a: pattern budget exceeded for {selector.field!r}")
                     return
                 value = matcher(candidate)
@@ -281,11 +281,11 @@ class Executor:
             return
 
         if used_alt:
-            ctx.add_modifier("anchor_alt_used")
+            ctx.add_field_modifier(selector.field, "anchor_alt_used")
         if ambiguous and selector.region in regions.NON_NARROWING:
             # F12: the same label in the body and on the stub, with nothing to
             # say which one was meant.
-            ctx.add_modifier("ambiguous_anchor")
+            ctx.add_field_modifier(selector.field, "ambiguous_anchor")
 
         quality = (
             QUALITY_ANCHOR_ALT

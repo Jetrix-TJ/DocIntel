@@ -173,7 +173,7 @@ def crosscheck_scanline(ctx: JobContext) -> JobContext:
         if scanline_mod.corroborates(ctx.scanline, value, field):
             _boost(ctx, field)
         else:
-            ctx.add_modifier("scanline_mismatch")
+            ctx.add_field_modifier(field, "scanline_mismatch")
             ctx.log(f"s6: {field}={value!r} does not appear in the scan line digits")
     return ctx
 

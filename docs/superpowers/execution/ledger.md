@@ -1054,3 +1054,109 @@ CARRIED FORWARD TO C5, important: pack-supplied thresholds are accepted by
   can NEVER produce a `high` lane — and seven documents expect one. C5's personas
   must reach `active` status, or must ship thresholds below 0.85.
 Cluster C4: COMPLETE (0 fix rounds). Full detail in task-c4-report.md.
+Cluster C5a: EXECUTED INLINE. Delivers packs/registry.py, packs/store.py, the six
+  Northstar pack modules (+conventions.py, a seventh), six authored personas, and
+  the s3/s4/s7/cli wiring. 107 new tests, suite 1208/1208 in 6.9s, mypy strict
+  clean over 18 files, ruff clean, gold 95 green.
+  SCORECARD 42/339 -> 128/339. Per document: dtss 23/24, complete-beverage 21/30,
+  veritiv 20/37, federal-recycling 19/29, upak 17/32, edco 16/35. The four Digital
+  Direction documents stay at 3 (that is C5b). 0/10 green — no Northstar document
+  is fully clean yet, and the gap is almost entirely address/case formatting.
+CONTROLLER DECISION: a pack claims a document by the BILL-TO on the page, not by
+  the sender and never by the filename. The sender decides which PERSONA applies
+  (s4); the recipient decides which PACK applies (s3). Conflating them would mean a
+  new vendor could not be processed until someone said which pack it belonged to.
+  `resolve_pack` returning None is a real answer, tagged `unclaimed_document`: an
+  invoice in the wrong AP inbox is a real event somebody needs to see.
+CONTROLLER DECISION: the fingerprint is `<pack>|<canonical vendor>`, computed from
+  PAGE TEXT at the beforePersonaLookup hook — not from an extracted vendor_name.
+  s4 runs before s5, so no field exists yet, and that ordering is not an
+  inconvenience to route around: the persona is what tells s5 how to extract, so
+  the lookup key cannot depend on extraction having happened.
+FEWER HOOKS THAN THE PACK SPEC LISTS, each absence deliberate and tabulated in
+  hooks.py: detectFlattenedAnnotations/assignPageRoles are already generic core
+  (s2, C1b); deriveAmountPayable/runArithmeticCrosschecks/inferCurrency are each
+  persona `adjust` declarations run by s6 (a hook would DOUBLE-COUNT the confidence
+  boosts); northstarThresholds became ConfidenceGate reading ctx.pack.thresholds;
+  attachAllocationMetadata is already on the record. Four hooks remain, and they
+  are the four that cannot be expressed any other way.
+NEW PACK MODULE (7th, not in the plan): conventions.py. EDCO's `prior_balance_basis`
+  is 'gross' and NO SELECTOR CAN SUPPLY IT — it is not printed anywhere. That
+  BALANCE FORWARD is carried in full is a fact about how EDCO bills, and F1b
+  refuses to guess it (a missing basis is a review flag). So it is a per-vendor
+  table in the pack, applied at afterExtraction. DELIBERATELY NOT a grammar
+  feature: adding a "literal value" selector kind would let a rule agent write
+  arbitrary constants into any field, a far larger hole than one hand-maintained
+  table. A wrong entry here is a reviewed code change; a wrong constant in a
+  persona would be an agent write.
+DESIGN FLAW FOUND IN MY OWN C3 (real, and it blocked the whole cluster): s6 applied
+  EVERY modifier to EVERY field. `currency_inferred_weak` fires on 8 of 10 gold
+  documents via the pack_default rung, so every field of every one of them scored
+  1.0 x 0.90 = 0.90 against a 0.95 total_printed threshold — NO DOCUMENT COULD EVER
+  REACH THE `high` LANE. §5 calls modifiers "multiplicative" without saying what
+  they multiply, and some are plainly document-wide (ocr_source, draft_rules,
+  soft_miss, handwriting_detected, flattened_annotations) while others are about
+  ONE field (currency_inferred_weak, anchor_alt_used, ambiguous_anchor,
+  pattern_timeout, scanline_mismatch). Added JobContext.field_modifiers and
+  add_field_modifier; s6 multiplies document-wide ones into everything and scoped
+  ones into their own field only. Scoped modifiers still reach the record, because
+  the record listing every modifier that fired is what makes a confidence number
+  auditable.
+GRAMMAR EXTENSION (deliberate, reviewed, 24th op): `join_lines_comma`. Ten gold
+  files carry bill_to_address and eight carry vendor_address, and every one is a
+  multi-line block represented as a single comma-joined string. No §4.1 op produced
+  that — collapse_internal_spaces flattens the newline to a space and loses the
+  separator — so roughly eighteen assertions were unreachable by any LEGAL persona.
+  §10 says a new op needs review and a reason rather than an agent's say-so; this is
+  that reason. Pure formatting: moves no value between fields, makes no business
+  decision.
+REGION TWEAK: near-anchor now extends 12pt to the LEFT as well as 300pt right. §2
+  says "within 300pt right of", but a value printed BELOW its label is left-aligned
+  with it and layout jitter puts it a point or two further left — strict equality
+  dropped `Northstar Recycling Company, LLC` from under its own `Bill To` label.
+CONTRACT FIX: _serialize now handles the two structured results a named pattern can
+  produce, duck-typed so core does not import grammar. A DateResult reaches the
+  record whenever a persona uses `date` without normalize_date_iso, which is legal;
+  an AccountNumber crosses as its PRINTED form because the joinable form is a
+  separate field (F6). Before this the CLI raised a raw TypeError from json.
+CORPUS FACT (measured, for C5b and beyond): gold's currency_basis vocabulary is
+  `explicit_iso_code` / `tax_regime_marker` / `pack_default`, NOT the names C3
+  invented. Renamed. Naming the rungs anything else would have made the field
+  unassertable, so the scorecard would have silently stopped measuring the F14
+  ladder it exists to check.
+MEASURED signals now in the ladder: contra = every per-unit rate on the page is
+  negative (`-40.00/ST`). The `/UNIT` suffix is what makes it a RATE, and it is the
+  only corpus signal separating a contra from an invoice carrying a rebate line —
+  U-PAK prints `-40.500` and Complete Beverage `-0.65`, negative unit prices with
+  no suffix, and neither is a contra. Handwriting = OCR noise ratio >= 0.40 on a
+  SUPPORTING page; measured 0.51/0.46 on Complete Beverage's handwritten BOL pages
+  against 0.22/0.28 on its printed ones and 0.17 on Federal Recycling. Only
+  supporting pages are examined, which removes the false-positive risk entirely:
+  Federal Recycling carries a handwritten margin note but is single-page.
+  past_due = a SHORT line (<=6 words) containing PAST DUE, or an aging header —
+  Federal Recycling's terms print "PAST DUE AMOUNTS SUBJECT TO INTEREST..." on
+  every invoice it sends and its gold is correctly not tagged.
+REQUIRED FIELD SET narrowed to {vendor_name, total_printed, amount_payable,
+  bill_to_name}, deliberately. invoice_number is omitted because three of ten corpus
+  documents print none (F6) — that is the whole reason the identity ladder falls
+  back to account+period, so requiring a selector would make the documents F6 was
+  written for unwritable. invoice_date is omitted because EDCO prints a billing date
+  and no invoice date. currency is omitted because the F14 ladder produces it.
+TWO FIXTURE DEFECTS, both mine, both standing rule 7: (1) test_registry's _page
+  hardcoded page_number=1, so a two-page fixture was two copies of page 1 and the
+  supporting-page test passed for the WRONG REASON. (2) test_northstar_ladder's
+  _page put every token on ONE visual line, which made _is_own_paperwork see the
+  bill-to inside its 4-line letterhead window and made every PAST DUE banner look
+  like prose — two tests failed against CORRECT code. Both helpers now build real
+  lines.
+DEFECT (mine, cost a round): an unbounded `\s+` in a DTSS persona regex made V4
+  reject the whole persona, and a rejected persona does not error — it is a lookup
+  MISS and the document falls silently back to vision. DTSS dropped 23 -> 14
+  passing assertions and nothing but the scorecard noticed. GUARDRAIL 5
+  (tests/packs/test_personas_validate.py) now validates every shipped persona.
+KNOWN GAPS, all formatting rather than extraction (see task-c5a-report.md):
+  EDCO's gold title-cases an ALL-CAPS document throughout and no §4.1 op produces
+  title case; several addresses span more lines than near-anchor's 40pt reaches;
+  a persona cannot capture its own anchor text as a value, which is what
+  bill_to_name needs when the label IS the value.
+Cluster C5a: COMPLETE (0 fix rounds). Full detail in task-c5a-report.md.

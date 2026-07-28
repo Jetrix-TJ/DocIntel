@@ -9,13 +9,12 @@ from collections import Counter
 
 from docintel.adapters.intake.filesystem import FilesystemIntake
 from docintel.adapters.vision.fake import FakeVision
-from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
-from docintel.pipeline.stages import build_default_stages
+from docintel.pipeline.stages import build_pipeline
 
 
 def _build_runner() -> Runner:
-    return Runner(stages=build_default_stages(vision=FakeVision()), hooks=HookRegistry())
+    return build_pipeline(vision=FakeVision())
 
 
 def _cmd_process(args: argparse.Namespace) -> int:

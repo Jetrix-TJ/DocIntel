@@ -1,0 +1,101 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "sender_fingerprint": "northstar|federal_recycling",
+  "doc_type": "contra_invoice",
+  "notes": "A contra: every commodity rate is negative. Flattened annotations carry human corrections OCR cannot distinguish from print (F3), so this document is forced to review whatever the confidence. The letterhead and the remittance payee are different legal names (F5).",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "top-left",
+      "pattern": "text"
+    },
+    {
+      "field": "remit_payee",
+      "anchor": "CHECK REMITTANCE",
+      "region": "near-anchor",
+      "pattern": "text",
+      "required": false,
+      "adjust": [
+        "resolve_vendor_alias"
+      ]
+    },
+    {
+      "field": "invoice_number",
+      "anchor": "No.",
+      "region": "near-anchor",
+      "pattern": "([0-9]{7})"
+    },
+    {
+      "field": "invoice_date",
+      "region": "header-block",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "SHIP TO",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "currency",
+      "anchor": "Total Amt.",
+      "region": "same-row",
+      "pattern": "(USD)",
+      "required": false,
+      "adjust": [
+        "infer_currency"
+      ]
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amt.",
+      "region": "same-row",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "payment_terms",
+      "anchor": "PAYMENT TERMS",
+      "region": "near-anchor",
+      "pattern": "(EOM plus [0-9]{1,2})",
+      "required": false
+    },
+    {
+      "row_group": "line_items",
+      "table_anchor": "TRANS NO.",
+      "columns": {
+        "trans_no": "text",
+        "reference": "text",
+        "description": "text",
+        "amount": "currency"
+      },
+      "column_headers": {
+        "trans_no": "TRANS NO.",
+        "reference": "REFERENCE",
+        "description": "DESCRIPTION",
+        "amount": "AMOUNT"
+      },
+      "row_count": {
+        "min": 1,
+        "max": 40
+      },
+      "allow_empty_cells": true
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 1,
+      "max": 2
+    },
+    "has_table": true,
+    "text_source": "ocr"
+  }
+}

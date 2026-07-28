@@ -1,0 +1,122 @@
+{
+  "sender_fingerprint": "northstar|dtss",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "The cleanest document in the corpus: one page, native text, three line items, no prior balance. Labels sit on one line and their values on the next, so most selectors use near-anchor rather than same-row.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "top-left",
+      "pattern": "text"
+    },
+    {
+      "field": "invoice_number",
+      "anchor": "Invoice #",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "invoice_date",
+      "region": "top-right",
+      "pattern": "date",
+      "adjust": [
+        "normalize_date_iso"
+      ]
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "Bill To",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "payment_terms",
+      "region": "first-page",
+      "pattern": "Due on receipt|Net [0-9]{1,3}"
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "resolve_carried_balance",
+        "derive_amount_payable",
+        "infer_currency",
+        "crosscheck_filename"
+      ]
+    },
+    {
+      "field": "balance_due",
+      "anchor": "Balance Due",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments/Credits",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "normalize_credit_sign"
+      ]
+    },
+    {
+      "row_group": "line_items",
+      "table_anchor": "Description",
+      "columns": {
+        "description": "text",
+        "quantity": "integer",
+        "unit_price": "currency",
+        "amount": "currency"
+      },
+      "column_headers": {
+        "description": "Description",
+        "quantity": "Qty",
+        "unit_price": "Rate",
+        "amount": "Amount"
+      },
+      "row_count": {
+        "min": 1,
+        "max": 40
+      },
+      "allow_empty_cells": true
+    },
+    {
+      "field": "vendor_address",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "required": false,
+      "anchor": "D.T.S.S., Inc.",
+      "adjust": [
+        "join_lines_comma"
+      ]
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "Northstar Recycling Company, LLC",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 1,
+      "max": 2
+    },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native",
+    "column_signature": [
+      "Description",
+      "Qty",
+      "Rate",
+      "Amount"
+    ]
+  }
+}

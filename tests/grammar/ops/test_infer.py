@@ -45,10 +45,15 @@ class _Persona:
 
 
 def test_an_extracted_iso_code_is_the_strongest_rung() -> None:
+    """The basis strings are the GOLD LABELS' own vocabulary, not a fresh
+    invention: all ten gold files record a currency_basis using
+    `explicit_iso_code`, `tax_regime_marker` and `pack_default`. Naming the rungs
+    anything else would make the field unassertable, so the scorecard would
+    silently stop measuring the F14 ladder it exists to check."""
     ctx = _ctx(_page(1, "anything"), currency="CAD")
     ctx = infer_currency(ctx)
     assert ctx.derived.get("currency") == "CAD"
-    assert ctx.derived.get("currency_basis") == "iso_code"
+    assert ctx.derived.get("currency_basis") == "explicit_iso_code"
     assert "currency_inferred_weak" not in ctx.modifiers
 
 
@@ -64,7 +69,7 @@ def test_an_hst_line_infers_cad_with_no_penalty() -> None:
     ctx = _ctx(_page(1, "H.S.T.", "#", "123142812RT0001", "2,325.69"))
     ctx = infer_currency(ctx)
     assert ctx.derived.get("currency") == "CAD"
-    assert ctx.derived.get("currency_basis") == "tax_regime"
+    assert ctx.derived.get("currency_basis") == "tax_regime_marker"
     assert "currency_inferred_weak" not in ctx.modifiers
 
 
@@ -94,7 +99,7 @@ def test_a_canadian_postal_code_is_a_weak_signal() -> None:
 def test_a_tax_regime_outranks_an_address() -> None:
     ctx = _ctx(_page(1, "H.S.T.", "148.20"), _page(2, "Ohio", "45887"))
     ctx = infer_currency(ctx)
-    assert ctx.derived.get("currency_basis") == "tax_regime"
+    assert ctx.derived.get("currency_basis") == "tax_regime_marker"
 
 
 def test_a_supporting_page_does_not_decide_the_currency() -> None:

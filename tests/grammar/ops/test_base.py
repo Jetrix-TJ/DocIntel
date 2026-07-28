@@ -32,11 +32,14 @@ SAMPLES: list[Any] = [
 # --------------------------------------------------------------------------
 
 
-def test_the_registry_holds_the_ten_ops_from_section_4_1() -> None:
+def test_the_registry_holds_the_ops_from_section_4_1() -> None:
+    """Eleven, not the spec's ten: `join_lines_comma` was added in C5a because no
+    other op could produce the comma-joined address form every gold label uses."""
     assert set(VALUE_OPS) == {
         "strip_internal_whitespace", "strip_currency_symbols", "parens_to_negative",
         "trailing_cr_to_negative", "normalize_date_iso", "uppercase", "lowercase",
         "trim", "collapse_internal_spaces", "dedupe_preserve_order",
+        "join_lines_comma",
     }
 
 
@@ -134,6 +137,20 @@ def test_case_ops_and_trim() -> None:
     assert VALUE_OPS["uppercase"]("edco") == "EDCO"
     assert VALUE_OPS["lowercase"]("EDCO") == "edco"
     assert VALUE_OPS["trim"]("  EDCO  ") == "EDCO"
+
+
+def test_join_lines_comma_builds_the_gold_address_form() -> None:
+    assert VALUE_OPS["join_lines_comma"](
+        "500 North Defiance Trail\nSpencerville, OH 45887"
+    ) == "500 North Defiance Trail, Spencerville, OH 45887"
+
+
+def test_join_lines_comma_drops_blank_lines() -> None:
+    assert VALUE_OPS["join_lines_comma"]("a\n\n  \nb") == "a, b"
+
+
+def test_join_lines_comma_leaves_a_single_line_alone() -> None:
+    assert VALUE_OPS["join_lines_comma"]("PO Box 188") == "PO Box 188"
 
 
 def test_dedupe_preserves_first_seen_order() -> None:

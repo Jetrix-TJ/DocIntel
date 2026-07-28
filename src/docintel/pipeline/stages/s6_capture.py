@@ -129,8 +129,14 @@ class CaptureFields:
     # -- 5. confidence -----------------------------------------------------
 
     def _score(self, ctx: JobContext) -> None:
+        # Document-wide modifiers are everything not claimed by a single field.
+        # See JobContext.field_modifiers for why the distinction is load-bearing.
+        scoped = {m for names in ctx.field_modifiers.values() for m in names}
+        document_wide = [m for m in ctx.modifiers if m not in scoped]
+
         for name, quality in ctx.extracted.match_quality.items():
-            penalized = apply_modifiers(quality, ctx.modifiers)
+            applicable = [*document_wide, *ctx.field_modifiers.get(name, ())]
+            penalized = apply_modifiers(quality, applicable)
             ctx.confidence[name] = apply_boosts(penalized, ctx.boosts.get(name, 0))
 
         # The payable is the number that matters most, and it is derived, so it

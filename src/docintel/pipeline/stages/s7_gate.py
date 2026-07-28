@@ -105,10 +105,23 @@ class ConfidenceGate:
 
     # -- confidence --------------------------------------------------------
 
+    def _thresholds_for(self, ctx: JobContext) -> dict[str, float]:
+        """Injected thresholds win; otherwise the claiming pack's.
+
+        A pack's thresholds are a business judgement about that domain (a wrong
+        total is a wrong payment), so they belong to the pack rather than to the
+        gate. An explicit argument still wins, because that is the test seam.
+        """
+        if self.thresholds:
+            return self.thresholds
+        pack_thresholds = getattr(ctx.pack, "thresholds", None)
+        return pack_thresholds if isinstance(pack_thresholds, dict) else {}
+
     def _confidence_lane(self, ctx: JobContext) -> str:
+        thresholds = self._thresholds_for(ctx)
         short = [
             name for name, score in ctx.confidence.items()
-            if score < self.thresholds.get(name, DEFAULT_THRESHOLD)
+            if score < thresholds.get(name, DEFAULT_THRESHOLD)
         ]
         if not short:
             return "high"
