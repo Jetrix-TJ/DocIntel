@@ -80,8 +80,8 @@
       "allow_empty_cells": true
     },
     {
-      "field": "bill_to_address",
-      "anchor": "NORTHSTAR RECYCLING COMPANY LLC",
+      "field": "vendor_address",
+      "anchor": "VERITIV OPERATING COMPANY",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
@@ -90,8 +90,14 @@
       "required": false
     },
     {
-      "field": "vendor_address",
-      "anchor": "VERITIV OPERATING COMPANY",
+      "field": "remit_payee",
+      "region": "any-page",
+      "pattern": "(VERITIV OPERATING COMPANY)",
+      "required": false
+    },
+    {
+      "field": "remit_address",
+      "anchor": "P.O. BOX 409884",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [

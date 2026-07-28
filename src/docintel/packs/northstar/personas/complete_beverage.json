@@ -94,8 +94,8 @@
       "allow_empty_cells": true
     },
     {
-      "field": "bill_to_address",
-      "anchor": "BILL TO",
+      "field": "vendor_address",
+      "anchor": "9921 Old Lakeland Hwy",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
@@ -104,13 +104,9 @@
       "required": false
     },
     {
-      "field": "vendor_address",
-      "anchor": "Complete Beverage Destruction, LLC",
-      "region": "label-block",
-      "pattern": "text_block",
-      "adjust": [
-        "join_lines_comma"
-      ],
+      "field": "bill_to_attention",
+      "region": "any-page",
+      "pattern": "(Refresco, Acline)",
       "required": false
     }
   ],

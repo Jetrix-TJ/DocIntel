@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 31,
+      "passed_count": 33,
       "total_count": 39,
       "assertions": [
         {
@@ -201,21 +201,21 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 1955, Orem, UT 84059-1955",
-          "actual": null,
+          "actual": "%%%%$$$$, Account",
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 7, Fairview, UT 84629",
-          "actual": null,
+          "actual": "Balance, PO BOX 7, Payments, FAIRVIEW UT 84629, Previous, Please, Visit us on the web centracom.com",
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 7, Fairview, UT 84629-0007",
           "actual": "CENTRACOM, PO BOX 7, FAIRVIEW UT 84629-0007",
           "passed": false
@@ -224,8 +224,8 @@
           "name": "fields.vendor_phone",
           "kind": "text",
           "expected": "435-427-3331",
-          "actual": "0384043574",
-          "passed": false
+          "actual": "435-427-3331",
+          "passed": true
         },
         {
           "name": "fields.account_name",
@@ -322,8 +322,8 @@
           "name": "scanline.raw",
           "kind": "exact",
           "expected": "03840384043574000033876408",
-          "actual": null,
-          "passed": false
+          "actual": "03840384043574000033876408",
+          "passed": true
         },
         {
           "name": "arithmetic.balance_closed",
@@ -366,7 +366,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 26,
+      "passed_count": 32,
       "total_count": 38,
       "assertions": [
         {
@@ -478,8 +478,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "Comcast",
-          "actual": null,
-          "passed": false
+          "actual": "Comcast",
+          "passed": true
         },
         {
           "name": "fields.carrier_canonical",
@@ -518,10 +518,10 @@
         },
         {
           "name": "fields.service_location",
-          "kind": "text",
+          "kind": "address",
           "expected": "387 S 520 W STE 210, Lindon, UT 84042-1960",
           "actual": "387 S 520 W STE 210, LINDON UT 84042-1960",
-          "passed": false
+          "passed": true
         },
         {
           "name": "fields.currency",
@@ -546,31 +546,31 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 1955, Orem, UT 84059-1955",
-          "actual": null,
-          "passed": false
+          "actual": "PO BOX 1955, OREM, UT 84059-1955",
+          "passed": true
         },
         {
           "name": "fields.bill_to_attention",
           "kind": "text",
           "expected": "ATTN CLYDE COMPANIES-IT",
-          "actual": null,
-          "passed": false
+          "actual": "ATTN CLYDE COMPANIES-IT",
+          "passed": true
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 60533, City of Industry, CA 91716-0533",
-          "actual": "Business services 217.89, Taxes and fees 3.22",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.return_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 4118, Englewood, CO 80155",
-          "actual": null,
-          "passed": false
+          "actual": "PO BOX 4118 ENGLEWOOD CO 80155",
+          "passed": true
         },
         {
           "name": "fields.service_period",
@@ -652,8 +652,8 @@
           "name": "scanline.raw",
           "kind": "exact",
           "expected": "849544462036524200221119",
-          "actual": null,
-          "passed": false
+          "actual": "849544462036524200221119",
+          "passed": true
         },
         {
           "name": "arithmetic.balance_closed",
@@ -694,7 +694,7 @@
         "F12"
       ],
       "passed": false,
-      "passed_count": 29,
+      "passed_count": 32,
       "total_count": 39,
       "assertions": [
         {
@@ -806,8 +806,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "Level 3 Communications, LLC",
-          "actual": null,
-          "passed": false
+          "actual": "Level 3 Communications, LLC",
+          "passed": true
         },
         {
           "name": "fields.carrier_canonical",
@@ -874,14 +874,14 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "5555 Perimeter Dr, Dublin, OH 43017-3219",
-          "actual": "5555 PERIMETER DR, DUBLIN OH 43017-3219, How to reach, 1-877-453-8353, Billing@Lumen.com, Invoice of Level 3 Communications, LLC, a CenturyLink company, Bill-At-A-Glance, Manage your services your way, Previous, Payment, Manage your services online! View and pay your invoice,, Credits/Adjustments, manage repair tickets, check order status and much more.",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "1025 Eldorado Blvd., Broomfield, CO 80021",
           "actual": null,
           "passed": false
@@ -902,17 +902,17 @@
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 52015, Phoenix, AZ 85072-2015",
-          "actual": "PO Box 52015 \u2022 Detach and enclose, Phoenix, AZ 85072-2015 \u2022 Make check payable, \u2022 Write the invoice, \u2022 Mail check to address",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
           "kind": "text",
           "expected": "1-877-453-8353",
-          "actual": null,
-          "passed": false
+          "actual": "1-877-453-8353",
+          "passed": true
         },
         {
           "name": "fields.vendor_email",
@@ -969,8 +969,8 @@
           "name": "scanline.raw",
           "kind": "exact",
           "expected": "251001 000000752233001 00000000000586878247 8 2 00000024809 2",
-          "actual": null,
-          "passed": false
+          "actual": "251001 000000752233001 00000000000586878247 8 2 00000024809 2",
+          "passed": true
         },
         {
           "name": "arithmetic.balance_closed",
@@ -1013,7 +1013,7 @@
         "F9"
       ],
       "passed": false,
-      "passed_count": 28,
+      "passed_count": 31,
       "total_count": 36,
       "assertions": [
         {
@@ -1182,21 +1182,21 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 1550, Durant, OK 74702-1550",
           "actual": "PO BOX 1550, DURANT OK 74702-1550",
-          "passed": false
+          "passed": true
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 9001908, Louisville, KY 40290-1908",
-          "actual": null,
+          "actual": "LOUISVILLE, KY 40290-1908, AAAATTFDFTAADDFTDTDDADDTTFAAAFFTDTAAFATTDFTDDTATADDDFDAADTTATTFTD",
           "passed": false
         },
         {
           "name": "fields.return_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "ATTN: Support Services, 131 W Matthews St, Matthews, NC 28105",
           "actual": null,
           "passed": false
@@ -1205,8 +1205,8 @@
           "name": "fields.vendor_phone",
           "kind": "text",
           "expected": "1-833-241-0100",
-          "actual": null,
-          "passed": false
+          "actual": "1-833-241-0100",
+          "passed": true
         },
         {
           "name": "fields.vendor_website",
@@ -1265,8 +1265,8 @@
           "name": "scanline.raw",
           "kind": "exact",
           "expected": "7000444000000004106907622507190000012301446",
-          "actual": null,
-          "passed": false
+          "actual": "7000444000000004106907622507190000012301446",
+          "passed": true
         },
         {
           "name": "arithmetic.balance_closed",
@@ -1309,7 +1309,7 @@
         "F15"
       ],
       "passed": false,
-      "passed_count": 21,
+      "passed_count": 22,
       "total_count": 30,
       "assertions": [
         {
@@ -1450,23 +1450,23 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "P.O. Box 188, East Longmeadow, MA 01028, United States",
-          "actual": "NorthStar Recycling Company, LLC, Refresco, Acline, P.O. Box 188, East Longmeadow, MA 01028, United States, DATE TOTAL DUE DUE DATE, 10/24/2025 $1,177.70 11/23/2025, PLEASE DETACH TOP PORTION AND RETURN WITH YOUR",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_attention",
           "kind": "text",
           "expected": "Refresco, Acline",
-          "actual": null,
-          "passed": false
+          "actual": "Refresco, Acline",
+          "passed": true
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
-          "actual": "Invoice, 9921 Old Lakeland Hwy, Dade City, FL 33525 US",
+          "actual": "Dade City, FL 33525 US",
           "passed": false
         },
         {
@@ -1710,14 +1710,14 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "P.O. Box 188, East Longmeadow, MA 01028",
           "actual": "P.O. Box 188, East Longmeadow, MA 01028",
           "passed": true
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "500 North Defiance Trail, Spencerville, OH 45887",
           "actual": "500 North Defiance Trail, Spencerville, OH 45887",
           "passed": true
@@ -1791,7 +1791,7 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 19,
+      "passed_count": 25,
       "total_count": 35,
       "assertions": [
         {
@@ -1886,8 +1886,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "EDCO Waste & Recycling Service",
-          "actual": null,
-          "passed": false
+          "actual": "EDCO WASTE & RECYCLING SERVICE",
+          "passed": true
         },
         {
           "name": "fields.vendor_account_number",
@@ -1912,10 +1912,10 @@
         },
         {
           "name": "fields.service_location",
-          "kind": "text",
+          "kind": "address",
           "expected": "Hunter Industries, 260 S Pacific St, San Marcos, CA 92078",
           "actual": "HUNTER INDUSTRIES, 260 S PACIFIC ST, SAN MARCOS CA 92078",
-          "passed": false
+          "passed": true
         },
         {
           "name": "fields.currency",
@@ -1940,38 +1940,38 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 188, East Longmeadow, MA 01028",
-          "actual": "EDCO, HUNTER INDUST P.O., PO BOX 188 BUENA, EAST LONGMEADOW MA 01028",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_attention",
           "kind": "text",
           "expected": "Hunter Indust",
-          "actual": null,
-          "passed": false
+          "actual": "HUNTER INDUST",
+          "passed": true
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "224 S Las Posas Rd, San Marcos, CA 92078",
           "actual": "224 S LAS POSAS RD, SAN MARCOS, CA 92078",
           "passed": true
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "P.O. Box 5488, Buena Park, CA 90622-5488",
-          "actual": null,
+          "actual": "BUENA PARK, CA 90622-5488",
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
           "kind": "text",
           "expected": "(760) 744-2700",
-          "actual": "1-855-713-4203",
-          "passed": false
+          "actual": "(760) 744-2700",
+          "passed": true
         },
         {
           "name": "fields.payments_included_through",
@@ -2029,8 +2029,8 @@
           "name": "scanline.raw",
           "kind": "exact",
           "expected": "25600770871000367962",
-          "actual": null,
-          "passed": false
+          "actual": "25600770871000367962",
+          "passed": true
         },
         {
           "name": "arithmetic.balance_closed",
@@ -2043,8 +2043,8 @@
           "name": "arithmetic.scanline_agrees",
           "kind": "exact",
           "expected": true,
-          "actual": false,
-          "passed": false
+          "actual": true,
+          "passed": true
         },
         {
           "name": "derived.filename_crosscheck",
@@ -2068,7 +2068,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 19,
+      "passed_count": 20,
       "total_count": 29,
       "assertions": [
         {
@@ -2142,7 +2142,7 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "Federal International Recycling and Waste Solutions, LLC",
-          "actual": "Bank Swift",
+          "actual": null,
           "passed": false
         },
         {
@@ -2168,9 +2168,9 @@
         },
         {
           "name": "fields.service_location",
-          "kind": "text",
+          "kind": "address",
           "expected": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01028",
-          "actual": null,
+          "actual": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01, UNITED STATES",
           "passed": false
         },
         {
@@ -2189,9 +2189,9 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "PO Box 188, East Longmeadow, MA 01028, UNITED STATES",
-          "actual": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01, UNITED STATES",
+          "actual": null,
           "passed": false
         },
         {
@@ -2203,24 +2203,24 @@
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "7935 Clayton Rd, St. Louis, MO 63117",
-          "actual": null,
+          "actual": "St. Louis, MO 63117, 281-580-1242",
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "Post Office Box 203505, Dallas, TX 75320-3505",
-          "actual": "Bank Swift, Federal International Recycling and Waste Solutions, LLC Account Number:, Post Office Box 203505, Dallas, TX 75320-3505, TERMS & CONDITIONS, PAST DUE AMOUNTS SUBJECT TO INTEREST FEES IN THE AMOUNT OF 18.99% ANNUALLY OR, LOWER.",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
           "kind": "text",
           "expected": "281-580-1242",
-          "actual": null,
-          "passed": false
+          "actual": "281-580-1242",
+          "passed": true
         },
         {
           "name": "derived.amount_payable",
@@ -2342,7 +2342,7 @@
         "F20"
       ],
       "passed": false,
-      "passed_count": 19,
+      "passed_count": 20,
       "total_count": 32,
       "assertions": [
         {
@@ -2445,8 +2445,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "U-Pak Disposals (1989) Ltd",
-          "actual": null,
-          "passed": false
+          "actual": "U-Pak Disposals (1989) Ltd",
+          "passed": true
         },
         {
           "name": "fields.vendor_account_number",
@@ -2471,7 +2471,7 @@
         },
         {
           "name": "fields.service_location",
-          "kind": "text",
+          "kind": "address",
           "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
           "actual": "SHEARER'S FOOD CANADA INC N.S, 745 SOUTH GATE, MASTER ACC, GUELPH ON N1G 4N4",
           "passed": true
@@ -2492,16 +2492,16 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "94 Maple St, East Longmeadow, MA 01028",
-          "actual": "745 SOUTH, LLC, MASTER, 94 MAPLE ST, GUELPH, EAST LONGMEADOW MA 01028",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "15 Tidemore Avenue, Etobicoke, ON M9W 7E9",
-          "actual": null,
+          "actual": "ETOBICOKE, ON M9W 7E9 03/31/2025, 416-675-3700",
           "passed": false
         },
         {
@@ -2762,7 +2762,7 @@
         "F19"
       ],
       "passed": false,
-      "passed_count": 23,
+      "passed_count": 24,
       "total_count": 37,
       "assertions": [
         {
@@ -2850,8 +2850,8 @@
           "name": "fields.remit_payee",
           "kind": "text",
           "expected": "Veritiv Operating Company",
-          "actual": null,
-          "passed": false
+          "actual": "VERITIV OPERATING COMPANY",
+          "passed": true
         },
         {
           "name": "fields.vendor_account_number",
@@ -2904,7 +2904,7 @@
         },
         {
           "name": "fields.service_location",
-          "kind": "text",
+          "kind": "address",
           "expected": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
           "actual": null,
           "passed": false
@@ -2939,23 +2939,23 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "94 Maple St, East Longmeadow, MA 01028-2744",
-          "actual": "VERITIV, 94 MAPLE ST P.O. BOX, EAST LONGMEADOW,MA 01028-2744 ATLANTA,",
+          "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "6120 South Gilmore Road, Fairfield, OH 45014",
           "actual": "6120 South Gilmore Road, Fairfield, OH 45014",
           "passed": true
         },
         {
           "name": "fields.remit_address",
-          "kind": "text",
+          "kind": "address",
           "expected": "P.O. Box 409884, Atlanta, GA 30384-9884",
-          "actual": null,
+          "actual": "Remit Payment, ATLANTA, GA. 30384-9884 To This Address",
           "passed": false
         },
         {
@@ -3049,7 +3049,7 @@
     "total": 10,
     "passed": 1,
     "failed": 9,
-    "assertions_passed": 239,
+    "assertions_passed": 263,
     "assertions_total": 339
   }
 }

@@ -103,16 +103,6 @@
       ]
     },
     {
-      "field": "remit_address",
-      "anchor": "COMCAST",
-      "region": "label-block",
-      "pattern": "text_block",
-      "adjust": [
-        "join_lines_comma"
-      ],
-      "required": false
-    },
-    {
       "field": "account_number_normalized",
       "anchor": "Account number",
       "region": "near-anchor",
@@ -135,6 +125,34 @@
         "max": 20
       },
       "allow_empty_cells": true
+    },
+    {
+      "field": "remit_payee",
+      "region": "any-page",
+      "pattern": "payable to (Comcast)",
+      "required": false
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "ATTN CLYDE COMPANIES-IT",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "bill_to_attention",
+      "region": "any-page",
+      "pattern": "(ATTN CLYDE COMPANIES-IT)",
+      "required": false
+    },
+    {
+      "field": "return_address",
+      "region": "any-page",
+      "pattern": "(PO BOX 4118 ENGLEWOOD CO 80155)",
+      "required": false
     }
   ],
   "layout_fingerprint": {

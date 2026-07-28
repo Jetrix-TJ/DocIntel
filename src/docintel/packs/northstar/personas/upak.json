@@ -87,8 +87,8 @@
       "allow_empty_cells": true
     },
     {
-      "field": "bill_to_address",
-      "anchor": "NORTHSTAR RECYCLING COMPANY",
+      "field": "service_location",
+      "anchor": "Location:",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
@@ -97,8 +97,14 @@
       "required": false
     },
     {
-      "field": "service_location",
-      "anchor": "Location:",
+      "field": "remit_payee",
+      "region": "any-page",
+      "pattern": "(U-Pak Disposals \\(1989\\) Ltd)",
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "15 TIDEMORE AVENUE",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [

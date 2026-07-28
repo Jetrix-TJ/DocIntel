@@ -105,12 +105,6 @@
       "required": false
     },
     {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "phone",
-      "required": false
-    },
-    {
       "row_group": "charges",
       "table_anchor": "Internet Charges",
       "columns": {
@@ -159,6 +153,32 @@
       "field": "billing_group",
       "region": "first-page",
       "pattern": "([0-9]{4} - [A-Z]{3,6})",
+      "required": false
+    },
+    {
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "(435-427-3331)",
+      "required": false
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "CLYDE COMPANIES",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "CENTRACOM",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
       "required": false
     }
   ],

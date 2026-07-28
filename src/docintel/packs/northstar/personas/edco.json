@@ -80,12 +80,6 @@
       ]
     },
     {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "phone",
-      "required": false
-    },
-    {
       "field": "vendor_address",
       "anchor": "EDCO WASTE & RECYCLING SERVICE",
       "region": "label-block",
@@ -96,13 +90,31 @@
       "required": false
     },
     {
-      "field": "bill_to_address",
-      "anchor": "NORTHSTAR RECYCLING",
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "(\\(760\\) 744-2700)",
+      "required": false
+    },
+    {
+      "field": "remit_payee",
+      "region": "any-page",
+      "pattern": "(EDCO WASTE & RECYCLING SERVICE)",
+      "required": false
+    },
+    {
+      "field": "remit_address",
+      "anchor": "P.O. BOX 5488",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
         "join_lines_comma"
       ],
+      "required": false
+    },
+    {
+      "field": "bill_to_attention",
+      "region": "any-page",
+      "pattern": "(HUNTER INDUST)",
       "required": false
     }
   ],

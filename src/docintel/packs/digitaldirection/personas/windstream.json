@@ -126,6 +126,22 @@
         "join_lines_comma"
       ],
       "required": false
+    },
+    {
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "(1-833-241-0100)",
+      "required": false
+    },
+    {
+      "field": "remit_address",
+      "anchor": "PO BOX 9001908",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
     }
   ],
   "layout_fingerprint": {

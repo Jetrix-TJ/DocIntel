@@ -129,18 +129,20 @@
       ]
     },
     {
-      "field": "bill_to_address",
-      "anchor": "CITY OF DUBLIN",
-      "region": "label-block",
-      "pattern": "text_block",
-      "adjust": [
-        "join_lines_comma"
-      ],
+      "field": "remit_payee",
+      "region": "any-page",
+      "pattern": "payable to (Level 3 Communications, LLC)",
       "required": false
     },
     {
-      "field": "remit_address",
-      "anchor": "Level 3 Communications, LLC",
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "(1-877-453-8353)",
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "1025 Eldorado Blvd.",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [

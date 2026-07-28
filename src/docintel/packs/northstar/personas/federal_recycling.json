@@ -11,16 +11,6 @@
       "pattern": "text"
     },
     {
-      "field": "remit_payee",
-      "anchor": "CHECK REMITTANCE",
-      "region": "near-anchor",
-      "pattern": "text",
-      "required": false,
-      "adjust": [
-        "resolve_vendor_alias"
-      ]
-    },
-    {
       "field": "invoice_number",
       "anchor": "No.",
       "region": "near-anchor",
@@ -90,8 +80,14 @@
       "allow_empty_cells": true
     },
     {
-      "field": "bill_to_address",
-      "anchor": "SHIP TO",
+      "field": "vendor_phone",
+      "region": "any-page",
+      "pattern": "(281-580-1242)",
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "7935 Clayton Rd",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
@@ -100,8 +96,8 @@
       "required": false
     },
     {
-      "field": "remit_address",
-      "anchor": "CHECK REMITTANCE",
+      "field": "service_location",
+      "anchor": "SHIP TO",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
