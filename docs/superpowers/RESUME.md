@@ -7,17 +7,21 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        0f0ce2c                clean tree, 32 commits
-tests       558 passing in ~7.8s
+HEAD        835c9e8                clean tree, 33 commits
+tests       994 passing in ~7.9s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 39/242 assertions
+scorecard   0/10 documents green, 39/252 assertions
 ```
 
-**The 10/10 caveat is gone.** C2b landed the four contract keys, so the scorecard
-now asserts `line_items`, `charges`, `scanline` and `sub_account`. 242 is the honest
-denominator; reaching it means the corpus really is satisfied.
+**The 10/10 caveat is PARTLY back — read this before trusting the score.** C2b
+discharged it for the four contract keys. C3 then found a second, separate gap:
+every gold file carries an `assertions` array (68 entries, 37 machine-checkable)
+that the scorecard **never reads**, and `confidence_modifiers` is not asserted at
+all — the whole of spec §5, 16 modifiers, unmeasured. Nothing would notice if
+`arith_balance_mismatch` stopped being applied. See finding 2 in
+`execution/task-c3-report.md`. **A small C3b is recommended before C4.**
 
 Verify all of that in one go:
 
@@ -56,14 +60,17 @@ under injected failures at every stage.
 - C2b — `executor.py`, persona-bound Stage 5a, the four contract keys, +19 scorecard
   assertions. 0 rounds. Three implementation defects found and fixed mid-run; see
   `execution/task-c2b-report.md`.
+- C3 — the 23 adjust ops, unconditional `derive_document_identity`, a real
+  `s6_capture`, the identity contract requirement, `test_f1_antiregression.py`,
+  +10 `lane` assertions. 0 rounds. One spec correction and two measurement
+  findings; see `execution/task-c3-report.md`.
 
-**Read `execution/task-c2b-report.md` before starting C3.** Its "Notes for C3"
-section covers where the `adjust` ops live, what `match_quality` means, and one
-corpus fact that will otherwise cost a debugging round: EDCO's statement table
-prints its own summary row *inside* the table body, so Σ`line_items` ≠ `subtotal`
-there by construction — `crosscheck_line_sum` must not flag it.
+**Read `execution/task-c3-report.md` before starting C4.** Its "Notes for C4"
+section covers the `lane` scoreboard, the `flattened_annotations` forced-review
+wiring still owed, and that `ctx.review_flag` is already set by three C3 ops — the
+gate may raise it but must never clear it.
 
-## Next: five dispatch units
+## Next: five dispatch units, plus a recommended C3b
 
 Sizes are calibrated against C1a (458 src lines / 6 files), C1b (568 / 6),
 C2a (1,150 / 4) and C2b (760 / 5). Both C2 estimates ran ~30–60% over, almost
@@ -71,15 +78,18 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C3** | 4 adjust-op modules + real `s6_capture` + F1 anti-regression test | 400–500 | some `derived.*` |
-| 2 | C4 | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | routing |
+| 1 | **C3b** *(new, recommended)* | wire the 37 machine-checkable gold `assertions` + a `confidence_modifiers` assertion | 150–250 | 0/10, bigger denominator |
+| 2 | C4 | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | `lane` + routing |
 | 3 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
 | 4 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
 | 5 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
 | 6 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
 
-All the infrastructure is now in place. First real scorecard movement is C3; the
-bulk arrives with C5.
+All the extraction and derivation infrastructure is in place. **Nothing can move
+the score until C5 authors personas** — every C3 op runs only when a persona
+declares it, which is why C3 scored zero and the plan's "some `derived.*`" was
+optimistic. C3b and C4 make the denominator honest and the routing real; C5 is
+where the numerator finally moves.
 
 **Optional reorder, now actionable:** hand-author ONE persona for the cleanest
 document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
