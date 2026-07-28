@@ -152,21 +152,24 @@ MONEY_FIELDS = frozenset({
 # draft asserted only 12 scalar fields, which left the loop blind to ten
 # documented findings and all fifteen tags - it could have reached "10/10 green"
 # with an empty reference_list and no tags at all.
+# Narrowed with the printed-fields-only packs: a name here is a claim that some
+# pack extracts it, so a name no pack registers any more measures nothing and
+# only lowers every denominator. The thirteen that left are listed in
+# `tests/test_scorecard_coverage.py:DEFERRED_FIELDS`, which is what keeps their
+# gold values accounted for rather than merely unmeasured.
 CHECKED_FIELDS = (
     # amounts, and the F1/F1b machinery that decides what is actually payable
-    "total_printed", "current_charges", "prior_balance", "prior_balance_basis",
+    "total_printed", "current_charges", "prior_balance",
     "payments_credits", "subtotal", "tax_amount", "taxes_and_fees", "please_pay",
     "balance_due",
     # identity (F5, F6)
-    "invoice_number", "vendor_name", "remit_payee", "carrier_canonical",
+    "invoice_number", "vendor_name", "remit_payee",
     "account_number", "vendor_account_number", "telephone_number", "circuit_id",
     # dates and terms (F18)
     "invoice_date", "bill_date", "due_date", "payment_terms",
     "discount_date", "discount_amount",
     # allocation and guards (F13)
     "bill_to_name", "service_location",
-    # currency (F14)
-    "currency",
     # match keys carried as scalar fields (F11)
     "customer_po", "seal_number", "bol_number",
 
@@ -180,25 +183,15 @@ CHECKED_FIELDS = (
     # Only the two `*_note` fields are deliberately excluded: they are the
     # labeller's prose explaining a judgement, not a value a pipeline produces.
 
-    # currency provenance (F14) - the ladder rung that answered
-    "currency_basis",
     # the money fields MONEY_FIELDS already declared but nothing asserted
     "amount_previously_due", "balance", "balance_from_last_statement",
     "credits_adjustments", "total_weight",
-    # normalized identity forms (F6). The printed form and the joinable form are
-    # different facts and a record that carries only one has lost the other.
-    "account_number_normalized", "vendor_account_number_normalized",
     # allocation and remittance addresses - where the money goes and who owes it
     "bill_to_address", "bill_to_attention", "bill_to_email",
-    "vendor_address", "vendor_legal_name", "vendor_parent_reference",
-    "remit_address", "return_address",
-    # vendor contact details
-    "vendor_phone", "vendor_email", "vendor_website",
+    "vendor_address", "remit_address", "return_address",
     # account structure and periods
-    "account_name", "billing_group", "service_period", "service_dates",
+    "account_name", "service_period", "service_dates",
     "payments_included_through", "order_date", "sale_type",
-    # the H.S.T. number itself, which is the F14 anchor hazard's own value
-    "tax_id",
 )
 
 # Why every derived and arithmetic assertion below is deferred rather than
@@ -260,9 +253,8 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "arith_balance_mismatch_applied": DEFERRED_REASON,
     # `prior_balance_basis` is a derived CLASSIFICATION of which label supplied
     # the balance (design section 2), supplied by the `apply_billing_conventions`
-    # hook that section 5 unwires. The verdict is retired here; the
-    # `fields.prior_balance_basis` assertion itself goes with the FIELDS
-    # narrowing, because CHECKED_FIELDS is not this change's to touch.
+    # hook that section 5 unwires - now unregistered in both packs. The
+    # `fields.prior_balance_basis` assertion left CHECKED_FIELDS with them.
     "prior_balance_is_net": DEFERRED_REASON,
     # Printed, and staying: `prior_balance` is ink on the page even though the
     # gold check name describes how the labeller reasoned about it.
@@ -280,7 +272,11 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # -- identity (F5, F6) --------------------------------------------------
     "identity_basis": "covered:derived.identity_basis",
     "identity_fallback": "covered:derived.identity_basis",
-    "account_whitespace_stripped": "covered:fields.account_number_normalized",
+    # The joinable form of Comcast's account number is computed from the printed
+    # one, so `account_number_normalized` left `FIELDS` with the narrowing and
+    # this has no assertion left to point at. The printed form is still asserted
+    # as `fields.account_number`; what is deferred is the stripping itself.
+    "account_whitespace_stripped": DEFERRED_REASON,
     "alias_collapse": "wired:derived.vendor_canonical",
     "alias_collapse_three_names": "wired:derived.vendor_canonical",
     "vendor_alias": "wired:derived.vendor_canonical",
@@ -292,8 +288,13 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "credit_suffix_parsed": "covered:fields.payments_credits",
     "parens_parsed_negative": "covered:line_items.amounts",
     "total_is_positive_despite_contra": "covered:fields.total_printed",
-    "currency_inferred": "covered:fields.currency",
-    "hst_anchor_hazard": "covered:fields.tax_id",
+    # `currency` is the F14 inference ladder's output, not ink on the page, and
+    # it left both packs' FIELDS with the narrowing.
+    "currency_inferred": DEFERRED_REASON,
+    # `tax_id` IS printed - the hazard is that `H.S.T.` reads as a currency
+    # anchor - but no pack registers it any more, so nothing extracts the value
+    # this check is about. Deferred with the rest, not reclassified as prose.
+    "hst_anchor_hazard": DEFERRED_REASON,
 
     # -- the scan line (F7) -------------------------------------------------
     # Beyond the deferral list the design spelled out, and by the same test: both

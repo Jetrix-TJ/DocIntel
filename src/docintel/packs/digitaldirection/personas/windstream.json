@@ -69,23 +69,13 @@
       "field": "current_charges",
       "anchor": "Current Charges Due",
       "region": "near-anchor",
-      "pattern": "currency",
-      "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_balance_composition",
-        "infer_currency"
-      ]
+      "pattern": "currency"
     },
     {
       "field": "total_printed",
       "anchor": "Total Amount Due",
       "region": "near-anchor",
-      "pattern": "currency",
-      "adjust": [
-        "crosscheck_scanline",
-        "crosscheck_filename"
-      ]
+      "pattern": "currency"
     },
     {
       "field": "remit_payee",
@@ -96,12 +86,6 @@
       "adjust": [
         "resolve_vendor_alias"
       ]
-    },
-    {
-      "field": "vendor_website",
-      "region": "any-page",
-      "pattern": "(kineticbusiness.com)",
-      "required": false
     },
     {
       "scanline": true,
@@ -125,12 +109,6 @@
       "adjust": [
         "join_lines_comma"
       ],
-      "required": false
-    },
-    {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "(1-833-241-0100)",
       "required": false
     },
     {

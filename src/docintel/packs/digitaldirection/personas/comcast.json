@@ -80,11 +80,6 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_scanline",
-        "crosscheck_filename",
-        "infer_currency",
         "resolve_vendor_alias"
       ]
     },
@@ -101,16 +96,6 @@
           "as": "digits_only"
         }
       ]
-    },
-    {
-      "field": "account_number_normalized",
-      "anchor": "Account number",
-      "region": "near-anchor",
-      "pattern": "text",
-      "adjust": [
-        "strip_internal_whitespace"
-      ],
-      "required": false
     },
     {
       "row_group": "charges",

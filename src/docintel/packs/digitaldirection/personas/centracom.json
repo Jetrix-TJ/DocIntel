@@ -72,13 +72,7 @@
       "field": "current_charges",
       "anchor": "Subtotal Current Charges",
       "region": "near-anchor",
-      "pattern": "currency",
-      "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_balance_composition",
-        "infer_currency"
-      ]
+      "pattern": "currency"
     },
     {
       "field": "taxes_and_fees",
@@ -93,8 +87,6 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "crosscheck_scanline",
-        "crosscheck_filename",
         "resolve_vendor_alias"
       ]
     },
@@ -147,18 +139,6 @@
       "anchor": "Remit To:",
       "region": "label-block",
       "pattern": "text",
-      "required": false
-    },
-    {
-      "field": "billing_group",
-      "region": "first-page",
-      "pattern": "([0-9]{4} - [A-Z]{3,6})",
-      "required": false
-    },
-    {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "(435-427-3331)",
       "required": false
     },
     {

@@ -11,12 +11,17 @@ and their CONTENT varies (usage, one-off charges) while their LAYOUT does not, s
 a single low-confidence bill is weak evidence of rule drift and two consecutive
 months is strong evidence. The AP-oriented pile-up trigger is too twitchy for a
 monthly rhythm.
+
+`applyBillingConventions` and `refineProseBalanceTags` are both deferred by the
+printed-fields-only narrowing: the first supplies `prior_balance_basis`, a derived
+classification, and the second retags on `carried_balance`, which Stage 6 no
+longer produces. Both implementations stay in the tree.
 """
 
 from __future__ import annotations
 
 from docintel.core.models import JobContext
-from docintel.packs.digitaldirection import aliases, conventions, ladder, references
+from docintel.packs.digitaldirection import aliases, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
 
@@ -40,19 +45,22 @@ def resolve_carrier_fingerprint(ctx: JobContext, next_: Next) -> JobContext:
     return next_(ctx)
 
 
-def apply_billing_conventions(ctx: JobContext, next_: Next) -> JobContext:
-    """Supply `prior_balance_basis` from the carrier's convention (F1b)."""
-    return next_(conventions.apply_prior_balance_basis(ctx))
-
-
 def collect_references(ctx: JobContext, next_: Next) -> JobContext:
     """Promote the extracted identity fields into `reference_list` (F11).
 
     Registered at `beforeConfidenceGate`, NOT `afterExtraction`, and the
-    difference is load-bearing. These hits are the extracted fields themselves, and
-    `afterExtraction` fires *before* Stage 6 runs the value ops - so Comcast's
-    `account_number_normalized` would still read `8495 44 462 0365242` with its
-    printed spacing intact, and the reference hit would be unjoinable (F6).
+    difference is still load-bearing after the printed-fields-only narrowing -
+    though the example that used to justify it is gone. `afterExtraction` fires
+    *before* Stage 6 (`runner.HOOKS_BEFORE`), so a hook there reads the values
+    Stage 5 captured rather than the values the record ends up carrying. It used
+    to be Comcast's `account_number_normalized` that made the gap visible; that
+    field is no longer registered, and today no DD persona declares a value op on
+    a promoted identity field, so the two positions would currently agree.
+
+    The position stays because the agreement is a coincidence of the current
+    personas, not a property of the hook: a reference hit exists to be joined on,
+    so it must be the value the record carries, and adding one normalizer to
+    `account_number` must not silently change the reference list.
 
     Northstar's equivalent can run at `afterExtraction` because it scans page text
     and depends on nothing Stage 6 does.
@@ -60,18 +68,7 @@ def collect_references(ctx: JobContext, next_: Next) -> JobContext:
     return next_(references.collect(ctx))
 
 
-def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
-    """`prior_balance_present` vs `_cleared`, decided on the carried balance.
-
-    Runs at `beforeConfidenceGate` rather than `afterExtraction`, because it needs
-    `carried_balance` and that is produced by Stage 6.
-    """
-    return next_(ladder.retag_prior_balance(ctx))
-
-
 def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", telecom_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_carrier_fingerprint, PACK_NAME)
-    registry.register("afterExtraction", apply_billing_conventions, PACK_NAME)
     registry.register("beforeConfidenceGate", collect_references, PACK_NAME)
-    registry.register("beforeConfidenceGate", refine_prior_balance_tags, PACK_NAME)

@@ -12,13 +12,6 @@
       "required": false
     },
     {
-      "field": "vendor_legal_name",
-      "anchor": "Invoice of",
-      "region": "near-anchor",
-      "pattern": "(Level 3 Communications, LLC)",
-      "required": false
-    },
-    {
       "field": "invoice_number",
       "anchor": "Invoice Number",
       "region": "near-anchor",
@@ -81,21 +74,7 @@
       "field": "current_charges",
       "anchor": "Current Charges",
       "region": "near-anchor",
-      "pattern": "currency",
-      "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_balance_composition"
-      ]
-    },
-    {
-      "field": "currency",
-      "anchor": "Total Amount Due",
-      "region": "near-anchor",
-      "pattern": "(USD)",
-      "adjust": [
-        "infer_currency"
-      ]
+      "pattern": "currency"
     },
     {
       "field": "total_printed",
@@ -103,16 +82,8 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "crosscheck_scanline",
-        "crosscheck_filename",
         "resolve_vendor_alias"
       ]
-    },
-    {
-      "field": "vendor_email",
-      "region": "any-page",
-      "pattern": "(Billing@Lumen.com)",
-      "required": false
     },
     {
       "scanline": true,
@@ -132,12 +103,6 @@
       "field": "remit_payee",
       "region": "any-page",
       "pattern": "payable to (Level 3 Communications, LLC)",
-      "required": false
-    },
-    {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "(1-877-453-8353)",
       "required": false
     },
     {

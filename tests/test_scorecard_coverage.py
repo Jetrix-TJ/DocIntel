@@ -46,6 +46,30 @@ DEFERRED_REASON = "deferred:printed-fields-only"
 # for re-enabling stays on disk and this list is what points at it.
 DEFERRED_DERIVED_KEYS = frozenset({"amount_payable", "payable_basis"})
 
+# Gold records these, and the documents really do print some of them, but no
+# pack extracts them under printed-fields-only: `currency` comes from the F14
+# inference ladder and `prior_balance_basis` from a vendor convention. Gold is
+# read-only and keeps the evidence, so re-enabling is a wiring change.
+#
+# Computed, not curated - the exact set of `CHECKED_FIELDS` names that neither
+# pack's `FIELDS` still registers after Tasks 3 and 4. The pin below is what
+# stops it being used as a place to hide a field a pack does still extract.
+DEFERRED_FIELDS: frozenset[str] = frozenset({
+    "account_number_normalized",
+    "billing_group",
+    "carrier_canonical",
+    "currency",
+    "currency_basis",
+    "prior_balance_basis",
+    "tax_id",
+    "vendor_account_number_normalized",
+    "vendor_email",
+    "vendor_legal_name",
+    "vendor_parent_reference",
+    "vendor_phone",
+    "vendor_website",
+})
+
 # Assertions that an empty record satisfies for a legitimate reason, keyed
 # `<gold_id>:<assertion>` (or `*:<assertion>` for all documents). Every entry
 # needs a written reason, and this list must not grow without one: each one is a
@@ -159,17 +183,35 @@ def test_every_named_assertion_in_the_table_is_one_the_scorecard_emits() -> None
 def test_every_gold_field_is_either_asserted_or_declared_prose() -> None:
     """The larger half of the C3 finding: 29 gold field names across 73
     occurrences were never asserted, `bill_to_address` and `currency_basis` in
-    all ten files. `currency_basis` is C3's own output."""
+    all ten files. `currency_basis` is C3's own output.
+
+    Three accounts now, not two: asserted, declared prose, or named in
+    DEFERRED_FIELDS because no pack registers the name any more. The third is
+    held honest by test_the_deferred_field_list_holds_only_unextractable_names.
+    """
     unchecked: dict[str, int] = {}
     for gold in GOLD:
         for name, value in (gold.get("fields") or {}).items():
             if value is None or name in CHECKED_FIELDS or name in PROSE_FIELDS:
                 continue
+            if name in DEFERRED_FIELDS:
+                continue
             unchecked[name] = unchecked.get(name, 0) + 1
     assert not unchecked, (
         f"gold fields present but never asserted: {sorted(unchecked)}. "
-        "Add them to scorecard.CHECKED_FIELDS or to PROSE_FIELDS here."
+        "Add them to scorecard.CHECKED_FIELDS, or to DEFERRED_FIELDS here if no "
+        "pack registers the name, or to PROSE_FIELDS if it is labeller prose."
     )
+
+
+def test_the_deferred_field_list_holds_only_unextractable_names() -> None:
+    """An entry here for a field a pack still extracts is a free pass, not a
+    deferral — it would hide a real extraction failure behind a spec decision."""
+    from docintel.packs.digitaldirection import fields as dd
+    from docintel.packs.northstar import fields as ns
+
+    assert not (DEFERRED_FIELDS & (ns.FIELDS | dd.FIELDS))
+    assert not (DEFERRED_FIELDS & set(CHECKED_FIELDS))
 
 
 def test_the_prose_exemption_list_stays_small() -> None:
