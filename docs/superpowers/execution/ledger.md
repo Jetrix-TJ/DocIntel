@@ -908,3 +908,77 @@ FINDING 2 (NOT FIXED, NEEDS A DECISION): every gold file carries an `assertions`
   wiring the 37 `equals` entries plus a confidence_modifiers superset assertion.
   Est. 150-250 src lines, mostly a check-name -> getter table.
 Cluster C3: COMPLETE (0 fix rounds). Full detail in task-c3-report.md.
+Cluster C3b: EXECUTED INLINE. NOT in the original plan — created from C3's finding
+  2 on the user's approval. Delivers the missing scorecard coverage plus
+  tests/test_scorecard_coverage.py (GUARDRAIL 3). 67 new tests, suite 1061/1061 in
+  8.2s, mypy strict clean over 18 files, ruff clean, gold 95 green.
+  Scorecard 39/252 -> 41/339. The +87 denominator is the coverage; the +2 numerator
+  is REAL — ocr_source on Complete Beverage and ocr_source+flattened_annotations on
+  Federal Recycling, i.e. C1a's and C1b's detection working, turned into modifiers
+  by C3's Stage 6. Capability that had been correct for three clusters and was
+  measured by nothing.
+CONTROLLER ERRATUM on my own C3 finding 2: the estimate was wrong in BOTH
+  directions. (a) FEWER of the 68 gold assertions were genuinely new than claimed —
+  of the 25 distinct check names carrying `equals`, 13 were already covered by an
+  existing scorecard assertion and several more were arithmetic narrative whose
+  components were each asserted individually. balance_composition is the clearest
+  case of why a check name cannot be mapped mechanically: on four documents its
+  `equals` is total_printed, on Lumen it is the CARRIED BALANCE (249.84-249.84+0.00
+  = 0.0, while Lumen's total is 248.09) — the same name means two different things.
+  (b) A MUCH LARGER gap sat next to it, unmentioned: 29 gold FIELD names never
+  asserted across 73 occurrences, including bill_to_address and currency_basis in
+  ALL TEN files, plus 5 MONEY_FIELDS members declared as money and never checked.
+  currency_basis is C3's OWN OUTPUT. So the array I flagged was mostly redundant
+  and the thing I had not looked at was three times larger.
+THE REAL GAP was the confidence-modifier mechanism: spec §5, 16 modifiers, asserted
+  NOWHERE. Nothing would have noticed if arith_balance_mismatch stopped being
+  applied — the modifier that decides whether a human ever looks at U-PAK's
+  unexplained 48.92. _expected_modifiers derives expectations from three gold
+  signals (text_source/ocr_only tag, has_flattened_annotations tag, any
+  `<modifier>_applied: true` assertion) rather than a hand-written list, so a new
+  gold file gets its expectations for free. handwritten_supporting deliberately
+  implies nothing: §5's handwriting_detected is about a PRIMARY page and that tag
+  says the opposite.
+RULING: the four new arithmetic assertions are COMPOSITE ("the enabling value
+  exists AND no mismatch modifier was applied"), not bare "modifier is absent". A
+  bare absence check passes trivially on a pipeline that computed nothing — eight
+  free passes, making the score read BETTER while measuring LESS. Paired this way
+  each fails until the op genuinely runs and closes. Same reasoning kept
+  `no_prior_balance` unwired and kept the confidence_modifiers assertion off the
+  seven documents whose gold implies no modifier.
+DESIGN DECISION: the field getter now looks in `fields` then falls back to
+  `derived`. Gold puts currency_basis under `fields`; infer_currency writes it to
+  `derived`, correctly, because nothing read it off a page. Rather than move the
+  op's output to fit the label: GOLD LABELS A FACT ABOUT THE DOCUMENT AND DOES NOT
+  SAY WHETHER A PIPELINE SHOULD READ IT OR COMPUTE IT. Provenance is not thereby
+  unmeasured — it is exactly what currency_basis and payable_basis record, and both
+  are asserted.
+GUARDRAIL 3 (tests/test_scorecard_coverage.py): standing rule 3 has now been
+  violated FIVE times (reference_list + all 15 tags, page_roles, the 4 contract
+  keys, lane, and this), every one invisible — no test failed, no count looked
+  wrong. The guardrail makes it mechanical: every gold assertion check name must
+  carry one of four verdicts in GOLD_ASSERTION_COVERAGE (covered:/wired:/
+  documentation/deferred:); the table may not go stale; a covered:/wired: verdict
+  must name an assertion the scorecard ACTUALLY EMITS (a verdict pointing at
+  nothing reads as coverage that is not there); every gold field, derived key and
+  expected_routing key must be asserted or declared prose; and NO ASSERTION MAY
+  PASS AGAINST AN EMPTY RECORD.
+THE VACUITY CHECK EARNED ITS KEEP IMMEDIATELY: it found that 2 of the then-39
+  passing assertions were FREE PASSES — U-PAK's derived.amount_payable and
+  derived.payable_basis both expect null, which an empty record satisfies by
+  coincidence. Confirms C3's suspicion that U-PAK's derived assertions had been
+  passing without measuring anything. Allowed via a KEYED list with a written
+  reason each (null IS the correct answer for U-PAK, F8), but MITIGATED not waved
+  through: U-PAK also asserts confidence_modifiers requiring
+  arith_balance_mismatch, which cannot be satisfied without the derivation actually
+  running and refusing. A test asserts that mitigation exists, so U-PAK cannot
+  reach green on the vacuous pair alone. VACUOUS_BY_CONSTRUCTION has 4 entries and
+  a test asserts none is stale.
+STILL UNMEASURED, deliberately: ctx.boosts never reaches the record (a boost shows
+  up only as a higher confidence number and no gold label predicts a confidence
+  value — hence duplicate_anchor_agrees is classified `documentation`);
+  expected_routing.reason is free text; annotation_*_not_captured is deferred:C5
+  because "the overlay value was not captured" needs a pack that knows which values
+  are overlays; and 9 of the 16 modifiers have no gold signal implying them, which
+  is the right place for them since no gold label states them.
+Cluster C3b: COMPLETE (0 fix rounds). Full detail in task-c3b-report.md.

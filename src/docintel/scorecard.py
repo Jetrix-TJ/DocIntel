@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from docintel.core.confidence import MODIFIERS
+
 GOLD_DIR = os.path.join("docs", "corpus", "gold")
 DOCS_DIR = "docs"
 
@@ -94,9 +96,139 @@ CHECKED_FIELDS = (
     "currency",
     # match keys carried as scalar fields (F11)
     "customer_po", "seal_number", "bol_number",
+
+    # --- added in C3b -----------------------------------------------------
+    # A coverage audit found 29 gold field names present across 73 occurrences
+    # that this tuple never listed, so nothing checked them. The largest were
+    # `bill_to_address` and `currency_basis`, both in all ten gold files - and
+    # `currency_basis` is C3's own output, which makes it the same class of miss
+    # as the tags / reference_list / page_roles / lane gaps before it.
+    #
+    # Only the two `*_note` fields are deliberately excluded: they are the
+    # labeller's prose explaining a judgement, not a value a pipeline produces.
+
+    # currency provenance (F14) - the ladder rung that answered
+    "currency_basis",
+    # the money fields MONEY_FIELDS already declared but nothing asserted
+    "amount_previously_due", "balance", "balance_from_last_statement",
+    "credits_adjustments", "total_weight",
+    # normalized identity forms (F6). The printed form and the joinable form are
+    # different facts and a record that carries only one has lost the other.
+    "account_number_normalized", "vendor_account_number_normalized",
+    # allocation and remittance addresses - where the money goes and who owes it
+    "bill_to_address", "bill_to_attention", "bill_to_email",
+    "vendor_address", "vendor_legal_name", "vendor_parent_reference",
+    "remit_address", "return_address",
+    # vendor contact details
+    "vendor_phone", "vendor_email", "vendor_website",
+    # account structure and periods
+    "account_name", "billing_group", "service_period", "service_dates",
+    "payments_included_through", "order_date", "sale_type",
+    # the H.S.T. number itself, which is the F14 anchor hazard's own value
+    "tax_id",
 )
 
 CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "identity_basis")
+
+# Every `check` name appearing in any gold file's `assertions` array, and what
+# this scorecard does about it. 55 names, 68 entries.
+#
+# This table exists because the array was read by nothing at all until C3b, and
+# that was invisible: no test failed, no count looked wrong, and the loop could
+# have reached 10/10 while the entire confidence-modifier mechanism went
+# unchecked. `tests/test_scorecard_coverage.py` asserts this table's key set
+# equals the set of check names actually present in gold, so a new gold file - or
+# a new assertion in an existing one - fails loudly until somebody classifies it.
+#
+# Four verdicts:
+#   covered:<name>   an assertion this scorecard already emits checks the same
+#                    fact. Listing it here is the record of having checked that.
+#   wired:<name>     newly asserted in C3b.
+#   documentation    narrative, or arithmetic whose components are each asserted
+#                    individually, with no distinct observable on the record.
+#   deferred:<why>   needs a capability that does not exist yet.
+GOLD_ASSERTION_COVERAGE: dict[str, str] = {
+    # -- the payable, and the arithmetic behind it (F1, F1b, F8) -------------
+    "amount_payable": "covered:derived.amount_payable",
+    "amount_payable_is_null": "covered:derived.amount_payable",
+    "payable_basis": "covered:derived.payable_basis",
+    "payable_mismatch": "covered:derived.amount_payable",
+    "payable_composition": "wired:arithmetic.balance_closed",
+    "balance_composition": "wired:arithmetic.balance_closed",
+    "prior_balance_found_and_cleared": "wired:arithmetic.balance_closed",
+    "total_composition": "wired:arithmetic.total_closed",
+    "current_charges_composition": "wired:arithmetic.total_closed",
+    "new_charges_composition": "wired:arithmetic.total_closed",
+    "line_sum": "wired:arithmetic.lines_closed",
+    "line_extended": "wired:arithmetic.lines_closed",
+    "arith_balance_mismatch_applied": "wired:confidence_modifiers",
+    "prior_balance_is_net": "covered:fields.prior_balance_basis",
+    "prior_balance_derivation": "covered:fields.prior_balance",
+    "amount_previously_due_is_zero": "covered:fields.amount_previously_due",
+    "discount_is_one_percent": "covered:fields.discount_amount",
+    "every_line_qty_times_price": "documentation",
+    "occ_line_math": "documentation",
+    "payable_is_date_dependent": "documentation",
+    # `no_prior_balance` is deliberately NOT wired. An "this field must be
+    # absent" assertion is satisfied by a pipeline that extracts nothing, so it
+    # would have been a free pass rather than a measurement.
+    "no_prior_balance": "documentation",
+
+    # -- identity (F5, F6) --------------------------------------------------
+    "identity_basis": "covered:derived.identity_basis",
+    "identity_fallback": "covered:derived.identity_basis",
+    "account_whitespace_stripped": "covered:fields.account_number_normalized",
+    "alias_collapse": "wired:derived.vendor_canonical",
+    "alias_collapse_three_names": "wired:derived.vendor_canonical",
+    "vendor_alias": "wired:derived.vendor_canonical",
+    "payee_preferred_over_logo": "covered:fields.remit_payee",
+    "state_entity_pattern": "covered:reference_list.values",
+
+    # -- signs, currency, tax (F4, F14) -------------------------------------
+    "credit_parsed_negative": "covered:fields.payments_credits",
+    "credit_suffix_parsed": "covered:fields.payments_credits",
+    "parens_parsed_negative": "covered:line_items.amounts",
+    "total_is_positive_despite_contra": "covered:fields.total_printed",
+    "currency_inferred": "covered:fields.currency",
+    "hst_anchor_hazard": "covered:fields.tax_id",
+
+    # -- the scan line (F7) -------------------------------------------------
+    "scanline_agrees_with_printed_total": "wired:arithmetic.scanline_agrees",
+    "scanline_three_way": "wired:arithmetic.scanline_agrees",
+
+    # -- tables and rows (F15, F19) -----------------------------------------
+    "empty_amount_cell_not_a_failure": "covered:line_items.amounts",
+    "zero_value_row_preserved": "covered:line_items.count",
+
+    # -- classification and routing -----------------------------------------
+    "not_a_batch": "covered:doc_type",
+    "not_misclassified_as_statement": "covered:doc_type",
+    "past_due_is_a_tag_not_a_type": "covered:tags",
+    "review_forced": "covered:review_flag",
+    "review_not_needed": "covered:review_flag",
+    "values_never_from_supporting": "covered:page_roles",
+    "totals_not_on_page_1": "covered:fields.total_printed",
+
+    # -- fields ------------------------------------------------------------
+    "service_location_captured": "covered:fields.service_location",
+    "due_date_unparsed": "covered:fields.due_date",
+    "reference_dedupe": "covered:reference_list.values",
+
+    # -- what must NOT be captured (F3) -------------------------------------
+    # Federal Recycling's flattened annotations are invisible to the text layer,
+    # so "the overlay value was not captured" needs a pack that knows which
+    # values are overlays. That is C5.
+    "annotation_dates_not_captured": "deferred:C5 pack annotation exclusion",
+    "annotation_values_excluded": "deferred:C5 pack annotation exclusion",
+    "promo_block_ignored": "documentation",
+    "watermark_not_captured": "documentation",
+
+    # -- corroboration whose only observable is folded into confidence ------
+    # `ctx.boosts` is not emitted on the record; a boost shows up only as a
+    # slightly higher confidence number, which no gold label predicts.
+    "duplicate_anchor_agrees": "documentation",
+    "filename_crosscheck": "wired:derived.filename_crosscheck",
+}
 
 # Columns of a line-item row that hold an amount rather than a rate or a count.
 # `unit_price`, `quantity`, `weight` and `quantity_ordered` are deliberately
@@ -169,6 +301,124 @@ def _id_name_pairs(rows: Any) -> list[tuple[str, str]]:
     return sorted(out)
 
 
+def _field_value(record: dict[str, Any], name: str) -> Any:
+    """A gold-labelled field, wherever the pipeline chose to put it.
+
+    Gold labels a *fact about the document* and does not say whether a pipeline
+    should read it off the page or compute it. `currency` is the clear case: an
+    ISO code printed on the invoice is extracted, while U-PAK's CAD is inferred
+    from its H.S.T. line, so `infer_currency` writes both it and `currency_basis`
+    to `derived` - correctly, because nothing read them off a page. Gold puts both
+    under `fields`.
+
+    Looking in `fields` first and then `derived` means the scorecard scores the
+    answer rather than the provenance. Provenance is not unmeasured: it is exactly
+    what `currency_basis` and `payable_basis` record, and those are asserted too.
+    """
+    value = record.get("fields", {}).get(name)
+    if value is None:
+        value = record.get("derived", {}).get(name)
+    return value
+
+
+def _expected_modifiers(gold: dict[str, Any]) -> list[str]:
+    """Confidence modifiers this document's gold label implies (spec section 5).
+
+    The whole section 5 mechanism - 16 modifiers - was unasserted before C3b.
+    Nothing in the scorecard would have noticed if `arith_balance_mismatch`
+    stopped being applied, which is the one that decides whether a human ever
+    looks at U-PAK's unexplained 48.92.
+
+    Derived from three gold signals rather than a hand-written list, so a new
+    gold file gets its expectations for free:
+
+    * `classification.text_source == "ocr"` -> `ocr_source` (F2)
+    * an `ocr_only` / `has_flattened_annotations` tag -> the matching modifier
+    * any `assertions` entry named `<modifier>_applied` with `equals: true`
+
+    `handwritten_supporting` deliberately implies nothing: section 5's
+    `handwriting_detected` is about handwriting on a *primary* page, and that tag
+    says the opposite.
+    """
+    cls = gold["classification"]
+    tags = set(cls.get("tags", []))
+    expected: set[str] = set()
+
+    if cls.get("text_source") == "ocr" or "ocr_only" in tags:
+        expected.add("ocr_source")
+    if "has_flattened_annotations" in tags:
+        expected.add("flattened_annotations")
+
+    for entry in gold.get("assertions") or []:
+        check = str(entry.get("check", ""))
+        if check.endswith("_applied") and entry.get("equals") is True:
+            expected.add(check[: -len("_applied")])
+
+    return sorted(expected & set(MODIFIERS))
+
+
+def _closure_assertions(gold: dict[str, Any]) -> list[Assertion]:
+    """Composite "the arithmetic ran and closed" assertions.
+
+    Each gold `*_composition` / `line_sum` / `scanline_agrees_*` entry documents
+    arithmetic whose components are already asserted individually. What was NOT
+    observable is whether the pipeline *checked* it: the cross-check ops report a
+    modifier, and nothing asserted modifiers.
+
+    These are deliberately **composite** - "the enabling value exists AND no
+    mismatch modifier was applied" - rather than a bare "modifier is absent". A
+    bare absence check passes trivially on a pipeline that computed nothing,
+    which would have added eight free passes to the numerator and made the score
+    read better while measuring nothing. Paired this way each one fails until the
+    op genuinely runs and closes.
+    """
+    checks = {str(a.get("check")) for a in (gold.get("assertions") or [])}
+    items: list[Assertion] = []
+
+    if "balance_composition" in checks:
+        items.append(Assertion(
+            "arithmetic.balance_closed", True,
+            lambda r: (
+                r.get("derived", {}).get("amount_payable") is not None
+                and "arith_balance_mismatch" not in r.get("confidence_modifiers", [])
+            ),
+        ))
+    if {"total_composition", "current_charges_composition",
+            "new_charges_composition"} & checks:
+        items.append(Assertion(
+            "arithmetic.total_closed", True,
+            lambda r: (
+                _field_value(r, "total_printed") is not None
+                and "arith_total_mismatch" not in r.get("confidence_modifiers", [])
+            ),
+        ))
+    if {"line_sum", "line_extended"} & checks:
+        items.append(Assertion(
+            "arithmetic.lines_closed", True,
+            lambda r: (
+                bool(r.get("line_items"))
+                and "arith_lines_mismatch" not in r.get("confidence_modifiers", [])
+            ),
+        ))
+    if any(c.startswith("scanline_agrees") for c in checks):
+        items.append(Assertion(
+            "arithmetic.scanline_agrees", True,
+            lambda r: (
+                r.get("scanline") is not None
+                and "scanline_mismatch" not in r.get("confidence_modifiers", [])
+            ),
+        ))
+    return items
+
+
+def _assertion_equals(gold: dict[str, Any], *checks: str) -> Any:
+    """The `equals` value of the first named gold assertion present, or None."""
+    for entry in gold.get("assertions") or []:
+        if str(entry.get("check")) in checks and "equals" in entry:
+            return entry["equals"]
+    return None
+
+
 def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
     cls = gold["classification"]
     fields = gold.get("fields", {})
@@ -201,7 +451,7 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         if fields.get(name) is not None:
             items.append(Assertion(
                 f"fields.{name}", fields[name],
-                lambda r, n=name: r["fields"].get(n),
+                lambda r, n=name: _field_value(r, n),
                 kind="money" if name in MONEY_FIELDS else "exact",
             ))
 
@@ -269,6 +519,42 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         items.append(Assertion(
             "sub_account", _id_name_pairs(gold_sub),
             lambda r: _id_name_pairs(r.get("sub_account")),
+        ))
+
+    # --- C3b: the confidence-modifier mechanism, previously unmeasured -----
+    # Superset, not equality: a pack may legitimately apply modifiers the gold
+    # label does not enumerate, but every modifier the label IMPLIES must be
+    # present. Added only where gold implies at least one - an empty superset
+    # check passes trivially, and seven free passes would make the score read
+    # better while measuring nothing.
+    expected_modifiers = _expected_modifiers(gold)
+    if expected_modifiers:
+        items.append(Assertion(
+            "confidence_modifiers", expected_modifiers,
+            lambda r: r.get("confidence_modifiers", []), kind="superset",
+        ))
+
+    # Composite "the arithmetic ran and closed" checks - see _closure_assertions.
+    items.extend(_closure_assertions(gold))
+
+    # Two derived values that exist only inside the gold `assertions` array, so
+    # the derived loop above cannot see them.
+    filename_crosscheck = _assertion_equals(gold, "filename_crosscheck")
+    if filename_crosscheck is not None:
+        items.append(Assertion(
+            "derived.filename_crosscheck", filename_crosscheck,
+            lambda r: r.get("derived", {}).get("filename_crosscheck"),
+        ))
+
+    # F5: two corpus senders print one brand and bill under another. The gold
+    # label records the collapsed canonical name under `alias_collapse`.
+    vendor_canonical = _assertion_equals(
+        gold, "alias_collapse", "alias_collapse_three_names", "vendor_alias"
+    )
+    if vendor_canonical is not None:
+        items.append(Assertion(
+            "derived.vendor_canonical", vendor_canonical,
+            lambda r: r.get("derived", {}).get("vendor_canonical"),
         ))
 
     # Reference list (F11). Exact set only where the gold label is complete;

@@ -14,7 +14,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 29,
+      "total_count": 39,
       "assertions": [
         {
           "name": "doc_type",
@@ -186,6 +186,62 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.balance_from_last_statement",
+          "kind": "money",
+          "expected": 44244.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "PO Box 1955, Orem, UT 84059-1955",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "PO Box 7, Fairview, UT 84629",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "PO Box 7, Fairview, UT 84629-0007",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "435-427-3331",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_name",
+          "kind": "exact",
+          "expected": "CLYDE COMPANIES",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.billing_group",
+          "kind": "exact",
+          "expected": "0384 - ACRA",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 13752.6,
@@ -253,6 +309,20 @@
           "passed": false
         },
         {
+          "name": "arithmetic.balance_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "arithmetic.total_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -277,7 +347,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 29,
+      "total_count": 38,
       "assertions": [
         {
           "name": "doc_type",
@@ -441,6 +511,55 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.account_number_normalized",
+          "kind": "exact",
+          "expected": "8495444620365242",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "PO Box 1955, Orem, UT 84059-1955",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_attention",
+          "kind": "exact",
+          "expected": "ATTN CLYDE COMPANIES-IT",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "PO Box 60533, City of Industry, CA 91716-0533",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.return_address",
+          "kind": "exact",
+          "expected": "PO Box 4118, Englewood, CO 80155",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_period",
+          "kind": "exact",
+          "expected": "2025-12-14 to 2026-01-13",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 221.11,
@@ -503,6 +622,20 @@
           "passed": false
         },
         {
+          "name": "arithmetic.balance_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "arithmetic.total_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -526,7 +659,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 27,
+      "total_count": 39,
       "assertions": [
         {
           "name": "doc_type",
@@ -683,6 +816,76 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "explicit_iso_code",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.balance",
+          "kind": "money",
+          "expected": 0.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.credits_adjustments",
+          "kind": "money",
+          "expected": 0.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "5555 Perimeter Dr, Dublin, OH 43017-3219",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "1025 Eldorado Blvd., Broomfield, CO 80021",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_legal_name",
+          "kind": "exact",
+          "expected": "Level 3 Communications, LLC",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_parent_reference",
+          "kind": "exact",
+          "expected": "a CenturyLink company",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "PO Box 52015, Phoenix, AZ 85072-2015",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "1-877-453-8353",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_email",
+          "kind": "exact",
+          "expected": "Billing@Lumen.com",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 248.09,
@@ -729,6 +932,20 @@
           "passed": false
         },
         {
+          "name": "arithmetic.balance_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "derived.vendor_canonical",
+          "kind": "exact",
+          "expected": "lumen",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -753,7 +970,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 27,
+      "total_count": 36,
       "assertions": [
         {
           "name": "doc_type",
@@ -906,6 +1123,55 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.amount_previously_due",
+          "kind": "money",
+          "expected": 0.0,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "PO Box 1550, Durant, OK 74702-1550",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "PO Box 9001908, Louisville, KY 40290-1908",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.return_address",
+          "kind": "exact",
+          "expected": "ATTN: Support Services, 131 W Matthews St, Matthews, NC 28105",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "1-833-241-0100",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_website",
+          "kind": "exact",
+          "expected": "kineticbusiness.com",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 1230.14,
@@ -954,6 +1220,20 @@
           "passed": false
         },
         {
+          "name": "arithmetic.balance_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "derived.vendor_canonical",
+          "kind": "exact",
+          "expected": "windstream",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -977,8 +1257,8 @@
         "F15"
       ],
       "passed": false,
-      "passed_count": 4,
-      "total_count": 23,
+      "passed_count": 5,
+      "total_count": 30,
       "assertions": [
         {
           "name": "doc_type",
@@ -1110,6 +1390,41 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "P.O. Box 188, East Longmeadow, MA 01028, United States",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_attention",
+          "kind": "exact",
+          "expected": "Refresco, Acline",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_email",
+          "kind": "exact",
+          "expected": "AR@CBD-USA.COM",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 1177.7,
@@ -1162,6 +1477,24 @@
           "passed": false
         },
         {
+          "name": "confidence_modifiers",
+          "kind": "superset",
+          "expected": [
+            "ocr_source"
+          ],
+          "actual": [
+            "ocr_source"
+          ],
+          "passed": true
+        },
+        {
+          "name": "arithmetic.lines_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -1185,7 +1518,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 20,
+      "total_count": 24,
       "assertions": [
         {
           "name": "doc_type",
@@ -1297,6 +1630,27 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "P.O. Box 188, East Longmeadow, MA 01028",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "500 North Defiance Trail, Spencerville, OH 45887",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 699.0,
@@ -1329,6 +1683,13 @@
           "passed": false
         },
         {
+          "name": "arithmetic.lines_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -1353,7 +1714,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 24,
+      "total_count": 35,
       "assertions": [
         {
           "name": "doc_type",
@@ -1486,6 +1847,62 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_account_number_normalized",
+          "kind": "exact",
+          "expected": "253A077087",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "PO Box 188, East Longmeadow, MA 01028",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_attention",
+          "kind": "exact",
+          "expected": "Hunter Indust",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "224 S Las Posas Rd, San Marcos, CA 92078",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "P.O. Box 5488, Buena Park, CA 90622-5488",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "(760) 744-2700",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.payments_included_through",
+          "kind": "exact",
+          "expected": "2025-04-23",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 69.62,
@@ -1535,6 +1952,27 @@
           "expected": "25600770871000367962",
           "actual": null,
           "passed": false
+        },
+        {
+          "name": "arithmetic.balance_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "arithmetic.scanline_agrees",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "derived.filename_crosscheck",
+          "kind": "exact",
+          "expected": "agree",
+          "actual": null,
+          "passed": false
         }
       ]
     },
@@ -1551,8 +1989,8 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 4,
-      "total_count": 21,
+      "passed_count": 5,
+      "total_count": 29,
       "assertions": [
         {
           "name": "doc_type",
@@ -1664,6 +2102,48 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "explicit_iso_code",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "PO Box 188, East Longmeadow, MA 01028, UNITED STATES",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_email",
+          "kind": "exact",
+          "expected": "apayable@nsrecycle.com",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "7935 Clayton Rd, St. Louis, MO 63117",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "Post Office Box 203505, Dallas, TX 75320-3505",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "281-580-1242",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 481.2,
@@ -1716,6 +2196,26 @@
           "passed": false
         },
         {
+          "name": "confidence_modifiers",
+          "kind": "superset",
+          "expected": [
+            "flattened_annotations",
+            "ocr_source"
+          ],
+          "actual": [
+            "ocr_source",
+            "flattened_annotations"
+          ],
+          "passed": true
+        },
+        {
+          "name": "arithmetic.lines_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -1745,7 +2245,7 @@
       ],
       "passed": false,
       "passed_count": 7,
-      "total_count": 24,
+      "total_count": 32,
       "assertions": [
         {
           "name": "doc_type",
@@ -1886,6 +2386,48 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "tax_regime_marker",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "94 Maple St, East Longmeadow, MA 01028",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "15 Tidemore Avenue, Etobicoke, ON M9W 7E9",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_phone",
+          "kind": "exact",
+          "expected": "416-675-3700",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.service_dates",
+          "kind": "exact",
+          "expected": "MARCH 31, 2025",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.tax_id",
+          "kind": "exact",
+          "expected": "123142812RT0001",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": null,
@@ -1949,6 +2491,22 @@
           "passed": false
         },
         {
+          "name": "confidence_modifiers",
+          "kind": "superset",
+          "expected": [
+            "arith_balance_mismatch"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "arithmetic.total_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -1976,7 +2534,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 28,
+      "total_count": 37,
       "assertions": [
         {
           "name": "doc_type",
@@ -2137,6 +2695,55 @@
           "passed": false
         },
         {
+          "name": "fields.currency_basis",
+          "kind": "exact",
+          "expected": "pack_default",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.total_weight",
+          "kind": "money",
+          "expected": 2568.49,
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.bill_to_address",
+          "kind": "exact",
+          "expected": "94 Maple St, East Longmeadow, MA 01028-2744",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.vendor_address",
+          "kind": "exact",
+          "expected": "6120 South Gilmore Road, Fairfield, OH 45014",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.remit_address",
+          "kind": "exact",
+          "expected": "P.O. Box 409884, Atlanta, GA 30384-9884",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.order_date",
+          "kind": "exact",
+          "expected": "2025-08-08",
+          "actual": null,
+          "passed": false
+        },
+        {
+          "name": "fields.sale_type",
+          "kind": "exact",
+          "expected": "DIRECT",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "derived.amount_payable",
           "kind": "money",
           "expected": 4908.0,
@@ -2177,6 +2784,20 @@
           "passed": false
         },
         {
+          "name": "arithmetic.total_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
+          "name": "arithmetic.lines_closed",
+          "kind": "exact",
+          "expected": true,
+          "actual": false,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -2193,7 +2814,7 @@
     "total": 10,
     "passed": 0,
     "failed": 10,
-    "assertions_passed": 39,
-    "assertions_total": 252
+    "assertions_passed": 41,
+    "assertions_total": 339
   }
 }
