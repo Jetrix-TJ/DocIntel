@@ -7,13 +7,17 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        a6fadf2                clean tree, 31 commits
-tests       503 passing in ~7.6s
+HEAD        0f0ce2c                clean tree, 32 commits
+tests       558 passing in ~7.8s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 39/223 assertions
+scorecard   0/10 documents green, 39/242 assertions
 ```
+
+**The 10/10 caveat is gone.** C2b landed the four contract keys, so the scorecard
+now asserts `line_items`, `charges`, `scanline` and `sub_account`. 242 is the honest
+denominator; reaching it means the corpus really is satisfied.
 
 Verify all of that in one go:
 
@@ -42,49 +46,52 @@ python3 -m pytest -q && python3 -m mypy && ruff check src tests \
 schema-valid Stage 8 record; `count(intaken) == count(emitted)` is enforced and tested
 under injected failures at every stage.
 
-**Part B (the convergence loop): clusters C1 and C2a complete.**
+**Part B (the convergence loop): clusters C1 and C2 complete.**
 
 - C1a — `pdf.py`, `ocr.py`, `normalize.py`, wired into stage 2. 3 rounds.
 - C1b — `pageroles.py`, `annotations.py`, `scanline.py` + the `page_roles` scorecard
   assertion. 3 rounds.
-- C2a — `schema.py`, `patterns.py`, `regions.py`, `validator.py` (V1–V13). 0 rounds,
-  executed inline. Two spec errata and one tightening; see
-  `execution/task-c2a-report.md`.
+- C2a — `schema.py`, `patterns.py`, `regions.py`, `validator.py` (V1–V13). 0 rounds.
+  Two spec errata and one tightening; see `execution/task-c2a-report.md`.
+- C2b — `executor.py`, persona-bound Stage 5a, the four contract keys, +19 scorecard
+  assertions. 0 rounds. Three implementation defects found and fixed mid-run; see
+  `execution/task-c2b-report.md`.
 
-**Read `execution/task-c2a-report.md` before starting C2b.** It ends with a
-"Notes for C2b" section covering the surfaces C2b binds to — `Span` and its
-order-carries-meaning contract, the role-filtering boundary C2b must implement,
-and the unimplemented 50 ms pattern timeout.
+**Read `execution/task-c2b-report.md` before starting C3.** Its "Notes for C3"
+section covers where the `adjust` ops live, what `match_quality` means, and one
+corpus fact that will otherwise cost a debugging round: EDCO's statement table
+prints its own summary row *inside* the table body, so Σ`line_items` ≠ `subtotal`
+there by construction — `crosscheck_line_sum` must not flag it.
 
-## Next: seven dispatch units
+## Next: five dispatch units
 
-Sizes are estimates calibrated against C1a (458 src lines / 6 files), C1b (568 / 6)
-and C2a (1,150 / 4 + 900 test lines — the estimate below was low by ~30%, mostly in
-tests, so scale the remaining rows up accordingly).
+Sizes are calibrated against C1a (458 src lines / 6 files), C1b (568 / 6),
+C2a (1,150 / 4) and C2b (760 / 5). Both C2 estimates ran ~30–60% over, almost
+entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C2b** | executor + 4 contract keys + their scorecard assertions | 450–600 | 0/10 |
-| 2 | C3 | 4 adjust-op modules + real `s6_capture` + F1 anti-regression test | 400–500 | some `derived.*` |
-| 3 | C4 | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | routing |
-| 4 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
-| 5 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
-| 6 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
-| 7 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
+| 1 | **C3** | 4 adjust-op modules + real `s6_capture` + F1 anti-regression test | 400–500 | some `derived.*` |
+| 2 | C4 | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | routing |
+| 3 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
+| 4 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
+| 5 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
+| 6 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
 
-The score stays near zero through C2b — those are infrastructure. First real movement is
-C3; the bulk arrives with C5.
+All the infrastructure is now in place. First real scorecard movement is C3; the
+bulk arrives with C5.
 
-**Optional reorder worth considering:** after C2b, hand-author ONE persona for the
-cleanest document (D.T.S.S.) to prove the whole chain end-to-end at 1/10 before building
-both packs out. Costs a little rework, buys much earlier signal.
+**Optional reorder, now actionable:** hand-author ONE persona for the cleanest
+document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
+chain end-to-end at 1/10 before building both packs out. Costs a little rework, buys
+much earlier signal. C2b's end-to-end test is a working template for the shape.
 
 ## How to dispatch a cluster
 
 Briefs are generated from the plan, not hand-written:
 
 ```bash
-python3 .superpowers/sdd/2026-07-27-pipeline-implementation/brief.py C2a
+python3 .superpowers/sdd/2026-07-27-pipeline-implementation/brief.py C3
 ```
 
 If `.superpowers/` is gone (it is gitignored scratch), recreate the extractor — it is
@@ -125,12 +132,18 @@ ledger → commit.
    test was asserting the opposite of its own docstring. A test that passes for the wrong
    reason is worse than a missing test: it reports coverage it does not have. Recompute
    fixture arithmetic by hand rather than trusting the comment next to it.
+8. **A cluster that adds a pipeline capability must finish with one whole-path test.**
+   C2b's worst defect — `line_items` swallowing the totals block and remittance stub that
+   sit below *every* invoice table — passed all 42 unit tests and was caught only by the
+   end-to-end test that ran a real validated persona through Stage 5a into a validated
+   Stage 8 record. Unit tests confirm the units; only the whole path shows what the units
+   compose into.
 
 ## Deferred, with homes
 
-- **4 contract keys** — `line_items`, `charges`, `scanline`, `sub_account` have no Stage 8
-  key, so the scorecard cannot assert them. Scheduled into C2b's plan section. **Until they
-  land, 10/10 green does NOT mean the corpus is satisfied.**
+- ~~**4 contract keys**~~ — **DONE in C2b.** All four are on the record, type-checked by
+  `validate_record`, and asserted by the scorecard (+19 assertions). 10/10 green now means
+  what it says.
 - **`has_flattened_annotations` → forced review** — the tag is set but `s7_gate` does not
   consume `ctx.tags`. Scheduled into C4. Federal Recycling cannot reach its gold routing
   until then.
