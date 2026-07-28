@@ -152,11 +152,16 @@ MONEY_FIELDS = frozenset({
 # draft asserted only 12 scalar fields, which left the loop blind to ten
 # documented findings and all fifteen tags - it could have reached "10/10 green"
 # with an empty reference_list and no tags at all.
-# Narrowed with the printed-fields-only packs: a name here is a claim that some
-# pack extracts it, so a name no pack registers any more measures nothing and
-# only lowers every denominator. The thirteen that left are listed in
-# `tests/test_scorecard_coverage.py:DEFERRED_FIELDS`, which is what keeps their
-# gold values accounted for rather than merely unmeasured.
+# Narrowed with the printed-fields-only packs: a name here is a claim that the
+# scorecard should be MEASURING it, so a name the narrowing put out of reach on
+# purpose only lowers every denominator. Eleven left on that basis and are listed
+# in `tests/test_scorecard_coverage.py:DEFERRED_FIELDS`.
+#
+# Two names no pack registers are deliberately kept here anyway - `tax_id` and
+# `vendor_parent_reference`, both printed, both gold-labelled, and neither ever
+# given a selector in any persona. They fail every run, and they should: that is
+# extraction debt, not a spec decision, and deferring them would have bought a
+# higher rate by deleting the evidence. See EXTRACTION_DEBT in the same file.
 CHECKED_FIELDS = (
     # amounts, and the F1/F1b machinery that decides what is actually payable
     "total_printed", "current_charges", "prior_balance",
@@ -192,6 +197,12 @@ CHECKED_FIELDS = (
     # account structure and periods
     "account_name", "service_period", "service_dates",
     "payments_included_through", "order_date", "sale_type",
+
+    # --- printed, gold-labelled, and never selected by anybody -------------
+    # Measured so the gap stays visible. `tax_id` is U-PAK's H.S.T. number - the
+    # F14 anchor hazard's own value - and `vendor_parent_reference` is the
+    # `a CenturyLink company` clause Lumen prints beside its legal name (F5).
+    "tax_id", "vendor_parent_reference",
 )
 
 # Why every derived and arithmetic assertion below is deferred rather than
@@ -272,11 +283,11 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # -- identity (F5, F6) --------------------------------------------------
     "identity_basis": "covered:derived.identity_basis",
     "identity_fallback": "covered:derived.identity_basis",
-    # The joinable form of Comcast's account number is computed from the printed
-    # one, so `account_number_normalized` left `FIELDS` with the narrowing and
-    # this has no assertion left to point at. The printed form is still asserted
-    # as `fields.account_number`; what is deferred is the stripping itself.
-    "account_whitespace_stripped": DEFERRED_REASON,
+    # `account_number_normalized` left FIELDS with the narrowing, but the
+    # stripping did not go with it - `references._first` does it, so the check is
+    # measured by Comcast's reference hit being `8495444620365242` rather than
+    # the printed `8495 44 462 0365242`.
+    "account_whitespace_stripped": "covered:reference_list.values",
     "alias_collapse": "wired:derived.vendor_canonical",
     "alias_collapse_three_names": "wired:derived.vendor_canonical",
     "vendor_alias": "wired:derived.vendor_canonical",
@@ -292,9 +303,9 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # it left both packs' FIELDS with the narrowing.
     "currency_inferred": DEFERRED_REASON,
     # `tax_id` IS printed - the hazard is that `H.S.T.` reads as a currency
-    # anchor - but no pack registers it any more, so nothing extracts the value
-    # this check is about. Deferred with the rest, not reclassified as prose.
-    "hst_anchor_hazard": DEFERRED_REASON,
+    # anchor - and no persona has ever had a selector for it. Still asserted, and
+    # still failing, because that is extraction debt rather than a deferral.
+    "hst_anchor_hazard": "covered:fields.tax_id",
 
     # -- the scan line (F7) -------------------------------------------------
     # Beyond the deferral list the design spelled out, and by the same test: both

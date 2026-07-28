@@ -127,11 +127,15 @@ def test_pack_thresholds_cover_the_fields_that_decide_payment() -> None:
     `derive_amount_payable`**, not on whether `thresholds` happens to have the
     key. Keying it on the dict under test would make the dict self-certifying -
     deleting `"amount_payable"` from a pack that still derives it would silence
-    this check instead of failing it. Northstar no longer derives the field at
-    all (printed-fields-only: no persona's `adjust` list calls
-    `derive_amount_payable` any more), so it is correctly exempt; Digital
-    Direction's four personas still do, so it is still held to the invariant
-    in full, including the "the key must exist at all" half.
+    this check instead of failing it.
+
+    As of the printed-fields-only narrowing NEITHER pack derives the field - no
+    persona in either one still calls `derive_amount_payable` - so both are
+    currently exempt and only the `total_printed` bar bites. That makes this a
+    dormant invariant rather than a dead one, and it is deliberately left live:
+    the day any persona reinstates the op, the pack it belongs to is held to the
+    full rule again, including the "the key must exist at all" half, without
+    anyone having to remember to re-enable this.
     """
     for pack in load_packs():
         t = pack.thresholds

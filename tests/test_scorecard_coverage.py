@@ -46,28 +46,57 @@ DEFERRED_REASON = "deferred:printed-fields-only"
 # for re-enabling stays on disk and this list is what points at it.
 DEFERRED_DERIVED_KEYS = frozenset({"amount_payable", "payable_basis"})
 
-# Gold records these, and the documents really do print some of them, but no
-# pack extracts them under printed-fields-only: `currency` comes from the F14
-# inference ladder and `prior_balance_basis` from a vendor convention. Gold is
-# read-only and keeps the evidence, so re-enabling is a wiring change.
-#
-# Computed, not curated - the exact set of `CHECKED_FIELDS` names that neither
-# pack's `FIELDS` still registers after Tasks 3 and 4. The pin below is what
-# stops it being used as a place to hide a field a pack does still extract.
-DEFERRED_FIELDS: frozenset[str] = frozenset({
+# Thirteen `CHECKED_FIELDS` names stopped being extractable when Tasks 3 and 4
+# narrowed the two packs. "No pack extracts it" is one fact with three quite
+# different causes underneath, and collapsing them into one list hid the third.
+# Split so the states stay distinguishable and only two of them buy an exemption.
+
+# 1. Genuinely derived: computed from other values, never ink on the page. The
+#    `*_normalized` pair is stripped from a printed key, `carrier_canonical` is
+#    the alias table's output, `currency_basis` names the F14 ladder rung that
+#    answered, `prior_balance_basis` is a vendor convention's classification.
+#    These would not be extractable however good the personas were.
+DEFERRED_DERIVED_FIELDS: frozenset[str] = frozenset({
     "account_number_normalized",
-    "billing_group",
+    "vendor_account_number_normalized",
     "carrier_canonical",
-    "currency",
     "currency_basis",
     "prior_balance_basis",
-    "tax_id",
-    "vendor_account_number_normalized",
+})
+
+# 2. Printed, and extracted by a working selector right up until the narrowing
+#    dropped them. `currency` is the odd one: Lumen printed a literal `(USD)`
+#    and had a selector for it, even though the other nine documents relied on
+#    the inference ladder. These left for deliverability, not because they are
+#    unprintable, so this is the list that shrinks when scope widens again.
+DEFERRED_PRINTED_FIELDS: frozenset[str] = frozenset({
+    "billing_group",
+    "currency",
     "vendor_email",
     "vendor_legal_name",
-    "vendor_parent_reference",
     "vendor_phone",
     "vendor_website",
+})
+
+# What the gold-coverage test will accept as accounted for. Gold is read-only and
+# keeps the evidence for all of them, so re-enabling either group is a wiring
+# change rather than a re-labelling project.
+DEFERRED_FIELDS: frozenset[str] = DEFERRED_DERIVED_FIELDS | DEFERRED_PRINTED_FIELDS
+
+# 3. Printed, gold-labelled, and never given a selector in any persona - not by
+#    this narrowing, not before it. `tax_id` is U-PAK's H.S.T. number and
+#    `vendor_parent_reference` is the `a CenturyLink company` clause printed
+#    beside Lumen's legal name; both were verified as literal page text.
+#
+#    These are NOT deferred. They were failing every run before this spec touched
+#    anything, and moving them into DEFERRED_FIELDS would have deleted a
+#    pre-existing coverage gap from the denominator and called it a spec
+#    decision - raising the rate by measuring less. They stay in CHECKED_FIELDS,
+#    stay failing, and this list exists to make growing it feel expensive: every
+#    name here is a field somebody should have written a selector for.
+EXTRACTION_DEBT: frozenset[str] = frozenset({
+    "tax_id",
+    "vendor_parent_reference",
 })
 
 # Assertions that an empty record satisfies for a legitimate reason, keyed
@@ -212,6 +241,38 @@ def test_the_deferred_field_list_holds_only_unextractable_names() -> None:
 
     assert not (DEFERRED_FIELDS & (ns.FIELDS | dd.FIELDS))
     assert not (DEFERRED_FIELDS & set(CHECKED_FIELDS))
+
+
+def test_the_two_deferral_reasons_stay_separate() -> None:
+    """The split is the point: one list is "cannot be printed", the other is
+    "was printed and we stopped reading it", and they are undone by different
+    work. A name in both would mean nobody had decided which."""
+    assert not (DEFERRED_DERIVED_FIELDS & DEFERRED_PRINTED_FIELDS)
+    assert DEFERRED_FIELDS == DEFERRED_DERIVED_FIELDS | DEFERRED_PRINTED_FIELDS
+
+
+def test_extraction_debt_is_measured_rather_than_deferred() -> None:
+    """The guard the disjointness pin cannot give us.
+
+    `DEFERRED_FIELDS` is pinned disjoint from both packs' `FIELDS` — but that is
+    exactly the property a printed field nobody ever wrote a selector for has, so
+    the pin would wave one straight through. What separates the two is that a
+    deferral was a decision and this is a gap, so the gap stays in the
+    denominator where it goes on costing something.
+    """
+    from docintel.packs.digitaldirection import fields as dd
+    from docintel.packs.northstar import fields as ns
+
+    assert not (EXTRACTION_DEBT & DEFERRED_FIELDS), (
+        "extraction debt moved into a deferral list — that hides a real gap "
+        "behind a spec decision and silently raises the score"
+    )
+    assert EXTRACTION_DEBT <= set(CHECKED_FIELDS), (
+        "extraction debt must stay asserted, and therefore stay failing, until "
+        "somebody writes the selector"
+    )
+    # And it really is debt: no pack registers any of it.
+    assert not (EXTRACTION_DEBT & (ns.FIELDS | dd.FIELDS))
 
 
 def test_the_prose_exemption_list_stays_small() -> None:

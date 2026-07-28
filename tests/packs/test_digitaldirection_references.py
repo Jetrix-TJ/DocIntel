@@ -41,11 +41,16 @@ def test_the_JOINABLE_form_of_an_account_wins() -> None:
     Comcast prints `8495 44 462 0365242` and its gold reference hit is
     `8495444620365242`. A reference hit exists to be joined on, so the printed
     spacing would make it useless.
+
+    Driven through the `account_number` PATTERN, which is what Comcast's persona
+    actually declares, rather than by setting a second field. An earlier version
+    of this test hand-stuffed `account_number_normalized` into `ctx.extracted` -
+    a state no persona could produce even before that field was retired, so it
+    stayed green while the reachable path regressed to the printed form.
     """
-    ctx = collect(_ctx(
-        account_number="8495 44 462 0365242",
-        account_number_normalized="8495444620365242",
-    ))
+    from docintel.grammar.patterns import NAMED
+
+    ctx = collect(_ctx(account_number=NAMED["account_number"]("8495 44 462 0365242")))
     assert _values(ctx) == ["8495444620365242"]
 
 
@@ -78,8 +83,13 @@ def test_collect_is_idempotent() -> None:
     assert _values(ctx) == ["041069076"]
 
 
-def test_an_account_number_object_contributes_its_printed_form() -> None:
-    """A persona using the `account_number` PATTERN yields an object, not a string."""
+def test_an_account_number_object_keeps_a_hyphen_that_is_part_of_the_key() -> None:
+    """A persona using the `account_number` PATTERN yields an object, not a string.
+
+    Lumen's is printed `5-QXH7QKM7` and its gold hit keeps the hyphen, so this
+    pins the limit of the stripping: `AccountNumber.normalized` would say
+    `5QXH7QKM7` and miss. Whitespace is layout; a hyphen may be identity.
+    """
     from docintel.grammar.patterns import NAMED
 
     ctx = collect(_ctx(account_number=NAMED["account_number"]("5-QXH7QKM7")))
