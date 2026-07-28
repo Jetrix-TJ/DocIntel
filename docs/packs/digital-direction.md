@@ -51,8 +51,8 @@ that carrier — so champion/challenger regeneration (spec Part 3) matters more 
 
 | Tag | Trigger | Evidence |
 |---|---|---|
-| `prior_balance_present` | `prior_balance != 0` | **Centracom (20,123.80)** |
-| `prior_balance_cleared` | Prior present but netted to zero by a payment | Comcast, Windstream, Lumen |
+| `prior_balance_present` | Any prior-balance anchor. The conservative default | **Centracom (20,123.80)** |
+| `prior_balance_cleared` | Upgraded from `present` when `prior_balance + payments_credits == 0` | Comcast, Windstream, Lumen |
 | `past_due` | Dunning block / aging | Centracom |
 | `multi_brand_sender` | Alias table collapsed ≥2 printed names | Lumen (3), Windstream (2) |
 | `no_invoice_number` | Identity fell back to account+period | Centracom, Comcast, Windstream |
@@ -62,6 +62,21 @@ that carrier — so champion/challenger regeneration (spec Part 3) matters more 
 Note that `prior_balance_cleared` fires on **three of four** documents. That is the F1 illusion made
 explicit as a tag: the pipeline should record that it *checked* and found the prior netted out, rather
 than never looking.
+
+**The order of the two rows is load-bearing, and getting it wrong shipped a false
+claim.** Classification (`ladder.tags_for`) sees only page text, and page text
+cannot tell the two apart: Centracom prints `Payments Received` and still carries
+20,123.80. So classification emits `prior_balance_present` on any anchor and
+`ladder.retag_prior_balance` upgrades it — never the reverse. A version of this
+pack guessed `cleared` from the payment anchor while its refinement hook was
+unregistered, and emitted `prior_balance_cleared` on Centracom.
+
+Centracom is also why the upgrade test is `prior + payments == 0` rather than "a
+payment was printed": its `prior_balance` is **already net** of the 24,120.20
+payment (44,244.00 last statement less the payment), so the payment must not be
+subtracted a second time. The other three print a gross prior that the payment
+exactly offsets. Same split as §7's `basis` column, decided on printed amounts
+instead of a convention table.
 
 ---
 
@@ -213,9 +228,15 @@ new persona.
 | `beforeEmit` | `attachChargebackMetadata` | `service_location`, `circuit_id`, `service_period` |
 | `onRegenTrigger` | `requireTwoBillingCycles` | See below |
 | — | ~~`applyBillingConventions`~~ | **Deferred** — supplies `prior_balance_basis`, a derived classification |
-| — | ~~`refineProseBalanceTags`~~ | **Deferred** — retags on `carried_balance`, which Stage 6 no longer produces |
+| `beforeConfidenceGate` | `refineProseBalanceTags` | §2 — upgrades `prior_balance_present` to `cleared` on the printed amounts |
 
-The five struck-through rows are deferred by the printed-fields-only narrowing
+`refineProseBalanceTags` was briefly deferred alongside the rest, on the grounds
+that it retagged on `carried_balance`. That was a mistake with a $20,123.80
+label on it: unregistering it left classification's anchor-text guess as the
+pipeline's final answer. It is re-wired against `prior_balance` and
+`payments_credits`, both printed, and re-registered — see §2.
+
+The four struck-through rows are deferred by the printed-fields-only narrowing
 (spec `docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` §5).
 Every implementation is still in the tree; nothing calls them. Note also that the
 three `afterExtraction` derivations were never hook registrations in the first
@@ -245,12 +266,43 @@ regenerate healthy rules because one month had an unusual charge — the AP-orie
 | `bill_date` | 0.93 | Also part of the identity key |
 | `invoice_number` `payments_credits` | 0.92 | |
 | `bill_to_name` `vendor_name` `remit_payee` | 0.90 | |
+| `due_date` | 0.88 | Payment timing, not payment amount |
 | `service_location` | 0.85 | The chargeback key; human-correctable |
 | `circuit_id` `telephone_number` `service_period` | 0.85 | |
 | `taxes_and_fees` `subtotal` `tax_amount` `payment_terms` | 0.85 | |
+| line-item rows | 0.85 | `LINE_ITEM_THRESHOLD`, applied to all 9 columns: `label` `amount` `description` `quantity` `unit_price` `charges` `payments` `date` `reference` |
 | `bill_to_address` `remit_address` | 0.80 | |
 | `vendor_address` | 0.75 | |
 | ~~`amount_payable`~~ | ~~0.97~~ | **Deferred.** Was the highest threshold in either pack; the row is out of `thresholds.py`, because nothing prices a value nothing produces |
+
+**31 of 31 keys in `thresholds.py`.** The `line-item rows` and `due_date` rows
+close a gap: this table listed 21 while claiming to be regenerated from the
+module, missing `due_date` and all nine `LINE_ITEM_THRESHOLD` columns. Northstar's
+equivalent table verifies as an exact 43/43.
+
+### `(0.90, 0.99)` is currently a dead band
+
+**Every number above was calibrated for a world with corroboration boosts, and
+that world is switched off.** The cross-check ops (`crosscheck_filename`,
+`crosscheck_scanline`, `crosscheck_balance_composition`) supplied per-field
+`ctx.boosts`, which is what used to lift a well-extracted field to the
+intermediate values these thresholds sit at. With those ops out of every
+persona's `adjust` list, measured per-field confidence on all four carriers takes
+exactly **two** values: **0.90** (the base) and **0.99** (the cap reached another
+way). Measured 2026-07-29.
+
+So a threshold strictly inside `(0.90, 0.99]` is no longer a graded bar but a
+binary one — reachable only by a field that hits 0.99, failed by every field at
+the base. In this pack that silently repriced `current_charges` 0.95,
+`prior_balance` 0.95, `account_number` 0.95, `total_printed` 0.93, `bill_date`
+0.93, `invoice_number` 0.92 and `payments_credits` 0.92 into "0.99 or fail". The
+narrowing's threshold edits only deleted rows for deferred fields; no surviving
+number was revisited.
+
+All four carriers still route `high`, so the band costs this pack nothing today —
+but that is luck, not headroom, and the Northstar pack pays for it on three
+documents (`northstar-recycling.md` §7). Recalibration belongs with the
+per-document persona work, where there is evidence to do it properly.
 
 **Overrides**
 - `prior_balance` missing **and** any prior-balance anchor text present on the page → **review**. This

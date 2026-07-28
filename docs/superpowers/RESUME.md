@@ -7,11 +7,11 @@ Everything needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-tests       1,407 passing, 12 skipped, in ~8.5s
+tests       1,426 passing, 12 skipped, in ~8.5s
 mypy        python3 -m mypy        -> 0 errors (core/, grammar/, adapters/vision/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   1/10 documents green, 193/262 assertions
+scorecard   1/10 documents green, 193/263 assertions
 ```
 
 **All 12 skips are guardrails 2 and 6**, skipped with the deferral reason as the
@@ -23,15 +23,18 @@ Per document, measured 2026-07-29:
 | Document | | Document | |
 |---|--:|---|--:|
 | Centracom | 25/29 | EDCO | 17/26 |
-| Comcast | 25/29 | Complete Beverage | 17/24 |
+| Comcast | 25/29 | Complete Beverage | 17/25 |
 | Lumen | 24/29 | Veritiv | 16/31 |
 | Windstream | 24/27 | Federal Recycling | 14/23 |
 | **DTSS** | **19/19 PASS** | U-PAK | 12/25 |
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
 contract keys; C3b closed it for the confidence modifiers, 29 unasserted gold
-fields and the `lane`. 262 is the honest denominator today; it was 339 before the
-narrowing removed the derived and arithmetic assertions from it.
+fields and the `lane`. 263 is the honest denominator today; it was 339 before the
+narrowing removed the derived and arithmetic assertions from it. It was 262
+until the final whole-branch review found one genuinely FAILING assertion
+(`fields.vendor_email` on Complete Beverage) that had been retired as a spec
+decision, and put it back.
 
 `tests/test_scorecard_coverage.py` (**GUARDRAIL 3**) now makes this mechanical
 rather than something to remember: every gold fact must be asserted or explicitly
@@ -110,7 +113,7 @@ under injected failures at every stage.
 
   **The plan's predictions were wrong in both directions, and the measured
   numbers are the ones to trust.** The spec forecast 175–200 of ~230 assertions
-  and said 10/10 became reachable; the actual end state is **193/262 with 1/10
+  and said 10/10 became reachable; the actual end state is **193/263 with 1/10
   green.** The denominator is 32 higher than forecast because two rounds of
   review refused to over-defer — most sharply in Task 4, where three fields that
   had never had a selector were moved *back* into the denominator, dropping the
@@ -123,8 +126,46 @@ under injected failures at every stage.
   | List | n | What it means |
   |---|--:|---|
   | `DEFERRED_DERIVED_FIELDS` | 5 | Not printed at all. Cannot come back without re-enabling derivation and its guardrails. |
-  | `DEFERRED_PRINTED_FIELDS` | 6 | Printed, and had a *working* selector until the narrowing. Left for deliverability. **This is the list that shrinks first when scope widens.** |
-  | `EXTRACTION_DEBT` | 2 | `tax_id`, `vendor_parent_reference`. Printed, gold-labelled, and never given a selector by any persona — before this spec or after. **Deliberately still in `CHECKED_FIELDS`, still measured, still failing.** Moving either into a deferral list would delete a pre-existing gap from the denominator and call it a spec decision. |
+  | `DEFERRED_PRINTED_FIELDS` | 6 | Printed, and had a *working* selector **on at least one document** until the narrowing. Left for deliverability. **This is the list that shrinks first when scope widens.** |
+  | `EXTRACTION_DEBT` | 2 | `tax_id`, `vendor_parent_reference`. Printed, gold-labelled, and never given a selector by any persona — before this spec or after. **Registered in their packs' `FIELDS`, still in `CHECKED_FIELDS`, still measured, still failing.** Moving either into a deferral list would delete a pre-existing gap from the denominator and call it a spec decision; un-registering the names (which this branch briefly did) makes the debt *unpayable*, because V1 rejects a selector targeting an unregistered field. |
+  | `CHECKED_FIELDS_BY_GOLD` | 1 | The same debt where it belongs to one *document*. `vendor_email` is a deferral on Lumen (a working selector, a passing assertion) and debt on Complete Beverage (no selector ever, a **failing** assertion) — a name-scoped bucket cannot say that without being wrong about one of them. |
+
+  **"had a working selector" is the honest wording and the earlier "extracted by a
+  working selector right up until the narrowing" was not.** `vendor_email` is the
+  counter-example above. `currency` needs the same care: Lumen printed a literal
+  `(USD)` and `federal_recycling.json` had a selector too, but **8 of the 10
+  `fields.currency` passes came from `infer_currency` writing to `derived`**, not
+  from ink — the scorecard's `_field_value` falls back to `derived`, which is why
+  they scored at all. Re-widening scope recovers two documents by selector; the
+  rest need the F14 ladder back.
+
+- **final whole-branch review** — six task-scoped reviews all passed; a review of
+  the branch *as a whole* found one Critical and five Important issues none of
+  them could see. All fixed in a single wave. Full account in
+  `execution/ledger.md`, last section. Two of them change what you should believe
+  about this branch:
+
+  **The Critical was a false claim, not a missing one.** Unregistering
+  `refine_prior_balance_tags` left `ladder.tags_for`'s anchor-text guess as the
+  pipeline's final answer, and Centracom prints a payment anchor — so the record
+  said `prior_balance_cleared` on a document with $20,123.80 outstanding. The
+  spec accepts saying *nothing* about the payable; it does not accept saying
+  something false. The refinement is re-wired against `prior_balance` and
+  `payments_credits`, both printed, and re-registered. It survived six reviews
+  because Centracom's gold `tags` assertion is a **superset** check that was
+  already red — the regression went FAIL → FAIL, and no number moved.
+
+  **The `(0.90, 0.99)` dead band is the thing to fix next in the gate.** With the
+  crosscheck corroboration boosts unwired, measured per-field confidence is
+  binary: 27 fields at 0.90 and 71 at 0.99 across the corpus, nothing between
+  except on the two documents carrying document-wide multipliers. Every threshold
+  strictly inside that band is now "0.99 or fail", which is why **EDCO and
+  Veritiv raise review flags gold calls `False`** (two false-positive reviews on
+  clean documents) and **U-PAK routes `medium` instead of `review`** — it still
+  reaches a human, `s7_gate` sets `review_flag` on `medium` too; what it loses is
+  the reason code. Deliberately **not** recalibrated: that belongs with the
+  per-document persona work, which is where the evidence is. Both pack docs' §6
+  now say so in a "dead band" subsection.
 
 **Read `execution/task-c5b-report.md`'s "What is still failing" before continuing.**
 The `label-block` region it proposed **is shipped**, and it closed most of the
@@ -162,7 +203,7 @@ downstream's to close, by design, and
 pins it so it cannot flip back silently without guardrails 2 and 6 coming back
 with it.
 
-**193/262 assertions, 1/10 documents green** (DTSS passes at 19/19). Per-document
+**193/263 assertions, 1/10 documents green** (DTSS passes at 19/19). Per-document
 breakdown is in "State in one block" above.
 
 **C6's machinery is built and unused, on purpose.** All ten documents extract

@@ -1341,3 +1341,158 @@ NEW STANDING RULE 11: retire expectations before capabilities. Narrowing FIELDS
   field sets, then personas in the same commit as their field set, specifically
   to avoid that.
 Printed-fields-only: COMPLETE. Six tasks, two fix rounds (Tasks 3 and 4).
+
+## Final whole-branch review, and the single fix wave (2026-07-29)
+
+Six task-scoped reviews all passed. A review of the branch as a whole found one
+Critical and five Important issues that none of them could see, because each
+was scoped to one task's diff. Fixed in one wave; the findings and the fixes:
+
+CRITICAL C1: CENTRACOM SHIPPED AN INVERTED PRIOR-BALANCE TAG.
+  Measured base vs HEAD: base ['has_scanline','promo_content',
+  'prior_balance_present'], HEAD ['prior_balance_cleared','has_scanline',
+  'promo_content']. The pipeline was affirmatively stating that a prior balance
+  of $20,123.80 had been cleared - a new false claim, on the corpus's flagship
+  trap document, pointing a downstream consumer at exactly the wrong conclusion.
+  The spec accepts that the pipeline says NOTHING about the payable. It does not
+  accept it saying something false.
+
+  Cause: `refine_prior_balance_tags` was unregistered (correctly - it read
+  `derived.carried_balance`, which Stage 6 no longer produces), which left
+  `ladder.tags_for`'s unrefined guess as the final answer. That guess is made on
+  ANCHOR TEXT, and Centracom prints a payment anchor while still owing the
+  money. `retag_prior_balance`'s own docstring named Centracom as the case anchor
+  text cannot decide.
+
+  Invisible to the suite because Centracom's gold `tags` assertion is a SUPERSET
+  check already red on `no_invoice_number` and `past_due`: the regression moved
+  it FAIL -> FAIL with different contents, never PASS -> FAIL. Nothing else in
+  the repo inspects tag content.
+
+  FIXED by re-wiring rather than by dropping the distinction. Both inputs the
+  refinement now reads are printed - `fields.prior_balance` and
+  `fields.payments_credits` - so it is inside printed-fields-only scope.
+  Classification emits only `prior_balance_present` (the claim that is safe to be
+  wrong about) and the hook upgrades to `cleared` only when the printed payment
+  exactly offsets the printed prior. Comcast/Lumen/Windstream net to zero;
+  Centracom's prior is ALREADY net of its payment so it nets to -3,996.40 and
+  stays `present`. Decimal throughout. The alternative - collapse the pair to one
+  `prior_balance_printed` tag - was rejected because the distinction is real,
+  decidable from ink, and gold labels it on all four documents.
+
+  Three new tests, because the old shape could not have caught this: an EXACT
+  gold-pinned prior-balance tag for Centracom end to end (not a superset), the
+  four corpus amount pairs as units, and a pin that the hook is REGISTERED - the
+  refinement was correct code the entire time it was unregistered, so unit tests
+  of it would all have passed.
+
+  Corrected in the same change: `ladder.py:79`'s claim that the pair "is refined
+  at Stage 6 (`retag_prior_balance`)", false since the unregistration.
+
+I1: THE PASS RATE COULD STILL BE INFLATED BY RE-BUCKETING A FAILURE.
+  Demonstrated by the reviewer: moving `tax_id` from EXTRACTION_DEBT into
+  DEFERRED_PRINTED_FIELDS left 95 relevant tests green and moved the score
+  193/262 -> 193/261. `test_extraction_debt_is_measured_rather_than_deferred`
+  asserts disjointness and subset properties that a mover satisfies BY
+  CONSTRUCTION, because one bucket shrinks as the other grows. The split was a
+  convention, not a constraint. FIXED by pinning all three buckets literally,
+  following `VACUOUS_BY_CONSTRUCTION`, so a move is a diff line needing a reason.
+
+I2: ONE GENUINELY FAILING ASSERTION WAS SWEPT INTO THE WRONG BUCKET.
+  Of the 77 assertions removed from the denominator, 75 were passing and 2
+  failing. edco's `fields.vendor_account_number_normalized` is derived and leaves
+  regardless. `fields.vendor_email` on complete-beverage is not: expected
+  AR@CBD-USA.COM, got None, and `complete_beverage.json` never had a selector.
+  That is this branch's own definition of EXTRACTION_DEBT, and it landed in
+  DEFERRED_PRINTED_FIELDS.
+
+  DEVIATION FROM THE BRIEF, with evidence. The brief said "re-bucket it" as a
+  field NAME. Measured: `vendor_email` is gold-labelled on TWO documents, and
+  they are not the same case - `personas/lumen.json` DID have a working selector
+  at base (verified at 9703efc) and that assertion was PASSING, so retiring it is
+  a legitimate deferral. Moving the whole name to EXTRACTION_DEBT would have been
+  wrong about Lumen in the other direction and would have taken the denominator
+  to 264, not the 263 the brief predicted. Added
+  `scorecard.CHECKED_FIELDS_BY_GOLD`, keyed by gold_id exactly as
+  VACUOUS_BY_CONSTRUCTION keys its allowances, and restored only the failing
+  half. 262 -> 263, as the brief predicted, by a different mechanism.
+
+  Two false claims it created, also corrected: DEFERRED_PRINTED_FIELDS's comment
+  ("extracted by a working selector right up until the narrowing" - not true of
+  vendor_email) and the identical claim in RESUME.md's three-way table. The
+  `currency` claim was tightened too: `federal_recycling.json` also had a
+  `currency` selector (2 of 10 personas, verified at 9703efc), and 8 of 10
+  `fields.currency` passes came from `infer_currency` writing to `derived`, which
+  the scorecard's `_field_value` falls back to - not from ink.
+
+I3: THE ROUTING REGRESSION IS REAL, AND THE EARLIER LEDGER ENTRY WAS WRONG IN
+  BOTH DIRECTIONS. Measured 2026-07-29:
+
+    doc      gold lane/flag   head lane/flag   short field      bar
+    U-PAK    review / True    medium / True    total_printed    0.95
+    EDCO     high   / False   medium / True    total_printed    0.95
+    Veritiv  high   / False   medium / True    invoice_number   0.92
+
+  "U-PAK no longer reaches a human" is FALSE. `s7_gate` sets review_flag on
+  `medium` too, so it is still queued. What it loses is the REASON CODE - and
+  `s7_gate`'s own docstring argues that `review` and `medium` are different
+  queues with different fixes. A misroute, not an escape.
+
+  And nothing recorded the larger cost: EDCO and Veritiv now raise review flags
+  on documents gold calls clean (review_flag False, high lane). Two FALSE
+  POSITIVE reviews, on documents where extraction is correct. Framing that as a
+  benign "high -> medium" downgrade understates it.
+
+  ROOT CAUSE IS BROADER THAN THE FORCING MODIFIER. The cross-check ops supplied
+  per-field corroboration BOOSTS and the pack thresholds were calibrated with
+  them present. With the crosschecks unwired, measured per-field confidence
+  across the corpus is effectively binary: 27 fields at 0.90, 71 at 0.99, and
+  nothing between except on the two documents carrying document-wide multipliers.
+  Every threshold strictly inside (0.90, 0.99] is therefore now "0.99 or fail" -
+  `total_printed` 0.95 (NS) and 0.93 (DD), `please_pay` 0.95, `current_charges`
+  0.95, `prior_balance` 0.95, `account_number` 0.95, `bill_date` 0.93,
+  `invoice_number` 0.92, `payments_credits` 0.92. The narrowing's threshold edits
+  only deleted rows for deferred fields; no surviving number was revisited.
+
+  NOT RECALIBRATED HERE, deliberately - that needs evidence gathered with the
+  per-document persona work, not a number nudged until a lane matches. Both pack
+  docs' section 6 now carry a "(0.90, 0.99) is currently a dead band" subsection
+  saying so, and northstar's section 7 carries the corrected three-row table.
+  Leaving `arith_balance_mismatch` declared-but-unreachable in FORCING_MODIFIERS
+  is accepted and annotated in s7_gate.py.
+
+I4: DEFERRED_ARITHMETIC_MODIFIERS was the only deferral bucket with zero pins,
+  while subtracting from `_expected_modifiers` - removing expectations from
+  numerator and denominator with nothing checking membership. Raised as a Task 2
+  minor and never closed. Pinned as a subset of MODIFIERS, plus a source scan
+  asserting each name is emitted only from the two ops this spec unwired.
+
+I5: THE EXTRACTION DEBT HAD BEEN MADE UNPAYABLE. `tax_id` and
+  `vendor_parent_reference` are held in CHECKED_FIELDS precisely BECAUSE they are
+  printed - but the branch also removed both from their packs' FIELDS, and V1
+  rejects a selector targeting an unregistered field. The pin then asserted
+  `not (EXTRACTION_DEBT & FIELDS)`, locking it in, and contradicted spec section
+  1's own mechanical test ("in scope if a selector can read it off the page").
+  Both re-registered; the pin INVERTED to `EXTRACTION_DEBT <= (ns.FIELDS |
+  dd.FIELDS)` - registered, selectable, and nobody has done it yet. A second test
+  walks all ten personas and fails if one quietly gains a selector. Both still
+  fail every run, which is the point.
+
+MINORS: M1 digital-direction.md section 6 listed 21 of 31 threshold keys; added
+  `due_date` and a `line-item rows | 0.85` summary row matching northstar's
+  shape. M2 s7_gate.py claimed three C3 ops set review_flag before the stage
+  runs; none does, and `crosscheck_duplicate_anchor` was never in a persona even
+  at baseline. M3 CORRECTS AN EARLIER RULING OF MINE: `edco.json` and
+  `upak.json` are PERSONAS, not gold - freely editable, and this branch already
+  edited both. Their notes are fixed (upak's "so amount_payable must come out
+  null", edco's `prior_balance_basis` claim and its inert scanline block). The
+  GOLD notes remain read-only and untouched. M4 DEFERRED banners on both
+  conventions.py modules; not on `ladder.retag_prior_balance`, which C1 re-wired.
+  M6 `test_upak_has_no_document_specific_vacuous_allowance`'s "no exceptions at
+  all" corrected - the `*:review_flag` / `*:regen_flag` wildcards still apply.
+  M5, M8 and M9 were explicitly out of scope and are untouched.
+
+SCORE: 193/262 -> 193/263, 1/10 green throughout. The entire movement is I2's
+  one restored red assertion (complete-beverage 17/24 -> 17/25). C1 moved
+  nothing measurable, which is exactly why it survived six reviews. I5 moved
+  nothing because both names were already asserted and still fail.

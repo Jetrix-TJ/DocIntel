@@ -40,6 +40,29 @@ keeping visible.
    from the denominator and inflated the pass rate. Those two are back in
    measurement and still failing, deliberately.
 
+## Errata — 2026-07-29, after the final whole-branch review
+
+Two more, both places where the body below is now actively wrong about the code.
+
+5. **§5's table was right to unwire `refine_prior_balance_tags` and wrong about
+   the consequence.** It reads on `carried_balance`, which Stage 6 no longer
+   produces — so far so good. What the row missed is that `ladder.tags_for` still
+   emits the *unrefined* guess, and that guess is made on anchor text alone.
+   Centracom prints a payment anchor while carrying $20,123.80, so the pipeline
+   shipped `prior_balance_cleared` on it: a new **false** claim, where the whole
+   design accepts only saying *nothing*. The hook is re-registered, reading
+   `fields.prior_balance` and `fields.payments_credits` — both printed, so this is
+   inside the narrowing rather than an exception to it. §5's row is superseded.
+
+6. **§3's removal of `tax_id` and `vendor_parent_reference` from `FIELDS`
+   contradicted §1.** Both are ink on the page — U-PAK's H.S.T. number and the
+   `a CenturyLink company` clause on Lumen p1 — so §1's own mechanical test ("in
+   scope if a selector can read it off the page") puts them in scope. They are
+   held in `CHECKED_FIELDS` as extraction debt *because* they are printed, and
+   un-registering them made that debt unpayable: V1 rejects a selector targeting
+   an unregistered field, so nobody could pay it without first undoing the field
+   set. Both names are back in `FIELDS`, still unselected, still failing.
+
 The authoritative current state is `docs/superpowers/RESUME.md`, not this file.
 
 ---

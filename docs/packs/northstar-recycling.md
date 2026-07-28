@@ -274,7 +274,36 @@ testable from day one; expect these numbers to move.
 for it is intact and tested — but the only two ops that emit it
 (`grammar/ops/crosscheck.py`, `grammar/ops/derive.py`) are deferred, so **no
 corpus document can currently reach it.** That is why U-Pak no longer routes to
-review; see §7.
+the `review` lane; it still routes to a human, see §7.
+
+### `(0.90, 0.99)` is currently a dead band
+
+**Every number in the table above was calibrated for a world with corroboration
+boosts, and that world is switched off.** The cross-check ops
+(`crosscheck_filename`, `crosscheck_scanline`, `crosscheck_total_composition`,
+`crosscheck_line_sum`) supplied per-field `ctx.boosts`, which is what used to
+lift a well-extracted field to the intermediate values these thresholds sit at.
+With those ops out of every persona's `adjust` list, measured per-field
+confidence across the whole corpus takes exactly **two** values on any document
+with no document-wide penalty: **0.90** (the base) and **0.99** (the cap reached
+another way). Measured 2026-07-29 over all ten documents: 27 fields at 0.90, 71
+at 0.99, and the only other values belong to the two documents carrying
+`ocr_source` / `flattened_annotations` multipliers, which push everything below
+0.70 at once.
+
+So a threshold strictly inside `(0.90, 0.99]` is no longer a graded bar. It is a
+binary one: reachable only by a field that hits 0.99, and failed by every field
+sitting at the base. In this pack that silently repriced `total_printed` 0.95,
+`please_pay` 0.95, `current_charges` 0.95, `prior_balance` 0.95,
+`invoice_number` 0.92 and `payments_credits` 0.92 into "0.99 or fail". The
+threshold edits made by the narrowing only deleted rows for deferred fields; no
+surviving number was revisited.
+
+That is what produces the §7 routing regression, and it is a **calibration**
+problem rather than an extraction one — EDCO's total and Veritiv's invoice
+number are both extracted correctly. Recalibration is deliberately not done
+here: it needs evidence gathered alongside the per-document persona work, not a
+number nudged until a lane matches.
 
 ---
 
@@ -303,13 +332,36 @@ is simply not registered, and GUARDRAIL 2 (`tests/test_f1_antiregression.py`) is
 `skip`ped with that as the reason. Extraction transcribes; interpreting the
 $298.34 gap is downstream's job under this design.
 
-**U-Pak no longer routes to review.** Its gold routing depends on
-`arith_balance_mismatch`, and nothing emits that modifier while the crosschecks
-are deferred (§6). The forced-review machinery is intact — Federal Recycling
-still routes correctly, because flattened-annotation detection is generic and
-was never part of the narrowing.
+### The routing regression: three documents, two different costs
 
-So of the two documents that *should* route to review for the right reason — a
-document a human has already annotated, and a document whose arithmetic genuinely
-does not close — **only the first still does.** The second is a known consequence
-of the narrowing rather than a gate bug, and it comes back with the crosschecks.
+Measured 2026-07-29 against gold. Both costs are consequences of the §6 dead
+band, not gate bugs.
+
+| Document | Gold lane / `review_flag` | Measured lane / `review_flag` | Short field | Bar |
+|---|---|---|---|--:|
+| U-Pak `4378107` | `review` / **True** | `medium` / **True** | `total_printed` 0.90 | 0.95 |
+| EDCO `077087` | `high` / **False** | `medium` / **True** | `total_printed` 0.90 | 0.95 |
+| Veritiv `715-33905296` | `high` / **False** | `medium` / **True** | `invoice_number` 0.90 | 0.92 |
+
+**U-Pak still reaches a human. What it loses is the reason code.** An earlier
+version of this section said it "no longer routes to review", which is wrong:
+`s7_gate` sets `review_flag = True` on the `medium` lane too, so the document is
+still queued. It arrives in the wrong queue. §6's own argument for why `review`
+is a real lane rather than a synonym for `medium` is exactly that they are
+different queues with different fixes — "this document's numbers are shaky"
+against "something about this document mandates a human". U-Pak's arithmetic
+genuinely does not close (−48.92 unexplained), and it now presents as a
+confidence problem. A misroute, not an escape.
+
+**EDCO and Veritiv are the larger cost, and nothing recorded them until now.**
+Both are documents gold calls clean — `review_flag: False`, `high` lane — and
+both now raise a review flag. Those are **two false-positive reviews**, human
+time spent on documents where extraction was right; EDCO's total and Veritiv's
+invoice number are both extracted correctly and simply score 0.90 against bars
+of 0.95 and 0.92. Framing this as a benign "high → medium" confidence downgrade
+understates it: a downgrade that flags a clean document is a cost paid on every
+run.
+
+The forced-review machinery itself is intact — Federal Recycling still routes to
+`review` correctly, because flattened-annotation detection is generic and was
+never part of the narrowing.
