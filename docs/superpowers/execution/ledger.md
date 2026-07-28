@@ -1496,3 +1496,37 @@ SCORE: 193/262 -> 193/263, 1/10 green throughout. The entire movement is I2's
   one restored red assertion (complete-beverage 17/24 -> 17/25). C1 moved
   nothing measurable, which is exactly why it survived six reviews. I5 moved
   nothing because both names were already asserted and still fail.
+
+PARKED AFTER THE FIX-WAVE RE-REVIEW (2026-07-29). Verified, ruled not-blocking,
+  and recorded here rather than in scratch so they survive. All belong to the
+  persona-polish cluster.
+
+1. `grammar/ops/crosscheck.py` and `grammar/ops/derive.py` carry no DEFERRED
+   banner though they are as unwired as the two `conventions.py` that got one,
+   and their docstrings still read present-tense. Same class as M4; it was
+   simply not named in the fix list.
+2. I4's source scan matches two literal call shapes, `add_modifier("X")` and
+   `add_field_modifier(field, "X")`. An emitter written
+   `add_field_modifier(selector.field, "X")` - a shape that exists today in
+   `grammar/executor.py` - would evade the stray check. The pin does what the
+   finding asked; the escape hatch is narrow and known.
+3. I5's pin uses the union `EXTRACTION_DEBT <= (ns.FIELDS | dd.FIELDS)`, so
+   registering `tax_id` in the wrong pack would still satisfy it. Both names sit
+   in the correct pack today.
+4. A printed `prior_balance` of exactly 0.00 tags `cleared` with no payment
+   present. Defensible, pinned by a test, and no corpus document exercises it.
+5. THRESHOLD RECALIBRATION IS OWED AND WAS DELIBERATELY NOT ATTEMPTED. Measured
+   at HEAD: 27 fields sit at 0.90 and 71 at 0.99, with nothing between except
+   Complete Beverage (0.486/0.54) and Federal Recycling (0.6075/0.675). Every
+   threshold strictly inside (0.90, 0.99) is therefore unreachable. The numbers
+   were calibrated when the cross-check corroboration boosts existed; those are
+   deferred, the numbers were not revisited. The observable cost is two
+   false-positive review flags (EDCO, Veritiv) and U-PAK losing its `review`
+   reason code while still reaching a human. Documented in both packs' section
+   6; fixing it needs evidence this branch did not gather.
+
+METHODOLOGY NOTE, learned the expensive way during the re-review: this repo has
+  an editable install pointing at the main tree, so a plain worktree checkout of
+  an older commit silently runs HEAD's code. A baseline measurement needs
+  PYTHONPATH forced at the checkout, or its numbers are HEAD's wearing a
+  baseline's label. One re-review's first pass was invalid for exactly this.
