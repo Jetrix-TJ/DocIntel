@@ -69,3 +69,84 @@ def test_replay_never_mutates_gold():
     replay_gold(runner_factory=_factory)
     after = {p.name: p.read_bytes() for p in GOLD_DIR.glob("*.json")}
     assert before == after, "gold files are READ-ONLY to the loop"
+
+
+# ==========================================================================
+# The `text` comparison kind (decided in C5b)
+# ==========================================================================
+
+
+def test_transcribed_text_compares_case_insensitively():
+    """EDCO prints `EDCO WASTE & RECYCLING SERVICE`; its gold label reads
+    `EDCO Waste & Recycling Service`. The document is all-caps and the labeller
+    title-cased it, so the extraction is CORRECT and a scorecard that failed here
+    would be measuring the labeller's typing."""
+    from docintel.scorecard import matches
+
+    assert matches(
+        "EDCO Waste & Recycling Service", "EDCO WASTE & RECYCLING SERVICE", "text"
+    )
+
+
+def test_transcribed_text_collapses_whitespace():
+    from docintel.scorecard import matches
+
+    assert matches("Hunter Industries", "Hunter   Industries", "text")
+
+
+def test_transcribed_text_does_NOT_normalize_punctuation():
+    """A missing comma is a different transcription, not a different case.
+    Collapsing that would stop the assertion measuring how well an address was
+    captured at all."""
+    from docintel.scorecard import matches
+
+    assert not matches(
+        "260 S Pacific St, San Marcos, CA 92078",
+        "260 S PACIFIC ST SAN MARCOS CA 92078",
+        "text",
+    )
+
+
+def test_transcribed_text_still_fails_on_a_genuinely_wrong_value():
+    from docintel.scorecard import matches
+
+    assert not matches("EDCO Waste", "Acme Widgets", "text")
+
+
+def test_a_missing_value_is_not_matched_by_text_comparison():
+    from docintel.scorecard import matches
+
+    assert not matches("EDCO Waste", None, "text")
+    assert matches(None, None, "text")
+
+
+def test_our_own_vocabulary_stays_case_sensitive():
+    """`payable_basis` and friends are enums the pipeline emits, not text read off
+    a page. Accepting `Current_Charges` for `current_charges` would stop catching a
+    typo in code we wrote."""
+    from docintel.scorecard import EXACT_TEXT_FIELDS, _field_kind
+
+    assert _field_kind("currency", "USD") == "exact"
+    assert _field_kind("currency_basis", "pack_default") == "exact"
+    assert _field_kind("prior_balance_basis", "gross") == "exact"
+    assert "currency_basis" in EXACT_TEXT_FIELDS
+
+
+def test_money_fields_are_never_compared_as_text():
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("total_printed", 699.0) == "money"
+
+
+def test_a_transcribed_field_gets_the_text_kind():
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("vendor_name", "D.T.S.S., Inc.") == "text"
+    assert _field_kind("service_location", "Hunter Industries") == "text"
+
+
+def test_a_non_string_gold_value_is_compared_exactly():
+    """A boolean or a number that is not money must not be casefolded into a string."""
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("has_something", True) == "exact"

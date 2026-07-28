@@ -124,56 +124,56 @@
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "CentraCom",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "CentraCom",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.carrier_canonical",
-          "kind": "exact",
+          "kind": "text",
           "expected": "centracom",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "0384043574",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.circuit_id",
-          "kind": "exact",
+          "kind": "text",
           "expected": "4351003276",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2026-01-01",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "25TH OF THE MONTH",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "CLYDE COMPANIES",
           "actual": null,
           "passed": false
@@ -201,42 +201,42 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 1955, Orem, UT 84059-1955",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 7, Fairview, UT 84629",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 7, Fairview, UT 84629-0007",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "435-427-3331",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.account_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "CLYDE COMPANIES",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.billing_group",
-          "kind": "exact",
+          "kind": "text",
           "expected": "0384 - ACRA",
           "actual": null,
           "passed": false
@@ -452,56 +452,56 @@
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Comcast Business",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Comcast",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.carrier_canonical",
-          "kind": "exact",
+          "kind": "text",
           "expected": "comcast",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "8495 44 462 0365242",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-12-09",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-12-29",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Clyde Administration Servi",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.service_location",
-          "kind": "exact",
+          "kind": "text",
           "expected": "387 S 520 W STE 210, Lindon, UT 84042-1960",
           "actual": null,
           "passed": false
@@ -522,42 +522,42 @@
         },
         {
           "name": "fields.account_number_normalized",
-          "kind": "exact",
+          "kind": "text",
           "expected": "8495444620365242",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 1955, Orem, UT 84059-1955",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_attention",
-          "kind": "exact",
+          "kind": "text",
           "expected": "ATTN CLYDE COMPANIES-IT",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 60533, City of Industry, CA 91716-0533",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.return_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 4118, Englewood, CO 80155",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.service_period",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-12-14 to 2026-01-13",
           "actual": null,
           "passed": false
@@ -761,56 +761,56 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "752233001",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Lumen",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Level 3 Communications, LLC",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.carrier_canonical",
-          "kind": "exact",
+          "kind": "text",
           "expected": "lumen",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "5-QXH7QKM7",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-09-01",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-10-01",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "City of Dublin",
           "actual": null,
           "passed": false
@@ -845,49 +845,49 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "5555 Perimeter Dr, Dublin, OH 43017-3219",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1025 Eldorado Blvd., Broomfield, CO 80021",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_legal_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Level 3 Communications, LLC",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_parent_reference",
-          "kind": "exact",
+          "kind": "text",
           "expected": "a CenturyLink company",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 52015, Phoenix, AZ 85072-2015",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1-877-453-8353",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_email",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Billing@Lumen.com",
           "actual": null,
           "passed": false
@@ -1071,56 +1071,56 @@
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Kinetic Business by Windstream",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Oklahoma Windstream, LLC",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.carrier_canonical",
-          "kind": "exact",
+          "kind": "text",
           "expected": "windstream",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "041069076",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.telephone_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "918-653-3103",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-07-22",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-08-11",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Choctaw Travel Mart",
           "actual": null,
           "passed": false
@@ -1148,35 +1148,35 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 1550, Durant, OK 74702-1550",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 9001908, Louisville, KY 40290-1908",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.return_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "ATTN: Support Services, 131 W Matthews St, Matthews, NC 28105",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1-833-241-0100",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_website",
-          "kind": "exact",
+          "kind": "text",
           "expected": "kineticbusiness.com",
           "actual": null,
           "passed": false
@@ -1341,42 +1341,42 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "32930",
           "actual": "32930",
           "passed": true
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Complete Beverage Destruction, LLC",
           "actual": "Complete Beverage Destruction, LLC",
           "passed": true
         },
         {
           "name": "fields.invoice_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-10-24",
           "actual": "2025-10-24",
           "passed": true
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-11-23",
           "actual": "2025-11-23",
           "passed": true
         },
         {
           "name": "fields.payment_terms",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Net 30",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "NorthStar Recycling Company, LLC",
           "actual": "NorthStar Recycling Company, LLC",
           "passed": true
@@ -1390,14 +1390,14 @@
         },
         {
           "name": "fields.seal_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "5951119",
           "actual": "5951119",
           "passed": true
         },
         {
           "name": "fields.bol_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "10-21-25-01",
           "actual": "10-21-25-01",
           "passed": true
@@ -1411,28 +1411,28 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "P.O. Box 188, East Longmeadow, MA 01028, United States",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_attention",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Refresco, Acline",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "9921 Old Lakeland Hwy, Dade City, FL 33525 US",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_email",
-          "kind": "exact",
+          "kind": "text",
           "expected": "AR@CBD-USA.COM",
           "actual": null,
           "passed": false
@@ -1622,35 +1622,35 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "6060",
           "actual": "6060",
           "passed": true
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "D.T.S.S., Inc.",
           "actual": "D.T.S.S., Inc.",
           "passed": true
         },
         {
           "name": "fields.invoice_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-09-15",
           "actual": "2025-09-15",
           "passed": true
         },
         {
           "name": "fields.payment_terms",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Due on receipt",
           "actual": "Due on receipt",
           "passed": true
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar Recycling Company, LLC",
           "actual": "Northstar Recycling Company, LLC",
           "passed": true
@@ -1671,14 +1671,14 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "P.O. Box 188, East Longmeadow, MA 01028",
           "actual": "P.O. Box 188, East Longmeadow, MA 01028",
           "passed": true
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "500 North Defiance Trail, Spencerville, OH 45887",
           "actual": "500 North Defiance Trail",
           "passed": false
@@ -1752,7 +1752,7 @@
         "F17"
       ],
       "passed": false,
-      "passed_count": 16,
+      "passed_count": 18,
       "total_count": 35,
       "assertions": [
         {
@@ -1838,42 +1838,42 @@
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "EDCO Waste & Recycling Service",
           "actual": "EDCO WASTE & RECYCLING SERVICE",
-          "passed": false
+          "passed": true
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "EDCO Waste & Recycling Service",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "25-3A 077087",
           "actual": "25-3A 077087",
           "passed": true
         },
         {
           "name": "fields.bill_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-04-30",
           "actual": "2025-04-30",
           "passed": true
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar Recycling",
           "actual": "NORTHSTAR RECYCLING",
-          "passed": false
+          "passed": true
         },
         {
           "name": "fields.service_location",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Hunter Industries, 260 S Pacific St, San Marcos, CA 92078",
           "actual": "HUNTER INDUSTRIES, 260 S PACIFIC ST, SAN MARCOS CA 92078",
           "passed": false
@@ -1894,49 +1894,49 @@
         },
         {
           "name": "fields.vendor_account_number_normalized",
-          "kind": "exact",
+          "kind": "text",
           "expected": "253A077087",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 188, East Longmeadow, MA 01028",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_attention",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Hunter Indust",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "224 S Las Posas Rd, San Marcos, CA 92078",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "P.O. Box 5488, Buena Park, CA 90622-5488",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "(760) 744-2700",
           "actual": "1-855-713-4203",
           "passed": false
         },
         {
           "name": "fields.payments_included_through",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-04-23",
           "actual": null,
           "passed": false
@@ -2087,49 +2087,49 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1330123",
           "actual": "1330123",
           "passed": true
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Federal Recycling & Waste Solutions",
           "actual": "FEDERAL",
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Federal International Recycling and Waste Solutions, LLC",
           "actual": "Bank Swift",
           "passed": false
         },
         {
           "name": "fields.invoice_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-05-31",
           "actual": "2025-05-31",
           "passed": true
         },
         {
           "name": "fields.payment_terms",
-          "kind": "exact",
+          "kind": "text",
           "expected": "EOM plus 15",
           "actual": "EOM plus 15",
           "passed": true
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar-Bimbo-Market Street",
           "actual": "Northstar-Bimbo-Market Street",
           "passed": true
         },
         {
           "name": "fields.service_location",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar-Bimbo-Market Street, PO Box 188, East Longmeadow, MA 01028",
           "actual": null,
           "passed": false
@@ -2150,35 +2150,35 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "PO Box 188, East Longmeadow, MA 01028, UNITED STATES",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.bill_to_email",
-          "kind": "exact",
+          "kind": "text",
           "expected": "apayable@nsrecycle.com",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "7935 Clayton Rd, St. Louis, MO 63117",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Post Office Box 203505, Dallas, TX 75320-3505",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "281-580-1242",
           "actual": null,
           "passed": false
@@ -2390,49 +2390,49 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "4378107",
           "actual": "4378107",
           "passed": true
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "U-Pak Disposals (1989) Ltd",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "U-Pak Disposals (1989) Ltd",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1 -24136 1",
           "actual": "1 -24136 1",
           "passed": true
         },
         {
           "name": "fields.invoice_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-03-31",
           "actual": "2025-03-31",
           "passed": true
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar Recycling Company LLC",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.service_location",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Shearer's Food Canada Inc N.S, 745 South Gate, Master Acc, Guelph ON N1G 4N4",
           "actual": null,
           "passed": false
@@ -2453,35 +2453,35 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "94 Maple St, East Longmeadow, MA 01028",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "15 Tidemore Avenue, Etobicoke, ON M9W 7E9",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_phone",
-          "kind": "exact",
+          "kind": "text",
           "expected": "416-675-3700",
           "actual": "416-675-3700",
           "passed": true
         },
         {
           "name": "fields.service_dates",
-          "kind": "exact",
+          "kind": "text",
           "expected": "MARCH 31, 2025",
           "actual": "2025-03-31",
           "passed": false
         },
         {
           "name": "fields.tax_id",
-          "kind": "exact",
+          "kind": "text",
           "expected": "123142812RT0001",
           "actual": null,
           "passed": false
@@ -2795,56 +2795,56 @@
         },
         {
           "name": "fields.invoice_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "715-33905296",
           "actual": "715-33905296",
           "passed": true
         },
         {
           "name": "fields.vendor_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Veritiv Operating Company",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_payee",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Veritiv Operating Company",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_account_number",
-          "kind": "exact",
+          "kind": "text",
           "expected": "068753",
           "actual": "068753",
           "passed": true
         },
         {
           "name": "fields.invoice_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-08-14",
           "actual": "2025-08-14",
           "passed": true
         },
         {
           "name": "fields.due_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-09-14",
           "actual": "2025-09-14",
           "passed": true
         },
         {
           "name": "fields.payment_terms",
-          "kind": "exact",
+          "kind": "text",
           "expected": "1 % 30 DAYS, NET 31 DAYS",
           "actual": "1 % 30 DAYS, NET 31 DAYS",
           "passed": true
         },
         {
           "name": "fields.discount_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-09-13",
           "actual": null,
           "passed": false
@@ -2858,14 +2858,14 @@
         },
         {
           "name": "fields.bill_to_name",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar Recycling Company LLC",
           "actual": "VERITIV OPERATING COMPANY",
           "passed": false
         },
         {
           "name": "fields.service_location",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Shearer's Brewster, 692 N Wabash Ave, Brewster, OH 44613-1056",
           "actual": null,
           "passed": false
@@ -2879,7 +2879,7 @@
         },
         {
           "name": "fields.customer_po",
-          "kind": "exact",
+          "kind": "text",
           "expected": "Northstar# 2542693",
           "actual": null,
           "passed": false
@@ -2900,28 +2900,28 @@
         },
         {
           "name": "fields.bill_to_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "94 Maple St, East Longmeadow, MA 01028-2744",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.vendor_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "6120 South Gilmore Road, Fairfield, OH 45014",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.remit_address",
-          "kind": "exact",
+          "kind": "text",
           "expected": "P.O. Box 409884, Atlanta, GA 30384-9884",
           "actual": null,
           "passed": false
         },
         {
           "name": "fields.order_date",
-          "kind": "exact",
+          "kind": "text",
           "expected": "2025-08-08",
           "actual": null,
           "passed": false
@@ -3010,7 +3010,7 @@
     "total": 10,
     "passed": 0,
     "failed": 10,
-    "assertions_passed": 128,
+    "assertions_passed": 130,
     "assertions_total": 339
   }
 }

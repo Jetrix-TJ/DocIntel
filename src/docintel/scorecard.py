@@ -31,8 +31,10 @@ class Assertion:
 def matches(expected: Any, actual: Any, kind: str) -> bool:
     """Compare a gold expectation against a record value.
 
-    Four comparison kinds:
-      exact    - plain equality
+    Five comparison kinds:
+      exact    - plain equality. For our own vocabulary: enums, basis strings.
+      text     - transcribed text, case-insensitive and whitespace-collapsed.
+                 See the block below for why, and for what was rejected.
       money    - value equality via Decimal. Gold holds 33876.4 (JSON drops the
                  trailing zero) while the record serializes Decimal("33876.40")
                  as "33876.40"; both denote the same amount.
@@ -49,6 +51,29 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
             return Decimal(str(expected)) == Decimal(str(actual))
         except (InvalidOperation, ValueError):
             return False
+    if kind == "text":
+        # Transcribed text, compared case-insensitively and whitespace-collapsed.
+        #
+        # DECIDED IN C5b, and the alternative was worse. EDCO prints
+        # `EDCO WASTE & RECYCLING SERVICE` while its gold label reads `EDCO Waste
+        # & Recycling Service`: the document is all-caps and the labeller
+        # title-cased it. The extraction is CORRECT, and a scorecard that fails on
+        # case is measuring the labeller's typing.
+        #
+        # The rejected alternative was a `title_case` adjust op, which would be
+        # ACTIVELY WRONG: `LLC` -> `Llc`, `P.O. Box` -> `P.o. Box`, `OCC` -> `Occ`.
+        # Correct title-casing of company names needs an exceptions list, which is
+        # the same unbounded-enumeration trap the C1b review already refused for
+        # totals phrases - and it would mean transforming real data to match a
+        # label's cosmetic convention.
+        #
+        # Punctuation is deliberately NOT normalized. `260 S Pacific St, San
+        # Marcos, CA 92078` and the same string missing a comma are different
+        # transcriptions, and collapsing that difference would stop the assertion
+        # measuring anything about how well an address was captured.
+        if expected is None or actual is None:
+            return expected == actual
+        return _text_key(expected) == _text_key(actual)
     if kind == "superset":
         if actual is None:
             return not expected
@@ -58,6 +83,19 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
             return not expected
         return set(expected) == set(actual)
     return expected == actual
+
+
+def _text_key(value: Any) -> str:
+    return " ".join(str(value).split()).casefold()
+
+
+# Fields whose value is OUR OWN vocabulary rather than text transcribed off a
+# page. These stay case-sensitive: `payable_basis` is an enum the pipeline emits,
+# and a scorecard that accepted `Current_Charges` for `current_charges` would stop
+# catching a typo in code we wrote.
+EXACT_TEXT_FIELDS: frozenset[str] = frozenset({
+    "prior_balance_basis", "currency", "currency_basis", "sale_type",
+})
 
 
 def load_gold() -> list[dict[str, Any]]:
@@ -301,6 +339,15 @@ def _id_name_pairs(rows: Any) -> list[tuple[str, str]]:
     return sorted(out)
 
 
+def _field_kind(name: str, expected: Any) -> str:
+    """How a gold field should be compared: money, transcribed text, or exactly."""
+    if name in MONEY_FIELDS:
+        return "money"
+    if isinstance(expected, str) and name not in EXACT_TEXT_FIELDS:
+        return "text"
+    return "exact"
+
+
 def _field_value(record: dict[str, Any], name: str) -> Any:
     """A gold-labelled field, wherever the pipeline chose to put it.
 
@@ -452,7 +499,7 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
             items.append(Assertion(
                 f"fields.{name}", fields[name],
                 lambda r, n=name: _field_value(r, n),
-                kind="money" if name in MONEY_FIELDS else "exact",
+                kind=_field_kind(name, fields[name]),
             ))
 
     for name in CHECKED_DERIVED:
