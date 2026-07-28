@@ -19,6 +19,7 @@ cross-checks that means double-counting a confidence boost.
 | `northstarThresholds` | `ConfidenceGate` reads `ctx.pack.thresholds` |
 | `attachAllocationMetadata` | already on the record: `service_location` is a field, `sub_account` a row group |
 | `excludeAnnotatedFromGold` | the rule lifecycle, which runs beside the pipeline |
+| `applyBillingConventions` | deferred: supplies `prior_balance_basis`, a derived classification. `conventions.py` stays in the tree; see the printed-fields-only spec. |
 
 The three that remain are the three that cannot be expressed any other way: a
 classification ladder, a fingerprint derived from page text, and reference
@@ -28,7 +29,7 @@ patterns that are pack code rather than grammar.
 from __future__ import annotations
 
 from docintel.core.models import JobContext
-from docintel.packs.northstar import aliases, conventions, ladder, references
+from docintel.packs.northstar import aliases, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
 
@@ -59,11 +60,6 @@ def resolve_vendor_fingerprint(ctx: JobContext, next_: Next) -> JobContext:
     return next_(ctx)
 
 
-def apply_billing_conventions(ctx: JobContext, next_: Next) -> JobContext:
-    """Supply `prior_balance_basis` from the vendor's known convention (F1b)."""
-    return next_(conventions.apply_prior_balance_basis(ctx))
-
-
 def collect_references(ctx: JobContext, next_: Next) -> JobContext:
     """The section 3 reference patterns, with provenance (F11)."""
     return next_(references.collect(ctx))
@@ -72,5 +68,4 @@ def collect_references(ctx: JobContext, next_: Next) -> JobContext:
 def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", northstar_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_vendor_fingerprint, PACK_NAME)
-    registry.register("afterExtraction", apply_billing_conventions, PACK_NAME)
     registry.register("afterExtraction", collect_references, PACK_NAME)

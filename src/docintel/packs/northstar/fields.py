@@ -1,78 +1,69 @@
 """Northstar's field set (`docs/packs/northstar-recycling.md` section 2).
 
-Three sets per doc type, and the distinction between them is what V1, V10 and V13
-each check:
+Narrowed to printed-fields-only: every name in `FIELDS` is a value that
+appears as ink on the page, never one computed from other fields. Three sets
+per doc type, and the distinction between them is what V1, V10 and V13 each
+check:
 
 * `FIELDS` - every name a selector may target (V1)
 * `REQUIRED` - every name that must have a selector before a persona leaves
   `draft` (V13)
 * `DERIVED_ONLY` - every name no selector may ever target (V10)
 
-`amount_payable` is in `REQUIRED` **and** `DERIVED_ONLY`, which is not a
-contradiction: the record must carry it and no selector may read it off a page.
-V13 exempts derived-only fields for exactly this reason - without that exemption
-the two rules would make every Northstar persona unwritable.
+`core.models.DERIVED_ONLY` already covers `amount_payable` and its
+companions, and none of them are registered here any more - a derived value
+has no selector to write, so there is nothing left for this pack's own
+`DERIVED_ONLY` to add on top of the core set.
 """
 
 from __future__ import annotations
 
-# Required on every doc type (section 2, "Required - every doc_type").
-_CORE: frozenset[str] = frozenset({
+# Printed identity. `vendor_name` is registered but never required - see
+# REQUIRED_ANY_OF's absence of it and hooks.resolve_vendor_fingerprint.
+_IDENTITY: frozenset[str] = frozenset({
     "vendor_name",
     "invoice_number",
     "invoice_date",
-    "total_printed",
-    "amount_payable",
-    "currency",
-    "bill_to_name",
+    "bill_date",
 })
 
-# Commercial terms. `prior_balance` and `current_charges` are marked optional in
-# the spec table because five of six documents do not print them - EDCO does, and
-# it is the F1 trap.
+# Amounts exactly as printed. No derivation: `amount_payable` and
+# `carried_balance` are DERIVED_ONLY and no longer registered anywhere.
+_AMOUNTS: frozenset[str] = frozenset({
+    "total_printed",
+    "subtotal",
+    "tax_amount",
+    "prior_balance",
+    "current_charges",
+    "payments_credits",
+    "please_pay",
+    "balance_due",
+    "discount_amount",
+})
+
 _TERMS: frozenset[str] = frozenset({
     "due_date",
     "payment_terms",
-    "prior_balance",
-    "prior_balance_basis",
-    "current_charges",
-    "payments_credits",
-    "subtotal",
-    "tax_amount",
-    "tax_id",
     "discount_date",
-    "discount_amount",
-    "please_pay",
-    "balance_due",
-    # EDCO prints a billing date and no invoice date; the DD pack uses it too.
-    "bill_date",
 })
 
 # Allocation: which end site the cost belongs to (F13).
 _ALLOCATION: frozenset[str] = frozenset({
     "service_location",
     "vendor_account_number",
-    "vendor_account_number_normalized",
     "account_number",
-    "account_number_normalized",
 })
 
-# Identity and contact detail the gold labels carry.
-_IDENTITY: frozenset[str] = frozenset({
-    "remit_payee",
-    "vendor_legal_name",
-    "vendor_address",
-    "vendor_phone",
-    "vendor_email",
-    "vendor_website",
-    "vendor_parent_reference",
-    "remit_address",
-    "return_address",
+# Addresses and payee, all printed blocks.
+_ADDRESSES: frozenset[str] = frozenset({
+    "bill_to_name",
     "bill_to_address",
     "bill_to_attention",
     "bill_to_email",
-    "account_name",
-    "billing_group",
+    "remit_payee",
+    "remit_address",
+    "return_address",
+    "vendor_address",
 })
 
 # Match keys carried as scalar fields rather than in reference_list (F11).
@@ -115,42 +106,27 @@ _TABLE: frozenset[str] = frozenset({
 })
 
 FIELDS: frozenset[str] = (
-    _CORE | _TERMS | _ALLOCATION | _IDENTITY | _MATCH_KEYS | _TABLE
+    _IDENTITY | _AMOUNTS | _TERMS | _ALLOCATION | _ADDRESSES | _MATCH_KEYS | _TABLE
 )
 
-# What must have a selector before a persona can leave `draft` (V13).
-#
-# Deliberately much shorter than the spec's "required" table, and each omission
-# is a corpus fact rather than a convenience:
-#
-#   currency        produced by the F14 inference ladder, not by a selector.
-#                   Demanding one would force every persona to invent it.
-#   invoice_number  three of the ten corpus documents print none at all (F6) -
-#                   EDCO among them. That is the entire reason the identity
-#                   ladder falls back to account+period, so requiring a selector
-#                   here would make the documents F6 was written for unwritable.
-#   invoice_date    EDCO prints a billing date and no invoice date.
-#   vendor_name     supplied by the alias table's display names when the
-#                   letterhead is unreadable, the same way `currency` comes from
-#                   the F14 ladder. Veritiv's name shares a flattened line with
-#                   the invoice header block; Lumen's letterhead is an IMAGE and
-#                   Windstream's text layer breaks the brand mid-word. Demanding a
-#                   selector would make those three unwritable.
-#
-# What remains is what every document in the corpus genuinely carries.
-REQUIRED: frozenset[str] = frozenset({
-    "total_printed",
-    "amount_payable",
-    "bill_to_name",
-})
+# The only unconditional requirement. Printed on 94.4% of documents, and it
+# carries the guard that the billed party resolves to Northstar - which is what
+# stops another company's invoice being processed as ours.
+REQUIRED: frozenset[str] = frozenset({"bill_to_name"})
 
-# Populated when the field set narrows to printed values only. Empty here means
-# V13's any-of clause is a no-op, so this task changes no behaviour.
-REQUIRED_ANY_OF: tuple[frozenset[str], ...] = ()
+# What a flat set cannot say. Each group needs one covered member.
+#
+#   date    EDCO prints a billing date and no invoice date. Requiring
+#           `invoice_date` by name would make its persona unwritable.
+#   amount  the total's LABEL is present on 92.2% of invoices but its VALUE
+#           parses on 77.2%. Requiring `total_printed` by name would make every
+#           vendor printing no parseable total unwritable.
+REQUIRED_ANY_OF: tuple[frozenset[str], ...] = (
+    frozenset({"invoice_date", "bill_date"}),
+    frozenset({"total_printed", "balance_due", "please_pay",
+               "current_charges", "subtotal"}),
+)
 
-# Section 2 marks exactly one field derived-only. `core.models.DERIVED_ONLY`
-# already covers `amount_payable` and its companions; this set is for names the
-# PACK adds on top, and Northstar adds none.
 DERIVED_ONLY: frozenset[str] = frozenset()
 
 DOC_TYPES: tuple[str, ...] = (

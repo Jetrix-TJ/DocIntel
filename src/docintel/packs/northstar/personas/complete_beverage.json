@@ -37,10 +37,6 @@
       "region": "same-row",
       "pattern": "currency",
       "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_filename",
-        "infer_currency",
         "resolve_vendor_alias"
       ]
     },

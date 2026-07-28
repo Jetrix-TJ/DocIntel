@@ -85,15 +85,23 @@ def test_pack_thresholds_cover_the_fields_that_decide_payment() -> None:
 
     The two packs deliberately differ - Northstar holds `total_printed` at 0.95
     while Digital Direction holds it at 0.93 because a scan line corroborates it
-    on all four of its bills. What must hold everywhere is that the DERIVED
-    payable is held to at least the bar of the printed total it came from, and
-    that both bars are high, because a wrong total is a wrong payment.
+    on all four of its bills. Where a pack still derives `amount_payable`, that
+    DERIVED payable must be held to at least the bar of the printed total it
+    came from, and both bars must be high, because a wrong total is a wrong
+    payment.
+
+    Northstar no longer derives `amount_payable` at all (printed-fields-only:
+    no persona's `adjust` list still calls `derive_amount_payable`), so it has
+    no threshold entry for it and there is nothing to compare - the `in` guard
+    is what keeps this an invariant over packs that still derive the field,
+    rather than a demand that every pack must.
     """
     for pack in load_packs():
         t = pack.thresholds
-        assert t["amount_payable"] >= 0.95, pack.name
         assert t["total_printed"] >= 0.90, pack.name
-        assert t["amount_payable"] >= t["total_printed"], pack.name
+        if "amount_payable" in t:
+            assert t["amount_payable"] >= 0.95, pack.name
+            assert t["amount_payable"] >= t["total_printed"], pack.name
 
 
 def test_no_pack_registers_an_adjust_op_of_its_own() -> None:

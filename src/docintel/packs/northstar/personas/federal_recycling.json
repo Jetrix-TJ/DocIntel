@@ -31,25 +31,10 @@
       "pattern": "text"
     },
     {
-      "field": "currency",
-      "anchor": "Total Amt.",
-      "region": "same-row",
-      "pattern": "(USD)",
-      "required": false,
-      "adjust": [
-        "infer_currency"
-      ]
-    },
-    {
       "field": "total_printed",
       "anchor": "Total Amt.",
       "region": "same-row",
-      "pattern": "currency",
-      "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_filename"
-      ]
+      "pattern": "currency"
     },
     {
       "field": "payment_terms",
@@ -78,12 +63,6 @@
         "max": 40
       },
       "allow_empty_cells": true
-    },
-    {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "(281-580-1242)",
-      "required": false
     },
     {
       "field": "vendor_address",

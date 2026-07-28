@@ -47,12 +47,6 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_total_composition",
-        "crosscheck_line_sum",
-        "crosscheck_filename",
-        "infer_currency",
         "resolve_vendor_alias"
       ]
     },

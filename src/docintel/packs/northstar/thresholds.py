@@ -16,8 +16,6 @@ from __future__ import annotations
 THRESHOLDS: dict[str, float] = {
     # A wrong total is a wrong payment. Highest bar in the pack.
     "total_printed": 0.95,
-    # Same, and it is derived - no arithmetic closure means no confidence.
-    "amount_payable": 0.95,
     # The dedup key. A wrong one merges two invoices or splits one.
     "invoice_number": 0.92,
     # Downstream vendor resolution can recover from a near-miss.
@@ -32,8 +30,8 @@ THRESHOLDS: dict[str, float] = {
     "bill_to_name": 0.90,
     # An allocation hint a human corrects routinely (F13).
     "service_location": 0.80,
-    # Amounts that feed the F1 derivation are held as high as the total, because
-    # a wrong one produces a confidently wrong payable.
+    # Held as high as the total: a wrong one is a wrong payment amount, printed
+    # fields only or not.
     "current_charges": 0.95,
     "prior_balance": 0.95,
     "payments_credits": 0.92,
@@ -51,13 +49,9 @@ THRESHOLDS: dict[str, float] = {
     "account_number": 0.90,
     # Contact and address detail: useful, never load-bearing.
     "vendor_address": 0.75,
-    "vendor_phone": 0.75,
-    "vendor_email": 0.75,
-    "vendor_website": 0.75,
     "remit_address": 0.80,
     "bill_to_address": 0.80,
     "payment_terms": 0.85,
-    "currency": 0.85,
 }
 
 # Applied to every line-item column. The line-sum check guards these

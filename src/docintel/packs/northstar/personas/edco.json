@@ -41,21 +41,13 @@
       "anchor": "CURRENT CHARGES:",
       "region": "same-row",
       "pattern": "currency",
-      "required": false,
-      "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_balance_composition",
-        "infer_currency"
-      ]
+      "required": false
     },
     {
       "field": "total_printed",
       "region": "header-block",
       "pattern": "currency",
       "adjust": [
-        "crosscheck_scanline",
-        "crosscheck_filename",
         "resolve_vendor_alias"
       ]
     },
@@ -87,12 +79,6 @@
       "adjust": [
         "join_lines_comma"
       ],
-      "required": false
-    },
-    {
-      "field": "vendor_phone",
-      "region": "any-page",
-      "pattern": "(\\(760\\) 744-2700)",
       "required": false
     },
     {

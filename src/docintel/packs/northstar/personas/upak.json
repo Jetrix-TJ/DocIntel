@@ -46,21 +46,10 @@
       "required": false
     },
     {
-      "field": "vendor_phone",
-      "region": "top-left",
-      "pattern": "phone",
-      "required": false
-    },
-    {
       "field": "total_printed",
       "region": "totals-block",
       "pattern": "currency",
       "adjust": [
-        "resolve_carried_balance",
-        "derive_amount_payable",
-        "crosscheck_total_composition",
-        "crosscheck_filename",
-        "infer_currency",
         "resolve_vendor_alias"
       ]
     },
