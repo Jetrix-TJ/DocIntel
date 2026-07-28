@@ -29,6 +29,7 @@ patterns that are pack code rather than grammar.
 from __future__ import annotations
 
 from docintel.core.models import JobContext
+from docintel.core.senders import is_aggregator
 from docintel.packs.northstar import aliases, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
@@ -53,8 +54,16 @@ def resolve_vendor_fingerprint(ctx: JobContext, next_: Next) -> JobContext:
     rendering of a vendor onto one canonical key is the whole point: without it
     Federal Recycling's letterhead and its remittance payee become two personas
     that never find each other.
+
+    When the page text resolves nothing at all, fall back to the sender's email
+    domain (weaker evidence than print, but still evidence) - unless the sender
+    is an aggregator like bill.com, in which case every one of its customers'
+    invoices would otherwise collapse onto a single "bill.com" persona. The
+    printed-name lookup always runs first and wins when it finds anything.
     """
     canonical = aliases.canonical(primary_text(ctx))
+    if canonical is None and not is_aggregator(ctx.sender_email or ""):
+        canonical = aliases.canonical_from_domain(ctx.sender_email or "")
     if canonical is not None:
         ctx.sender_fingerprint = f"{PACK_NAME}|{canonical}"
     return next_(ctx)

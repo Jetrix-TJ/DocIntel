@@ -67,6 +67,34 @@ DISPLAY_NAMES: dict[str, str] = {
     "windstream": "Kinetic Business by Windstream",
 }
 
+# Sender-email domain -> canonical key, for the fallback in
+# `resolve_carrier_fingerprint` when nothing on the page resolves at all (the
+# escape hatch, not the normal path - `canonical()` above already resolves
+# Lumen and Windstream from other printed text, so this table exists for the
+# case where even that fails). A domain earns a place here only when a real
+# corpus document prints that address: `docs/corpus/gold/
+# digitaldirection-lumen-5-QXH7QKM7.json` has `vendor_email:
+# "Billing@Lumen.com"`, so `lumen.com` is real evidence for Lumen. No other DD
+# carrier's gold record carries a printed email address - Windstream, Comcast
+# and CentraCom are absent on purpose, not an oversight - so no other domain is
+# added. Not derived by munging a carrier's name into a plausible domain: that
+# would silently miss the real one when the guess is wrong.
+DOMAIN_ALIASES: dict[str, str] = {
+    "lumen.com": "lumen",
+}
+
+
+def canonical_from_domain(sender_email: str | None) -> str | None:
+    """The canonical carrier key from the sender's email domain, or None.
+
+    Weaker evidence than a printed name: only consulted by
+    `resolve_carrier_fingerprint` when `canonical()` found nothing on the page.
+    """
+    if not sender_email or "@" not in sender_email:
+        return None
+    domain = sender_email.strip().rsplit("@", 1)[1].lower().rstrip(".")
+    return DOMAIN_ALIASES.get(domain)
+
 
 def canonical(printed: str | None, payee: str | None = None) -> str | None:
     """The canonical carrier key, preferring the remittance payee (F5)."""

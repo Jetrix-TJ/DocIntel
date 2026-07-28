@@ -21,6 +21,7 @@ longer produces. Both implementations stay in the tree.
 from __future__ import annotations
 
 from docintel.core.models import JobContext
+from docintel.core.senders import is_aggregator
 from docintel.packs.digitaldirection import aliases, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
@@ -38,8 +39,17 @@ def resolve_carrier_fingerprint(ctx: JobContext, next_: Next) -> JobContext:
 
     Lumen prints three names on one page and Windstream two. Collapsing them here
     is what stops one carrier becoming three personas.
+
+    If page text resolves nothing at all - a letterhead-only logo with no other
+    printed mention, say - fall back to the sender's email domain, unless the
+    sender is an aggregator (bill.com, Ariba, QuickBooks): keying an aggregator's
+    shared domain would collapse every carrier that bills through it onto one
+    persona. The page-text lookup always runs first and wins when it finds
+    anything; the domain is weaker evidence, used only when print gives nothing.
     """
     carrier = aliases.canonical(primary_text(ctx))
+    if carrier is None and not is_aggregator(ctx.sender_email or ""):
+        carrier = aliases.canonical_from_domain(ctx.sender_email or "")
     if carrier is not None:
         ctx.sender_fingerprint = f"{PACK_NAME}|{carrier}"
     return next_(ctx)

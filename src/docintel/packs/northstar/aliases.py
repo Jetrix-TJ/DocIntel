@@ -110,3 +110,31 @@ DISPLAY_NAMES: dict[str, str] = {
     "upak": "U-Pak Disposals (1989) Ltd",
     "edco": "EDCO Waste & Recycling Service",
 }
+
+# Sender-email domain -> canonical key, for the fallback in
+# `resolve_vendor_fingerprint` when the letterhead cannot be read at all (F5's
+# escape hatch, not its normal path). A domain earns a place here only when a
+# real corpus document prints that address: `docs/corpus/gold/
+# northstar-complete-beverage-32930.json` has `vendor_email: "AR@CBD-USA.COM"`,
+# so `cbd-usa.com` is real evidence that domain belongs to Complete Beverage
+# Destruction. No other Northstar vendor's gold record carries a printed email
+# address, so no other domain is added - inventing one to fill out the table
+# would be a guess wearing a table's clothes. Deliberately NOT derived by
+# munging a vendor's name into a plausible-looking domain: `acmehauling.com`
+# only coincidentally resembles Acme Hauling's canonical key, and a munge would
+# silently miss the real domain when it does not match the guess.
+DOMAIN_ALIASES: dict[str, str] = {
+    "cbd-usa.com": "complete_beverage_destruction",
+}
+
+
+def canonical_from_domain(sender_email: str | None) -> str | None:
+    """The canonical vendor key from the sender's email domain, or None.
+
+    Weaker evidence than a printed name: only consulted by
+    `resolve_vendor_fingerprint` when `canonical()` found nothing on the page.
+    """
+    if not sender_email or "@" not in sender_email:
+        return None
+    domain = sender_email.strip().rsplit("@", 1)[1].lower().rstrip(".")
+    return DOMAIN_ALIASES.get(domain)
