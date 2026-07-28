@@ -174,13 +174,53 @@ a silent gap:
 
 ## 5 · What gets unwired
 
-Hook registrations removed from both packs; **modules and their unit tests stay**.
+**Correction to an earlier draft of this section.** The derived work is not
+registered as hooks. `northstar/hooks.py:15-17` and `digitaldirection/hooks.py:4-6`
+both state that `deriveAmountPayable`, `runArithmeticCrosschecks` and
+`inferCurrency` live in **each persona's `adjust` list, run by Stage 6** —
+registering them as hooks as well would double-count every confidence boost. So
+"unwiring" is mostly a persona edit (§6), not a hook edit.
 
-| Hook | Socket | Module retained at |
-|---|---|---|
-| `deriveAmountPayable` | `afterExtraction` | `grammar/ops/derive.py` |
-| `runArithmeticCrosschecks` | `afterExtraction` | `grammar/ops/crosscheck.py` |
-| `inferCurrency` | `afterExtraction` | pack module |
+### Ops removed from persona `adjust` lists
+
+Measured across all ten personas:
+
+| Op | Occurrences | Why it goes |
+|---|---:|---|
+| `resolve_carried_balance` | 10 | Produces `carried_balance`, `DERIVED_ONLY` |
+| `derive_amount_payable` | 10 | Produces `amount_payable`, `DERIVED_ONLY` |
+| `infer_currency` | 10 | The F14 inference ladder |
+| `crosscheck_filename` | 10 | Confidence-only cross-check |
+| `crosscheck_scanline` | 5 | Same |
+| `crosscheck_balance_composition` | 4 | Same |
+| `crosscheck_total_composition` | 2 | Same |
+| `crosscheck_line_sum` | 1 | Same |
+
+### Ops that stay
+
+These normalize a value that **is** printed rather than deriving a new one:
+
+| Op | Occurrences |
+|---|---:|
+| `join_lines_comma` | 20 |
+| `normalize_date_iso` | 15 |
+| `resolve_vendor_alias` | 9 |
+| `normalize_credit_sign` | 5 |
+| `strip_internal_whitespace` | 1 |
+
+`resolve_vendor_alias` stays and becomes more load-bearing, not less: it is half of
+the §4 vendor-name path.
+
+### Hooks actually removed
+
+| Hook | Pack | Socket | Why |
+|---|---|---|---|
+| `apply_billing_conventions` | both | `afterExtraction` | Supplies `prior_balance_basis`, a derived classification |
+| `refine_prior_balance_tags` | DD | `beforeConfidenceGate` | Retags on `carried_balance`, which no longer exists |
+
+**Hooks kept:** both ladders (`classifySignals` — `doc_type` is required), both
+fingerprint resolvers (`beforePersonaLookup` — the §4 vendor path), and both
+`collect_references` registrations, since reference patterns match printed text.
 
 ### The one derived thing that stays
 
@@ -224,11 +264,16 @@ read-only and a test byte-compares all ten every run. The gold keeps recording
 that Centracom's payable is $13,752.60, so the evidence for re-enabling derivation
 stays on disk.
 
-**Scorecard.** Every derived assertion moves to a new `DEFERRED_DERIVED`
-classification carrying a written reason. GUARDRAIL 3
-(`test_scorecard_coverage.py`) requires each gold fact to be asserted *or
-explicitly classified*, so this classification is what keeps that test green
-without weakening it.
+**Scorecard.** No new classification mechanism is needed — a second correction to
+an earlier draft. `GOLD_ASSERTION_COVERAGE` (`scorecard.py:223`) already carries
+four verdict prefixes, one of which is **`deferred:<why>`** for "needs a capability
+that does not exist yet". Every derived assertion is re-verdicted to
+`deferred:printed-fields-only` with the spec path as the reason.
+
+GUARDRAIL 3 requires each gold fact to be asserted *or* explicitly classified, so
+re-verdicting keeps it green without weakening it. `CHECKED_DERIVED`
+(`scorecard.py:204`) narrows from four names to the two contract keys that survive
+§5, and `test_every_gold_derived_key_is_asserted` follows it.
 
 **Guardrails 2 and 6** (`test_f1_antiregression.py`, `test_f1_centracom_trap.py`)
 are end-to-end tests of derived behaviour. They become `skip` with the deferral
