@@ -7,12 +7,12 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        299cd71                clean tree, 37 commits
-tests       1,101 passing in ~7.8s
+HEAD        a788b55                clean tree, 39 commits
+tests       1,208 passing in ~6.9s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 42/339 assertions
+scorecard   0/10 documents green, 128/339 assertions
 ```
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
@@ -71,12 +71,18 @@ under injected failures at every stage.
 - C4 — a real `s7_gate`: four lanes, forced review, deterministic audit sampling,
   and GUARDRAIL 4. 0 rounds. Two spec errata and one real bug caught only by the
   whole-path test; see `execution/task-c4-report.md`.
+- C5a — the pack registry, the Northstar pack (7 modules), 6 authored personas,
+  and the Stage 3/4/7 wiring. 0 rounds. **42 → 128 assertions.** One grammar
+  extension, one design flaw found in C3, and three known formatting limitations;
+  see `execution/task-c5a-report.md`.
 
-**Read `execution/task-c4-report.md` before starting C5.** Its "Notes for C5"
-section carries one thing that will otherwise cost a whole round: a `draft`
-persona applies `draft_rules` (0.85) to every field and the default threshold is
-0.90, so **a draft persona can never produce a `high` lane — and seven documents
-expect one.** C5's personas must reach `active`, or must ship thresholds below 0.85.
+**Read `execution/task-c5a-report.md` before starting C5b.** Its "What is still
+failing" section is the important part: three formatting limitations account for
+most of the remaining Northstar failures, and **one of them needs a decision before
+authoring more personas** — EDCO's gold title-cases an all-caps document, and no
+§4.1 op produces title case. Either add a `title_case` op or make the scorecard
+compare non-money text fields case-insensitively. The second is probably right:
+`EDCO WASTE` and `EDCO Waste` are the same vendor.
 
 ## Next: four dispatch units
 
@@ -86,17 +92,18 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C5a** | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
-| 2 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
-| 3 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
-| 4 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
+| 1 | **C5b** | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
+| 2 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
+| 3 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
 
-Every stage is now real except Stage 4 (persona lookup) and Stage 5b (vision).
-**The remaining 297 failing assertions are essentially all waiting on personas.**
+Every stage is now real except Stage 5b (the vision adapter is still the fake).
+The six Northstar documents extract their totals, identities and line items from
+real PDFs, and the F1 trap derives 69.62 rather than 367.96.
 
-Current 42 passing: 10 `text_source`, 10 `page_roles`, 2 `doc_type`, 2
-`confidence_modifiers`, 1 `lane` (Federal Recycling, forced review), 2 U-PAK
-vacuous-and-documented, and the `review_flag` / `regen_flag` defaults.
+**Of the 211 still failing, 127 are the four Digital Direction documents (C5b) and
+most of the remaining 84 are formatting** — see C5a's report. No Northstar
+document is fully green yet; DTSS is closest at 23/24, failing only on a
+two-line vendor address that `near-anchor` cannot reach.
 
 **Optional reorder, now actionable:** hand-author ONE persona for the cleanest
 document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
@@ -108,7 +115,7 @@ much earlier signal. C2b's end-to-end test is a working template for the shape.
 Briefs are generated from the plan, not hand-written:
 
 ```bash
-python3 .superpowers/sdd/2026-07-27-pipeline-implementation/brief.py C3
+python3 .superpowers/sdd/2026-07-27-pipeline-implementation/brief.py C5
 ```
 
 If `.superpowers/` is gone (it is gitignored scratch), recreate the extractor — it is
