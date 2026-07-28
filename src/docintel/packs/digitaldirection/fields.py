@@ -55,9 +55,19 @@ _AMOUNTS: frozenset[str] = frozenset({
 })
 
 # Allocation - the product. Chargeback is per circuit / service location.
-# The unprinted vendor-identity tail (legal name, phone, email, website, parent
-# reference) is gone with it: none of those decide where a cost lands.
+# The vendor-identity tail (legal name, phone, email, website) is gone with it:
+# none of those decide where a cost lands.
+#
+# `vendor_parent_reference` is the exception, and it is registered while
+# deliberately unselected. Lumen prints `a CenturyLink company` beside its legal
+# name (F5) - literal page text, gold-labelled, and no persona has ever read it.
+# That is extraction DEBT rather than a deferral, so `scorecard.CHECKED_FIELDS`
+# keeps asserting it and it keeps failing. Registration is what makes the debt
+# payable: V1 rejects a selector targeting an unregistered field, so dropping
+# the name would have meant nobody could write the selector without first
+# undoing this file.
 _ALLOCATION: frozenset[str] = frozenset({
+    "vendor_parent_reference",
     "service_location",
     "bill_to_name",
     "bill_to_address",

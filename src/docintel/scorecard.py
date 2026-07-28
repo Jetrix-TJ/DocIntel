@@ -202,8 +202,28 @@ CHECKED_FIELDS = (
     # Measured so the gap stays visible. `tax_id` is U-PAK's H.S.T. number - the
     # F14 anchor hazard's own value - and `vendor_parent_reference` is the
     # `a CenturyLink company` clause Lumen prints beside its legal name (F5).
+    # Both are registered in their pack's FIELDS so the debt can actually be
+    # paid; neither has a selector, so both fail every run.
     "tax_id", "vendor_parent_reference",
 )
+
+# Extraction debt that belongs to ONE document rather than to a field name.
+#
+# `vendor_email` is printed and gold-labelled on two documents, and they are not
+# the same case. Lumen had a working selector (`personas/lumen.json`) right up
+# until the printed-fields-only narrowing dropped it, and its assertion was
+# PASSING - retiring that is a deferral, and it costs the numerator and the
+# denominator equally. `complete_beverage.json` never had a selector at all and
+# its assertion was FAILING, so retiring that one removed a red from the
+# denominator and raised the rate by measuring less. That is the thing the
+# three-bucket split exists to prevent, and a name-scoped bucket cannot say it:
+# putting `vendor_email` in either list is wrong for one of the two documents.
+#
+# So the failing half comes back, scoped to the document it belongs to. Keyed by
+# `gold_id`, exactly as `VACUOUS_BY_CONSTRUCTION` keys its allowances.
+CHECKED_FIELDS_BY_GOLD: dict[str, tuple[str, ...]] = {
+    "northstar-complete-beverage-32930": ("vendor_email",),
+}
 
 # Why every derived and arithmetic assertion below is deferred rather than
 # deleted. See docs/superpowers/specs/2026-07-28-printed-fields-only-design.md.
@@ -547,7 +567,8 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         Assertion("page_roles", cls["page_roles"], lambda r: r.get("page_roles"), kind="exact"),
     ]
 
-    for name in CHECKED_FIELDS:
+    checked = CHECKED_FIELDS + CHECKED_FIELDS_BY_GOLD.get(gold["gold_id"], ())
+    for name in checked:
         if fields.get(name) is not None:
             items.append(Assertion(
                 f"fields.{name}", fields[name],

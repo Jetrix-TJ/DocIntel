@@ -26,6 +26,8 @@ from docintel.core.confidence import MODIFIERS
 from docintel.scorecard import (
     CHECKED_DERIVED,
     CHECKED_FIELDS,
+    CHECKED_FIELDS_BY_GOLD,
+    DEFERRED_ARITHMETIC_MODIFIERS,
     GOLD_ASSERTION_COVERAGE,
     assertions_for,
     load_gold,
@@ -64,11 +66,24 @@ DEFERRED_DERIVED_FIELDS: frozenset[str] = frozenset({
     "prior_balance_basis",
 })
 
-# 2. Printed, and extracted by a working selector right up until the narrowing
-#    dropped them. `currency` is the odd one: Lumen printed a literal `(USD)`
-#    and had a selector for it, even though the other nine documents relied on
-#    the inference ladder. These left for deliverability, not because they are
-#    unprintable, so this is the list that shrinks when scope widens again.
+# 2. Printed, and extracted by a working selector on at least one document right
+#    up until the narrowing dropped it. These left for deliverability, not
+#    because they are unprintable, so this is the list that shrinks when scope
+#    widens again.
+#
+#    "on at least one document" is the honest wording, and the earlier "extracted
+#    by a working selector right up until the narrowing" was not. `vendor_email`
+#    is the counter-example: Lumen had a selector, `complete_beverage.json` never
+#    did, and that half was FAILING when it was retired - so it is debt and it is
+#    back in the denominator via `scorecard.CHECKED_FIELDS_BY_GOLD`.
+#
+#    `currency` needs the same care. Lumen printed a literal `(USD)` and
+#    `federal_recycling.json` had a selector too, but eight of the ten
+#    `fields.currency` passes came from `infer_currency` writing to `derived`
+#    rather than from ink - the scorecard's `_field_value` looks in `derived`
+#    when `fields` is empty, which is why they scored at all. So `currency` is
+#    only partly a printed field, and re-widening scope would recover two
+#    documents by selector and the rest only by re-enabling the F14 ladder.
 DEFERRED_PRINTED_FIELDS: frozenset[str] = frozenset({
     "billing_group",
     "currency",
@@ -94,10 +109,26 @@ DEFERRED_FIELDS: frozenset[str] = DEFERRED_DERIVED_FIELDS | DEFERRED_PRINTED_FIE
 #    decision - raising the rate by measuring less. They stay in CHECKED_FIELDS,
 #    stay failing, and this list exists to make growing it feel expensive: every
 #    name here is a field somebody should have written a selector for.
+#
+#    Both are REGISTERED in their pack's `FIELDS` and neither has a selector.
+#    That combination is the point, and getting it wrong once already made the
+#    debt unpayable: V1 rejects a selector targeting an unregistered field, so
+#    while these names were out of `FIELDS` nobody could pay the debt without
+#    first re-widening the field set. See the third assertion in
+#    `test_extraction_debt_is_measured_rather_than_deferred`.
 EXTRACTION_DEBT: frozenset[str] = frozenset({
     "tax_id",
     "vendor_parent_reference",
 })
+
+# 3b. The same debt, where it belongs to one DOCUMENT rather than to a name.
+#     `vendor_email` is a deferral on Lumen (a working selector, an assertion
+#     that was passing) and debt on Complete Beverage (no selector ever, an
+#     assertion that was failing when it was retired). Mirrors
+#     `scorecard.CHECKED_FIELDS_BY_GOLD`, which puts the failing half back.
+DOCUMENT_SCOPED_EXTRACTION_DEBT: dict[str, frozenset[str]] = {
+    "northstar-complete-beverage-32930": frozenset({"vendor_email"}),
+}
 
 # Assertions that an empty record satisfies for a legitimate reason, keyed
 # `<gold_id>:<assertion>` (or `*:<assertion>` for all documents). Every entry
@@ -193,6 +224,11 @@ def test_every_named_assertion_in_the_table_is_one_the_scorecard_emits() -> None
     # Field and derived assertions are only emitted when that gold file carries
     # the value, so the union across all ten is the right thing to check against.
     emitted |= {f"fields.{name}" for name in CHECKED_FIELDS}
+    emitted |= {
+        f"fields.{name}"
+        for names in CHECKED_FIELDS_BY_GOLD.values()
+        for name in names
+    }
     emitted |= {f"derived.{name}" for name in CHECKED_DERIVED}
 
     dangling = sorted(
@@ -271,8 +307,122 @@ def test_extraction_debt_is_measured_rather_than_deferred() -> None:
         "extraction debt must stay asserted, and therefore stay failing, until "
         "somebody writes the selector"
     )
-    # And it really is debt: no pack registers any of it.
-    assert not (EXTRACTION_DEBT & (ns.FIELDS | dd.FIELDS))
+    # Registered, selectable, and nobody has done it yet.
+    #
+    # INVERTED from `not (EXTRACTION_DEBT & (ns.FIELDS | dd.FIELDS))`, which was
+    # backwards and made the debt UNPAYABLE. These names are held out of the
+    # deferral lists precisely because they are printed, and V1 rejects a
+    # selector targeting an unregistered field — so pinning them OUT of `FIELDS`
+    # meant the only way to pay the debt was to first undo the pin. It also
+    # contradicted the design's own mechanical test, "a field is in scope if a
+    # selector can read it off the page".
+    assert EXTRACTION_DEBT <= (ns.FIELDS | dd.FIELDS), (
+        "extraction debt must be REGISTERED so a selector can target it; "
+        "un-registering it makes the debt unpayable rather than smaller"
+    )
+
+
+def test_no_persona_has_quietly_paid_the_extraction_debt() -> None:
+    """The other half of `EXTRACTION_DEBT <= FIELDS`: registered is not selected.
+
+    Registering the names re-opens the door a selector walks through, and a
+    selector appearing without this list shrinking would leave the scorecard
+    describing a gap that has been closed. Either is a diff worth arguing about;
+    neither should happen silently.
+    """
+    import glob
+    import json
+    import os
+
+    selected: dict[str, list[str]] = {}
+    pattern = os.path.join("src", "docintel", "packs", "*", "personas", "*.json")
+    paths = sorted(glob.glob(pattern))
+    assert len(paths) == 10, f"expected ten personas, found {len(paths)}"
+    for path in paths:
+        with open(path) as fh:
+            persona = json.load(fh)
+        for selector in persona.get("field_selectors") or []:
+            name = selector.get("field")
+            if name in EXTRACTION_DEBT:
+                selected.setdefault(name, []).append(os.path.basename(path))
+
+    assert not selected, (
+        f"a persona now selects extraction debt: {selected}. If the selector "
+        "works, take the name out of EXTRACTION_DEBT in the same change; the "
+        "list is only honest while every name in it is still failing."
+    )
+
+
+def test_document_scoped_extraction_debt_is_wired_and_still_failing() -> None:
+    """`vendor_email` on Complete Beverage: the assertion I2 found swept away.
+
+    Of the 77 assertions the narrowing removed from the denominator, 75 were
+    passing and 2 were failing. One of the two — edco's
+    `vendor_account_number_normalized` — is genuinely derived and leaves whatever
+    happens. This one is not: `complete_beverage.json` never had a selector for
+    `vendor_email`, so it was extraction debt being retired as a spec decision,
+    which raises the rate by measuring less.
+    """
+    assert DOCUMENT_SCOPED_EXTRACTION_DEBT == {
+        gold_id: frozenset(names)
+        for gold_id, names in CHECKED_FIELDS_BY_GOLD.items()
+    }, "the test's view of the document-scoped debt and the scorecard's disagree"
+
+    for gold_id, names in DOCUMENT_SCOPED_EXTRACTION_DEBT.items():
+        gold = next((g for g in GOLD if g["gold_id"] == gold_id), None)
+        assert gold is not None, f"{gold_id} is not a gold document"
+        emitted = {a.name for a in assertions_for(gold)}
+        for name in names:
+            assert gold["fields"].get(name) is not None, (
+                f"{gold_id} does not label {name}, so asserting it measures nothing"
+            )
+            assert name not in CHECKED_FIELDS, (
+                f"{name} is checked on every document already; scoping it to "
+                f"{gold_id} would assert it twice"
+            )
+            assert f"fields.{name}" in emitted, (
+                f"{gold_id}:fields.{name} is declared as debt but never asserted"
+            )
+
+
+# The three deferral buckets, pinned literally.
+#
+# `test_extraction_debt_is_measured_rather_than_deferred` asserts disjointness
+# and subset properties, and a reviewer demonstrated that all of them are
+# satisfied BY CONSTRUCTION by anybody who moves a name from one bucket to
+# another: the bucket shrinks at the same moment the other grows, so every
+# relation still holds. Moving `tax_id` out of the debt list left 95 relevant
+# tests green while the denominator fell from 262 to 261.
+#
+# So the contents are pinned literally, following `VACUOUS_BY_CONSTRUCTION`.
+# Growing a bucket, shrinking one, or moving a name between them is then a
+# visible diff line here that has to be argued for in a commit message.
+PINNED_DEFERRED_DERIVED_FIELDS = frozenset({
+    "account_number_normalized",
+    "carrier_canonical",
+    "currency_basis",
+    "prior_balance_basis",
+    "vendor_account_number_normalized",
+})
+PINNED_DEFERRED_PRINTED_FIELDS = frozenset({
+    "billing_group",
+    "currency",
+    "vendor_email",
+    "vendor_legal_name",
+    "vendor_phone",
+    "vendor_website",
+})
+PINNED_EXTRACTION_DEBT = frozenset({"tax_id", "vendor_parent_reference"})
+
+
+def test_the_three_buckets_have_exactly_these_contents() -> None:
+    """Re-bucketing a failure must cost a diff line, not nothing at all."""
+    assert DEFERRED_DERIVED_FIELDS == PINNED_DEFERRED_DERIVED_FIELDS
+    assert DEFERRED_PRINTED_FIELDS == PINNED_DEFERRED_PRINTED_FIELDS
+    assert EXTRACTION_DEBT == PINNED_EXTRACTION_DEBT
+    assert DOCUMENT_SCOPED_EXTRACTION_DEBT == {
+        "northstar-complete-beverage-32930": frozenset({"vendor_email"}),
+    }
 
 
 def test_the_prose_exemption_list_stays_small() -> None:
@@ -331,6 +481,56 @@ def test_the_modifier_mechanism_is_measured_somewhere() -> None:
     exactly the state C3b found."""
     names = {a.name for gold in GOLD for a in assertions_for(gold)}
     assert "confidence_modifiers" in names
+
+
+def test_the_deferred_arithmetic_modifiers_are_real_modifiers() -> None:
+    """The only deferral bucket that had no pin at all.
+
+    `DEFERRED_ARITHMETIC_MODIFIERS` subtracts from `_expected_modifiers`, so a
+    name added here removes an expectation from the numerator AND the
+    denominator — the same mechanism as a deferred field, with none of the
+    guards. A typo would remove nothing and pass silently; a real modifier added
+    by mistake would remove a live expectation and also pass silently.
+    """
+    unknown = sorted(DEFERRED_ARITHMETIC_MODIFIERS - set(MODIFIERS))
+    assert not unknown, (
+        f"{unknown} are not modifiers, so deferring them defers nothing — "
+        "check the spelling against core.confidence.MODIFIERS"
+    )
+
+
+def test_every_deferred_modifier_comes_from_an_op_this_spec_unwired() -> None:
+    """The membership rule, not just the spelling.
+
+    A modifier may be deferred here only because the printed-fields-only
+    narrowing unwired the op that emits it. Both of those ops live in
+    `grammar/ops/`, and their code stays in the tree — so "which ops emit this
+    name" is a question the source can answer, and the answer must be the two
+    deferred files rather than, say, a stage that still runs.
+    """
+    import pathlib
+
+    root = pathlib.Path("src") / "docintel"
+    deferred_sources = {
+        root / "grammar" / "ops" / "crosscheck.py",
+        root / "grammar" / "ops" / "derive.py",
+    }
+    for path in deferred_sources:
+        assert path.exists(), f"{path} was deleted; deferral means kept, not removed"
+
+    for name in sorted(DEFERRED_ARITHMETIC_MODIFIERS):
+        emitters = {
+            path
+            for path in root.rglob("*.py")
+            for call in (f'add_modifier("{name}")', f'add_field_modifier(field, "{name}")')
+            if call in path.read_text()
+        }
+        assert emitters, f"nothing emits {name}; it cannot be deferred from anywhere"
+        stray = sorted(str(p) for p in emitters - deferred_sources)
+        assert not stray, (
+            f"{name} is also emitted from {stray}, which this spec did not "
+            "unwire — deferring it there hides a live capability"
+        )
 
 
 def test_modifier_expectations_only_name_real_modifiers() -> None:
@@ -402,7 +602,12 @@ def test_upak_has_no_document_specific_vacuous_allowance() -> None:
     assertions, and the arithmetic modifier that was their non-vacuous gate. With
     nothing left to forgive, the allowances went too, and U-PAK is now covered by
     the general `test_no_assertion_passes_vacuously_on_an_empty_record` with no
-    exceptions at all — strictly stronger than what it had.
+    DOCUMENT-SPECIFIC exceptions — strictly stronger than what it had.
+
+    Not "no exceptions at all", which an earlier version of this docstring
+    claimed and which is false: the `*:review_flag` and `*:regen_flag` wildcards
+    in `VACUOUS_BY_CONSTRUCTION` still apply to U-PAK exactly as they apply to
+    every other document.
 
     The invariant worth keeping is that the free passes do not creep back under
     another name.

@@ -20,11 +20,21 @@ from __future__ import annotations
 
 # Printed identity. `vendor_name` is registered but never required - see
 # REQUIRED_ANY_OF's absence of it and hooks.resolve_vendor_fingerprint.
+#
+# `tax_id` is registered and deliberately unselected. U-PAK prints an H.S.T.
+# number (`123142812RT0001`) which gold labels and no persona has ever read - it
+# is the F14 anchor hazard's own value, since `H.S.T.` is also what tells the
+# currency ladder the invoice is Canadian. That is extraction DEBT, not a
+# deferral, so `scorecard.CHECKED_FIELDS` keeps asserting it and it keeps
+# failing. Registration is what makes the debt payable: V1 rejects a selector
+# targeting an unregistered field, so dropping the name here would have meant
+# nobody could write the selector without first undoing this file.
 _IDENTITY: frozenset[str] = frozenset({
     "vendor_name",
     "invoice_number",
     "invoice_date",
     "bill_date",
+    "tax_id",
 })
 
 # Amounts exactly as printed. No derivation: `amount_payable` and
