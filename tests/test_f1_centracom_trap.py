@@ -31,6 +31,12 @@ import pytest
 from docintel.adapters.vision.fake import FakeVision
 from docintel.pipeline.stages import build_pipeline
 
+pytestmark = pytest.mark.skip(
+    reason="printed-fields-only: derive_amount_payable is deferred, not deleted. "
+    "See docs/superpowers/specs/2026-07-28-printed-fields-only-design.md. "
+    "Re-enable this guardrail in the same change that re-registers the op."
+)
+
 GOLD_PATH = os.path.join(
     "docs", "corpus", "gold", "digitaldirection-centracom-0384043574.json"
 )

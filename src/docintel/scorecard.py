@@ -201,7 +201,27 @@ CHECKED_FIELDS = (
     "tax_id",
 )
 
-CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "identity_basis")
+# Why every derived and arithmetic assertion below is deferred rather than
+# deleted. See docs/superpowers/specs/2026-07-28-printed-fields-only-design.md.
+# The gold files still record the derived answers, so re-enabling is a wiring
+# change and not a re-labelling project.
+DEFERRED_REASON = "deferred:printed-fields-only"
+
+# `amount_payable` and `payable_basis` left with the printed-fields-only
+# narrowing. These two stay because core/contract.py requires their PRESENCE on
+# every processed record - they are provenance, not a claim about what the
+# document printed.
+CHECKED_DERIVED = ("document_identity", "identity_basis")
+
+# Confidence modifiers reporting an arithmetic cross-check. Each one is the ONLY
+# observable of a closure the printed-fields-only narrowing defers, so expecting
+# them would assert a capability that is on its way out. `filename_disagree` is
+# deliberately absent: it compares a printed invoice number against the
+# attachment name and is not arithmetic.
+DEFERRED_ARITHMETIC_MODIFIERS: frozenset[str] = frozenset({
+    "arith_balance_mismatch", "arith_lines_mismatch", "arith_total_mismatch",
+    "scanline_mismatch",
+})
 
 # Every `check` name appearing in any gold file's `assertions` array, and what
 # this scorecard does about it. 55 names, 68 entries.
@@ -222,20 +242,30 @@ CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "iden
 #   deferred:<why>   needs a capability that does not exist yet.
 GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # -- the payable, and the arithmetic behind it (F1, F1b, F8) -------------
-    "amount_payable": "covered:derived.amount_payable",
-    "amount_payable_is_null": "covered:derived.amount_payable",
-    "payable_basis": "covered:derived.payable_basis",
-    "payable_mismatch": "covered:derived.amount_payable",
-    "payable_composition": "wired:arithmetic.balance_closed",
-    "balance_composition": "wired:arithmetic.balance_closed",
-    "prior_balance_found_and_cleared": "wired:arithmetic.balance_closed",
-    "total_composition": "wired:arithmetic.total_closed",
-    "current_charges_composition": "wired:arithmetic.total_closed",
-    "new_charges_composition": "wired:arithmetic.total_closed",
-    "line_sum": "wired:arithmetic.lines_closed",
-    "line_extended": "wired:arithmetic.lines_closed",
-    "arith_balance_mismatch_applied": "wired:confidence_modifiers",
-    "prior_balance_is_net": "covered:fields.prior_balance_basis",
+    # Every entry down to `prior_balance_is_net` asserts a DERIVED value or an
+    # arithmetic closure, so all of them are deferred together. The gold files
+    # still record the answers; only the expectation is retired.
+    "amount_payable": DEFERRED_REASON,
+    "amount_payable_is_null": DEFERRED_REASON,
+    "payable_basis": DEFERRED_REASON,
+    "payable_mismatch": DEFERRED_REASON,
+    "payable_composition": DEFERRED_REASON,
+    "balance_composition": DEFERRED_REASON,
+    "prior_balance_found_and_cleared": DEFERRED_REASON,
+    "total_composition": DEFERRED_REASON,
+    "current_charges_composition": DEFERRED_REASON,
+    "new_charges_composition": DEFERRED_REASON,
+    "line_sum": DEFERRED_REASON,
+    "line_extended": DEFERRED_REASON,
+    "arith_balance_mismatch_applied": DEFERRED_REASON,
+    # `prior_balance_basis` is a derived CLASSIFICATION of which label supplied
+    # the balance (design section 2), supplied by the `apply_billing_conventions`
+    # hook that section 5 unwires. The verdict is retired here; the
+    # `fields.prior_balance_basis` assertion itself goes with the FIELDS
+    # narrowing, because CHECKED_FIELDS is not this change's to touch.
+    "prior_balance_is_net": DEFERRED_REASON,
+    # Printed, and staying: `prior_balance` is ink on the page even though the
+    # gold check name describes how the labeller reasoned about it.
     "prior_balance_derivation": "covered:fields.prior_balance",
     "amount_previously_due_is_zero": "covered:fields.amount_previously_due",
     "discount_is_one_percent": "covered:fields.discount_amount",
@@ -266,8 +296,13 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "hst_anchor_hazard": "covered:fields.tax_id",
 
     # -- the scan line (F7) -------------------------------------------------
-    "scanline_agrees_with_printed_total": "wired:arithmetic.scanline_agrees",
-    "scanline_three_way": "wired:arithmetic.scanline_agrees",
+    # Beyond the deferral list the design spelled out, and by the same test: both
+    # of these asserted `arithmetic.scanline_agrees`, a closure between the scan
+    # line and the printed total. The scan line's own digit run IS printed and
+    # stays asserted as `scanline.raw`; only the agreement between it and the
+    # total is arithmetic.
+    "scanline_agrees_with_printed_total": DEFERRED_REASON,
+    "scanline_three_way": DEFERRED_REASON,
 
     # -- tables and rows (F15, F19) -----------------------------------------
     "empty_amount_cell_not_a_failure": "covered:line_items.amounts",
@@ -423,6 +458,13 @@ def _expected_modifiers(gold: dict[str, Any]) -> list[str]:
     `handwritten_supporting` deliberately implies nothing: section 5's
     `handwriting_detected` is about handwriting on a *primary* page, and that tag
     says the opposite.
+
+    `DEFERRED_ARITHMETIC_MODIFIERS` are filtered out by the printed-fields-only
+    narrowing. A cross-check modifier is the sole observable of an arithmetic
+    closure, so expecting one asserts a capability the narrowing defers. This
+    removes exactly one expectation - U-PAK's `arith_balance_mismatch`, which was
+    its whole modifier set. The mechanism itself is still measured on the two OCR
+    documents, so `test_the_modifier_mechanism_is_measured_somewhere` still bites.
     """
     cls = gold["classification"]
     tags = set(cls.get("tags", []))
@@ -438,61 +480,23 @@ def _expected_modifiers(gold: dict[str, Any]) -> list[str]:
         if check.endswith("_applied") and entry.get("equals") is True:
             expected.add(check[: -len("_applied")])
 
-    return sorted(expected & set(MODIFIERS))
+    return sorted(expected & set(MODIFIERS) - DEFERRED_ARITHMETIC_MODIFIERS)
 
 
-def _closure_assertions(gold: dict[str, Any]) -> list[Assertion]:
-    """Composite "the arithmetic ran and closed" assertions.
-
-    Each gold `*_composition` / `line_sum` / `scanline_agrees_*` entry documents
-    arithmetic whose components are already asserted individually. What was NOT
-    observable is whether the pipeline *checked* it: the cross-check ops report a
-    modifier, and nothing asserted modifiers.
-
-    These are deliberately **composite** - "the enabling value exists AND no
-    mismatch modifier was applied" - rather than a bare "modifier is absent". A
-    bare absence check passes trivially on a pipeline that computed nothing,
-    which would have added eight free passes to the numerator and made the score
-    read better while measuring nothing. Paired this way each one fails until the
-    op genuinely runs and closes.
-    """
-    checks = {str(a.get("check")) for a in (gold.get("assertions") or [])}
-    items: list[Assertion] = []
-
-    if "balance_composition" in checks:
-        items.append(Assertion(
-            "arithmetic.balance_closed", True,
-            lambda r: (
-                r.get("derived", {}).get("amount_payable") is not None
-                and "arith_balance_mismatch" not in r.get("confidence_modifiers", [])
-            ),
-        ))
-    if {"total_composition", "current_charges_composition",
-            "new_charges_composition"} & checks:
-        items.append(Assertion(
-            "arithmetic.total_closed", True,
-            lambda r: (
-                _field_value(r, "total_printed") is not None
-                and "arith_total_mismatch" not in r.get("confidence_modifiers", [])
-            ),
-        ))
-    if {"line_sum", "line_extended"} & checks:
-        items.append(Assertion(
-            "arithmetic.lines_closed", True,
-            lambda r: (
-                bool(r.get("line_items"))
-                and "arith_lines_mismatch" not in r.get("confidence_modifiers", [])
-            ),
-        ))
-    if any(c.startswith("scanline_agrees") for c in checks):
-        items.append(Assertion(
-            "arithmetic.scanline_agrees", True,
-            lambda r: (
-                r.get("scanline") is not None
-                and "scanline_mismatch" not in r.get("confidence_modifiers", [])
-            ),
-        ))
-    return items
+# `_closure_assertions` lived here and emitted four composite "the arithmetic ran
+# and closed" checks - `arithmetic.balance_closed`, `.total_closed`,
+# `.lines_closed`, `.scanline_agrees` - one per family of gold `*_composition` /
+# `line_sum` / `scanline_agrees_*` entry. Each paired "the enabling value exists"
+# with "no mismatch modifier was applied", deliberately composite so that a
+# pipeline which computed nothing could not collect a free pass.
+#
+# All four are retired by the printed-fields-only narrowing: an arithmetic
+# closure is by definition not a value printed on the page, and the cross-check
+# ops that produce their only observable are unwired by section 5 of
+# docs/superpowers/specs/2026-07-28-printed-fields-only-design.md. The ops and
+# their unit tests stay in the tree (grammar/ops/crosscheck.py), so re-enabling
+# is `git revert` plus re-registering the ops - the composite pairing above is
+# the part worth restoring verbatim.
 
 
 def _assertion_equals(gold: dict[str, Any], *checks: str) -> Any:
@@ -617,9 +621,6 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
             "confidence_modifiers", expected_modifiers,
             lambda r: r.get("confidence_modifiers", []), kind="superset",
         ))
-
-    # Composite "the arithmetic ran and closed" checks - see _closure_assertions.
-    items.extend(_closure_assertions(gold))
 
     # Two derived values that exist only inside the gold `assertions` array, so
     # the derived loop above cannot see them.

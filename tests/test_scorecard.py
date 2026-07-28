@@ -56,12 +56,29 @@ def test_money_assertions_compare_by_value_not_by_string():
     assert matches(33876.4, "33876.40", kind="exact") is False
 
 
-def test_centracom_assertions_include_the_trap():
+def test_the_centracom_trap_is_deferred_rather_than_silently_dropped():
+    """The trap this used to assert, and where it went.
+
+    Centracom prints 33,876.40 and owes 13,752.60, so the scorecard asserted the
+    derived payable: collapsing the derivation into "read the total" showed up as
+    a score drop. The printed-fields-only narrowing retires that expectation,
+    which makes the guard two-sided — the assertions must be gone, AND the gold
+    facts behind them must still be classified as deferred rather than forgotten.
+    """
+    from docintel.scorecard import DEFERRED_REASON, GOLD_ASSERTION_COVERAGE
+
     card = replay_gold(runner_factory=_factory)
     doc = next(d for d in card["documents"] if "centracom" in d["gold_id"])
     names = {a["name"] for a in doc["assertions"]}
-    assert "derived.amount_payable" in names
-    assert "derived.payable_basis" in names
+    assert "derived.amount_payable" not in names
+    assert "derived.payable_basis" not in names
+
+    for check in ("amount_payable", "payable_basis", "payable_mismatch",
+                  "balance_composition"):
+        assert GOLD_ASSERTION_COVERAGE[check] == DEFERRED_REASON, (
+            f"{check} lost its deferral verdict — the gold answer is on disk but "
+            "nothing in the table points at it any more"
+        )
 
 
 def test_replay_never_mutates_gold():
