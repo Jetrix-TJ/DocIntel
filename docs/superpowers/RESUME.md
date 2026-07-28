@@ -7,12 +7,12 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        a788b55                clean tree, 39 commits
-tests       1,208 passing in ~6.9s
+HEAD        063254f                clean tree, 42 commits
+tests       1,242 passing in ~7.2s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 128/339 assertions
+scorecard   0/10 documents green, 211/339 assertions
 ```
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
@@ -75,14 +75,21 @@ under injected failures at every stage.
   and the Stage 3/4/7 wiring. 0 rounds. **42 → 128 assertions.** One grammar
   extension, one design flaw found in C3, and three known formatting limitations;
   see `execution/task-c5a-report.md`.
+- C5b — the Digital Direction pack, 4 carrier personas, the claim-gating fix, and
+  GUARDRAIL 6. 0 rounds. **130 → 211 assertions**, and Centracom's $20,123.80 trap
+  now derives correctly; see `execution/task-c5b-report.md`.
 
-**Read `execution/task-c5a-report.md` before starting C5b.** Its "What is still
-failing" section is the important part: three formatting limitations account for
-most of the remaining Northstar failures, and **one of them needs a decision before
-authoring more personas** — EDCO's gold title-cases an all-caps document, and no
-§4.1 op produces title case. Either add a `title_case` op or make the scorecard
-compare non-money text fields case-insensitively. The second is probably right:
-`EDCO WASTE` and `EDCO Waste` are the same vendor.
+**Read `execution/task-c5b-report.md`'s "What is still failing" before continuing.**
+The remaining 128 failures are dominated by **addresses and vendor names**, not
+extraction logic. One change would close most of the address failures: a region
+between `near-anchor` and `header-block` — call it `label-block`, the anchor's own
+column from the anchor line down to the next blank line. Two vendor names
+(Lumen's logo, Windstream's `Windstre am`) are not in the text layer at all and
+cannot be captured by any pattern.
+
+The title-case question C5a raised **is decided and shipped**: the scorecard now
+compares transcribed text case-insensitively (`kind="text"`). A `title_case` op
+was rejected because it would be actively wrong — `LLC` → `Llc`, `OCC` → `Occ`.
 
 ## Next: four dispatch units
 
@@ -92,18 +99,19 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C5b** | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
-| 2 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
-| 3 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
+| 1 | **persona polish** *(new)* | a `label-block` region + address/vendor selectors | 100–200 | most of the remaining 128 |
+| 2 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | — |
+| 3 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | fast lane |
 
 Every stage is now real except Stage 5b (the vision adapter is still the fake).
-The six Northstar documents extract their totals, identities and line items from
-real PDFs, and the F1 trap derives 69.62 rather than 367.96.
+**Both F1 traps derive correctly on the real PDFs** — EDCO 69.62 rather than
+367.96, and Centracom 13,752.60 rather than 33,876.40, the latter against a
+scan line that encodes the trap value.
 
-**Of the 211 still failing, 127 are the four Digital Direction documents (C5b) and
-most of the remaining 84 are formatting** — see C5a's report. No Northstar
-document is fully green yet; DTSS is closest at 23/24, failing only on a
-two-line vendor address that `near-anchor` cannot reach.
+**Of the 128 still failing, the large majority are addresses and vendor names.**
+No document is fully green; DTSS is closest at 23/24, failing only on a two-line
+vendor address. Neither C6 nor C7 is on the critical path for the score — the
+next real gain is persona polish.
 
 **Optional reorder, now actionable:** hand-author ONE persona for the cleanest
 document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
@@ -156,13 +164,19 @@ ledger → commit.
    test was asserting the opposite of its own docstring. A test that passes for the wrong
    reason is worse than a missing test: it reports coverage it does not have. Recompute
    fixture arithmetic by hand rather than trusting the comment next to it.
-8. **An assertion that passes on an empty record is a free pass, not coverage.**
+8. **A second pack can silently break the first.** Every hook in a `HookRegistry`
+   runs on every document, so Digital Direction's ladder overwrote Northstar's
+   `doc_type` and all six Northstar persona lookups missed by key. DTSS dropped
+   from 23 passing assertions to 4 and **nothing failed** — only the scorecard
+   noticed. Pack hooks are gated on the claim in `packs/registry.py`, not in each
+   pack, because a pack that forgot the guard would break a *different* pack.
+9. **An assertion that passes on an empty record is a free pass, not coverage.**
    C3b found 2 of the then-39 passing assertions were satisfied by a pipeline that
    computed nothing. Prefer a composite ("the value exists AND no mismatch was
    flagged") over a bare absence check; where a vacuous pass is genuinely correct,
    key it into `VACUOUS_BY_CONSTRUCTION` with a written reason and a mitigation
    test. GUARDRAIL 3 enforces this.
-9. **A cluster that adds a pipeline capability must finish with one whole-path test.**
+10. **A cluster that adds a pipeline capability must finish with one whole-path test.**
    C2b's worst defect — `line_items` swallowing the totals block and remittance stub that
    sit below *every* invoice table — passed all 42 unit tests and was caught only by the
    end-to-end test that ran a real validated persona through Stage 5a into a validated
