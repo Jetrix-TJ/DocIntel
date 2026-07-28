@@ -7,21 +7,23 @@ needed to pick up is in git. Nothing is half-committed.
 
 ```
 branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-HEAD        835c9e8                clean tree, 33 commits
-tests       994 passing in ~7.9s
+HEAD        e40a1f9                clean tree, 35 commits
+tests       1,061 passing in ~8.2s
 mypy        python3 -m mypy        -> 0 errors (covers core/ and grammar/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   0/10 documents green, 39/252 assertions
+scorecard   0/10 documents green, 41/339 assertions
 ```
 
-**The 10/10 caveat is PARTLY back — read this before trusting the score.** C2b
-discharged it for the four contract keys. C3 then found a second, separate gap:
-every gold file carries an `assertions` array (68 entries, 37 machine-checkable)
-that the scorecard **never reads**, and `confidence_modifiers` is not asserted at
-all — the whole of spec §5, 16 modifiers, unmeasured. Nothing would notice if
-`arith_balance_mismatch` stopped being applied. See finding 2 in
-`execution/task-c3-report.md`. **A small C3b is recommended before C4.**
+**The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
+contract keys; C3b closed it for the confidence modifiers, 29 unasserted gold
+fields and the `lane`. 339 is the honest denominator.
+
+`tests/test_scorecard_coverage.py` (**GUARDRAIL 3**) now makes this mechanical
+rather than something to remember: every gold fact must be asserted or explicitly
+classified, and **no assertion may pass against an empty record.** Adding a gold
+file fails that test until someone classifies it. Standing rule 3 had been
+violated five times before it existed.
 
 Verify all of that in one go:
 
@@ -64,13 +66,15 @@ under injected failures at every stage.
   `s6_capture`, the identity contract requirement, `test_f1_antiregression.py`,
   +10 `lane` assertions. 0 rounds. One spec correction and two measurement
   findings; see `execution/task-c3-report.md`.
+- C3b — scorecard coverage (+87 assertions) and GUARDRAIL 3. 0 rounds. Corrects my
+  own C3 finding in both directions; see `execution/task-c3b-report.md`.
 
 **Read `execution/task-c3-report.md` before starting C4.** Its "Notes for C4"
 section covers the `lane` scoreboard, the `flattened_annotations` forced-review
 wiring still owed, and that `ctx.review_flag` is already set by three C3 ops — the
 gate may raise it but must never clear it.
 
-## Next: five dispatch units, plus a recommended C3b
+## Next: five dispatch units
 
 Sizes are calibrated against C1a (458 src lines / 6 files), C1b (568 / 6),
 C2a (1,150 / 4) and C2b (760 / 5). Both C2 estimates ran ~30–60% over, almost
@@ -78,18 +82,21 @@ entirely in test lines, so treat the numbers below as floors.
 
 | # | Cluster | Delivers | Est. src | Score after |
 |---|---|---|--:|---|
-| 1 | **C3b** *(new, recommended)* | wire the 37 machine-checkable gold `assertions` + a `confidence_modifiers` assertion | 150–250 | 0/10, bigger denominator |
-| 2 | C4 | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | `lane` + routing |
-| 3 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
-| 4 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
-| 5 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
-| 6 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
+| 1 | **C4** | real `s7_gate` + wire `has_flattened_annotations` to forced review | 150–200 | `lane` + routing |
+| 2 | C5a | pack registry + 6 Northstar modules + 6 persona JSON | 600–800 | most Northstar |
+| 3 | C5b | 6 Digital Direction modules + 2 persona JSON | 500–700 | ~8/10 |
+| 4 | C6 | Anthropic vision adapter + cassettes + real `s5b` | 300–400 | 10/10 target |
+| 5 | C7 | SQLite persona store + real `s4`/`s5c` | 400–500 | 10/10, fast lane |
 
-All the extraction and derivation infrastructure is in place. **Nothing can move
-the score until C5 authors personas** — every C3 op runs only when a persona
-declares it, which is why C3 scored zero and the plan's "some `derived.*`" was
-optimistic. C3b and C4 make the denominator honest and the routing real; C5 is
-where the numerator finally moves.
+All the extraction and derivation infrastructure is in place, and the scorecard
+now measures it. **Nothing more can move the score until C5 authors personas** —
+every C3 op runs only when a persona declares it, which is why C3 scored zero and
+the plan's "some `derived.*`" was optimistic. C4 makes the routing real (its
+scoreboard is the 10 failing `lane` assertions); C5 is where the numerator moves.
+
+Current 41 passing breaks down as: 10 `doc_type`, 10 `text_source`, 10
+`page_roles`, 2 `confidence_modifiers`, 2 U-PAK vacuous (documented), and the
+`review_flag`/`regen_flag` defaults.
 
 **Optional reorder, now actionable:** hand-author ONE persona for the cleanest
 document (D.T.S.S. — one page, three line items, no prior balance) to prove the whole
@@ -142,7 +149,13 @@ ledger → commit.
    test was asserting the opposite of its own docstring. A test that passes for the wrong
    reason is worse than a missing test: it reports coverage it does not have. Recompute
    fixture arithmetic by hand rather than trusting the comment next to it.
-8. **A cluster that adds a pipeline capability must finish with one whole-path test.**
+8. **An assertion that passes on an empty record is a free pass, not coverage.**
+   C3b found 2 of the then-39 passing assertions were satisfied by a pipeline that
+   computed nothing. Prefer a composite ("the value exists AND no mismatch was
+   flagged") over a bare absence check; where a vacuous pass is genuinely correct,
+   key it into `VACUOUS_BY_CONSTRUCTION` with a written reason and a mitigation
+   test. GUARDRAIL 3 enforces this.
+9. **A cluster that adds a pipeline capability must finish with one whole-path test.**
    C2b's worst defect — `line_items` swallowing the totals block and remittance stub that
    sit below *every* invoice table — passed all 42 unit tests and was caught only by the
    end-to-end test that ran a real validated persona through Stage 5a into a validated
