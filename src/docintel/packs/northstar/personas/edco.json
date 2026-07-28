@@ -3,7 +3,7 @@
   "status": "active",
   "sender_fingerprint": "northstar|edco",
   "doc_type": "standard_invoice",
-  "notes": "THE F1 TRAP. 367.96 is printed in the largest box on the page; the payable is 69.62. prior_balance_basis comes from the pack's billing-convention table, not from the page - EDCO prints no payment line at all.",
+  "notes": "THE F1 TRAP. 367.96 is printed in the largest box on the page; the payable is 69.62. Under printed-fields-only this persona emits the printed 367.96 and says nothing about the 69.62 - the gap is downstream's to catch. prior_balance_basis WOULD come from the pack's billing-convention table rather than the page (EDCO prints no payment line at all), but apply_billing_conventions is registered at no socket, so nothing supplies it today; conventions.py is kept on disk for the wiring change that brings it back. The scanline block below is inert for the same reason: its only consumer, crosscheck_scanline, is in no adjust list.",
   "field_selectors": [
     {
       "field": "vendor_name",

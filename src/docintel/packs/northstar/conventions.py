@@ -1,5 +1,11 @@
 """Per-vendor billing conventions — facts about the VENDOR, not the document.
 
+**DEFERRED (printed-fields-only): nothing calls this.** `apply_billing_conventions`
+is registered at no socket in either pack, so every present-tense statement below
+describes what this module WOULD do, not what the pipeline does. Kept on disk
+because re-enabling is a wiring change; see
+`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5.
+
 One entry so far, and it is the F1b keystone.
 
 `prior_balance_basis` decides what a printed prior balance *means*, and the two

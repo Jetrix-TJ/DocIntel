@@ -1,5 +1,15 @@
 """Per-carrier billing conventions — the F1b keystone for this pack.
 
+**DEFERRED (printed-fields-only): nothing calls this.** `apply_billing_conventions`
+is registered at no socket in either pack, so every present-tense statement below
+describes what this module WOULD do, not what the pipeline does. Kept on disk
+because re-enabling is a wiring change; see
+`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5.
+
+Note that `ladder.retag_prior_balance` is NOT in the same state: it was
+unregistered alongside this and has been re-wired against printed amounts, so the
+prior-balance TAG pair is live again even though `prior_balance_basis` is not.
+
 `prior_balance_basis` decides what a printed prior balance *means*, and the pack
 spec's section 7 table makes the split explicit:
 

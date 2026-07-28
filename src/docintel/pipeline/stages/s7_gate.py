@@ -25,10 +25,22 @@ gives 0.90 x 0.60 = 0.54 on every field, and its gold expects `medium`. So `low`
 additionally requires most fields to be below `VERY_LOW_FLOOR` — genuinely
 collapsed, not merely penalized.
 
-**The gate may raise `review_flag` but never clears it.** Three C3 ops set it
-before this stage runs (`derive_amount_payable` on each of its three refusals,
-`crosscheck_balance_composition`, `crosscheck_duplicate_anchor`), and each one is
-a reason a human was supposed to look.
+**The gate may raise `review_flag` but never clears it.** That is a property of
+this stage and still holds — but the ops that used to raise it upstream do not
+run today.
+
+**DEFERRED (printed-fields-only): nothing sets `review_flag` before this stage.**
+`derive_amount_payable` (on each of its three refusals) and
+`crosscheck_balance_composition` are in no persona's `adjust` list any more.
+`crosscheck_duplicate_anchor` never was, even at baseline — an earlier version of
+this docstring named all three as live and was wrong about that one twice over.
+Their implementations stay in the tree; see
+`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5.
+
+The same deferral makes `arith_balance_mismatch` in `FORCING_MODIFIERS` below
+declared-but-unreachable. Left in place deliberately: the entry is the
+specification of what forces review, and it is correct — nothing emits the
+modifier today.
 """
 
 from __future__ import annotations
