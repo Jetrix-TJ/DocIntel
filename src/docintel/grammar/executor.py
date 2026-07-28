@@ -1,0 +1,489 @@
+"""Run a validated persona's selectors against a document's pages.
+
+This is the whole of Stage 5a: no AI calls, only the closed grammar applied to
+normalized page text. What it deliberately does **not** do is as important as
+what it does, because each of these would be the executor quietly taking over
+another stage's job:
+
+* **It does not apply `adjust` ops.** Section 4 says ops run at Stage 6, in
+  declaration order. `s6_capture` reads them straight off `ctx.persona`, so
+  there is no need for an intermediate "pending ops" structure and no chance of
+  one drifting out of sync with the persona that produced it.
+* **It does not compute confidence.** It records a `match_quality` per field and
+  appends modifier *names* to `ctx.modifiers`. Turning those into a number is
+  Stage 6's single responsibility (`core.confidence`).
+* **It does not enforce `required`.** A missing required field is a miss. Pricing
+  it is Stage 6, routing it is Stage 7. Raising here would turn an ordinary,
+  reviewable gap into a pipeline error.
+
+**It does apply the section 7 page-role rule**, which `regions.py` deliberately
+does not: field values never come off a `supporting` page. The role map is built
+from `ctx.page_meta` and is **fail-closed** - a page with no role entry counts as
+supporting, so a pipeline that skipped role assignment extracts nothing visible
+rather than silently reading totals off a handwritten Bill of Lading (F10). A
+loud empty result is recoverable; a confident wrong one is not.
+
+The scan line is the documented exception: it is scoring-only, so section 7 does
+not apply to it, and must not - the remittance stub of a multi-page bill
+routinely lands on a continuation page that is legitimately `supporting`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
+from time import perf_counter
+from typing import Any
+
+from docintel.core.models import JobContext, PageText, Word
+from docintel.extract import scanline as scanline_mod
+from docintel.grammar import patterns, regions
+from docintel.grammar.regions import Anchor, Span
+from docintel.grammar.schema import (
+    FieldSelector,
+    Persona,
+    RowGroupSelector,
+    ScanlineSelector,
+    SubGroup,
+)
+
+# Section 3.2's hard 50ms budget per field per document.
+PATTERN_BUDGET_SECONDS = 0.050
+
+# match_quality, the base Stage 6 applies modifiers to. An anchored hit is the
+# strongest evidence the grammar can produce; a region-only hit is weaker
+# because nothing on the page confirmed what the value is *labelled* as.
+QUALITY_ANCHORED = 1.0
+QUALITY_ANCHOR_ALT = 0.95
+QUALITY_REGION_ONLY = 0.90
+
+# Where a table ends. The `line_items` region runs from the header row to the
+# foot of the page, because nothing in the page geometry says where a table
+# stops - so the executor has to decide, and it decides on vertical rhythm: a
+# gap much larger than the established row pitch is a structural break.
+#
+# This is not a corner case. Every invoice in the corpus prints a totals block
+# below its line-item table, and five also print a remittance stub below that.
+# Without a break rule the first row group would swallow both on every document,
+# so `line_items` would contain the total as an extra row and the whole F8
+# closure check would be meaningless.
+TABLE_BREAK_FACTOR = 2.5   # multiples of the established row pitch
+TABLE_BREAK_FLOOR = 24.0   # points; keeps a tight-leaded table from breaking early
+
+
+
+@dataclass(frozen=True)
+class AnchorMatch:
+    """One occurrence of an anchor phrase, and the words that spelled it."""
+
+    page_number: int
+    words: tuple[Word, ...]
+
+    def as_anchor(self) -> Anchor:
+        return Anchor(word=self.words[0], page_number=self.page_number)
+
+
+def _norm(text: str) -> str:
+    """Compare anchors case-insensitively, whitespace-collapsed, colon-agnostic.
+
+    The trailing colon is dropped from both sides because a printed label is
+    written `CURRENT CHARGES:` on one document and `Current Charges` on the
+    next, and a persona should not need two `anchor_alts` to survive
+    punctuation. Everything else is compared strictly: an anchor that matched on
+    a substring would find `TOTAL` inside `SUBTOTAL`.
+    """
+    return " ".join(text.split()).upper().rstrip(":")
+
+
+def _runs(line: Sequence[Word], needle: str) -> list[tuple[Word, ...]]:
+    """Every contiguous word run on `line` whose joined text equals `needle`.
+
+    Shared by anchor lookup and column-header location, which are the same
+    operation asked twice: find the words that spell a known phrase. The length
+    guard only ever ends the *inner* scan - an earlier draft let it end the
+    outer one too, which silently abandoned the search after the first header
+    and put every cell of every row into the leftmost column.
+    """
+    upper = [w.text.upper() for w in line]
+    found: list[tuple[Word, ...]] = []
+    for start in range(len(line)):
+        acc = ""
+        for end in range(start, len(line)):
+            acc = upper[start] if end == start else f"{acc} {upper[end]}"
+            if _norm(acc) == needle:
+                found.append(tuple(line[start : end + 1]))
+                break
+            if len(acc) > len(needle) + 1:
+                break
+    return found
+
+
+def _cells(words: Sequence[Word]) -> list[list[Word]]:
+    """Split a line into cells at any gap wider than a column's worth."""
+    out: list[list[Word]] = []
+    for w in words:
+        if out and w.x0 - out[-1][-1].x1 <= regions.CELL_GAP:
+            out[-1].append(w)
+        else:
+            out.append([w])
+    return out
+
+
+class Executor:
+    """Applies one persona to one document."""
+
+    def __init__(self, persona: Persona) -> None:
+        self.persona = persona
+        self._budget_seconds = PATTERN_BUDGET_SECONDS
+
+    # -- public ------------------------------------------------------------
+
+    def apply(self, ctx: JobContext) -> JobContext:
+        """Extract everything this persona describes. Mutates and returns `ctx`.
+
+        The same context object comes back out: the pipeline threads one mutable
+        JobContext through all eight stages, and a clone here would silently
+        drop whatever an earlier stage had recorded on it.
+        """
+        for selector in self.persona.field_selectors:
+            if isinstance(selector, ScanlineSelector):
+                self._apply_scanline(ctx, selector)
+            elif isinstance(selector, RowGroupSelector):
+                self._apply_row_group(ctx, selector)
+            else:
+                self._apply_field(ctx, selector)
+        return ctx
+
+    # -- page roles --------------------------------------------------------
+
+    def _role(self, ctx: JobContext, page_number: int) -> str:
+        """Fail-closed: no role entry means `supporting`, never `primary`."""
+        for meta in ctx.page_meta:
+            if meta.page_number == page_number:
+                return meta.role
+        return "supporting"
+
+    def _page(self, ctx: JobContext, page_number: int) -> PageText | None:
+        for page in ctx.pages:
+            if page.page_number == page_number:
+                return page
+        return None
+
+    # -- anchors -----------------------------------------------------------
+
+    def _find_anchors(
+        self, ctx: JobContext, phrase: str, primary_only: bool = True
+    ) -> list[AnchorMatch]:
+        """Every occurrence of `phrase` as a contiguous word run on one line."""
+        needle = _norm(phrase)
+        if not needle:
+            return []
+        found: list[AnchorMatch] = []
+        for page in ctx.pages:
+            if primary_only and self._role(ctx, page.page_number) != "primary":
+                continue
+            for line in page.lines():
+                for run in _runs(line, needle):
+                    found.append(AnchorMatch(page.page_number, run))
+        return found
+
+    def _resolve_anchor(
+        self, ctx: JobContext, selector: FieldSelector
+    ) -> tuple[AnchorMatch | None, bool, bool]:
+        """(match, used_alt, ambiguous). Alts are tried in declaration order."""
+        if selector.anchor is None:
+            return None, False, False
+
+        hits = self._find_anchors(ctx, selector.anchor)
+        if hits:
+            return hits[0], False, len(hits) > 1
+
+        for alt in selector.anchor_alts:
+            hits = self._find_anchors(ctx, alt)
+            if hits:
+                return hits[0], True, len(hits) > 1
+        return None, False, False
+
+    # -- candidate generation ---------------------------------------------
+
+    def _candidates(
+        self, span: Span, pattern: str, skip: frozenset[Word]
+    ) -> Iterator[str]:
+        """Strings to try the pattern against, most specific first.
+
+        Cells before individual words before the whole line: a totals line reads
+        `Total Amount Due   367.96`, which splits into two cells and matches on
+        the second, but when the gap is tight enough that it stays one cell the
+        per-word pass still finds the figure.
+
+        `skip` holds the words that spelled the anchor. Excluding them is what
+        stops a `text_block` on `near-anchor` returning the label it was
+        located by instead of the address next to it.
+        """
+        if pattern == "text_block":
+            lines = [
+                " ".join(w.text for w in line if w not in skip) for line in span.lines()
+            ]
+            block = "\n".join(line for line in lines if line.strip())
+            if block.strip():
+                yield block
+            return
+
+        seen: set[str] = set()
+        for line in span.lines():
+            words = [w for w in line if w not in skip]
+            if not words:
+                continue
+            groups = [*_cells(words), *([w] for w in words), words]
+            for group in groups:
+                text = " ".join(w.text for w in group)
+                if text and text not in seen:
+                    seen.add(text)
+                    yield text
+
+    # -- field selectors ---------------------------------------------------
+
+    def _apply_field(self, ctx: JobContext, selector: FieldSelector) -> None:
+        match, used_alt, ambiguous = self._resolve_anchor(ctx, selector)
+        if selector.anchor is not None and match is None:
+            return  # the label is not on this document: an ordinary miss
+
+        anchor = match.as_anchor() if match is not None else None
+        skip = frozenset(match.words) if match is not None else frozenset()
+
+        spans = regions.resolve(selector.region)(ctx.pages, ctx.page_meta, anchor)
+        spans = tuple(s for s in spans if self._role(ctx, s.page_number) == "primary")
+
+        matcher = patterns.resolve(selector.pattern)
+        values: list[Any] = []
+        deadline = perf_counter() + self._budget_seconds
+        want_all = selector.capture == "all_matches"
+
+        for span in spans:
+            for candidate in self._candidates(span, selector.pattern, skip):
+                if perf_counter() > deadline:
+                    # Section 3.2: a blown budget is a miss plus a modifier,
+                    # never a wedged worker. Whatever was found so far is
+                    # discarded - a partial all_matches list is worse than a
+                    # visible miss, because it looks complete.
+                    ctx.add_modifier("pattern_timeout")
+                    ctx.log(f"s5a: pattern budget exceeded for {selector.field!r}")
+                    return
+                value = matcher(candidate)
+                if value is not None:
+                    values.append(value)
+                    if not want_all:
+                        break
+            if values and not want_all:
+                break
+
+        if not values:
+            return
+
+        if used_alt:
+            ctx.add_modifier("anchor_alt_used")
+        if ambiguous and selector.region in regions.NON_NARROWING:
+            # F12: the same label in the body and on the stub, with nothing to
+            # say which one was meant.
+            ctx.add_modifier("ambiguous_anchor")
+
+        quality = (
+            QUALITY_ANCHOR_ALT
+            if used_alt
+            else QUALITY_ANCHORED
+            if selector.anchor is not None
+            else QUALITY_REGION_ONLY
+        )
+        ctx.extracted.set(selector.field, values if want_all else values[0], quality)
+
+    # -- row groups --------------------------------------------------------
+
+    def _column_bounds(
+        self, header_line: list[Word], headers: dict[str, str], page_width: float
+    ) -> list[tuple[str, float, float]]:
+        """Locate each column by its HEADER TEXT and derive its x range (F19).
+
+        Never by index: U-PAK and Veritiv both reorder columns between revisions
+        of the same template, and surviving that reorder is the whole point of
+        matching on header text.
+
+        The grid is built from **every** cell of the header row, not only the
+        columns the persona declared, and boundaries fall midway between
+        adjacent header cells. That distinction is load-bearing: a persona that
+        declares only `amount` on a `DESCRIPTION | AMOUNT` table must still get
+        the right-hand column. Deriving boundaries from the declared columns
+        alone let that single column stretch across the full page width, so
+        every cell of every row landed in it and `currency` matched none of them.
+
+        The first and last header cells do extend to the page edges, so a long
+        description or a right-aligned figure that overhangs its own header is
+        still attributed to it.
+        """
+        cells = _cells(header_line)
+        if not cells:
+            return []
+
+        grid: list[tuple[str, float, float]] = []
+        for i, cell in enumerate(cells):
+            left = 0.0 if i == 0 else (cells[i - 1][-1].x1 + cell[0].x0) / 2.0
+            right = (
+                page_width
+                if i == len(cells) - 1
+                else (cell[-1].x1 + cells[i + 1][0].x0) / 2.0
+            )
+            grid.append((" ".join(w.text for w in cell), left, right))
+
+        bounds: list[tuple[str, float, float]] = []
+        for column, header_text in headers.items():
+            needle = _norm(header_text)
+            column_cell = next((g for g in grid if _norm(g[0]) == needle), None)
+            if column_cell is None:
+                # A declared header may name part of a wider printed one -
+                # "AMOUNT" against a cell printed "AMOUNT DUE".
+                column_cell = next((g for g in grid if needle in _norm(g[0])), None)
+            if column_cell is not None:
+                bounds.append((column, column_cell[1], column_cell[2]))
+        return bounds
+
+    def _sub_group_value(
+        self, sub: SubGroup, line: list[Word], deadline: float
+    ) -> str | None:
+        text = " ".join(w.text for w in line)
+        if _norm(sub.anchor) not in _norm(text):
+            return None
+        if perf_counter() > deadline:
+            return None
+        value = patterns.resolve(sub.pattern)(text)
+        return None if value is None else str(value)
+
+    def _apply_row_group(self, ctx: JobContext, selector: RowGroupSelector) -> None:
+        rows: list[dict[str, Any]] = []
+        ctx.row_groups.setdefault(selector.row_group, rows)
+
+        hits = self._find_anchors(ctx, selector.table_anchor)
+        if not hits:
+            return
+        header = hits[0]
+        page = self._page(ctx, header.page_number)
+        if page is None:
+            return
+
+        header_line = next(
+            (line for line in page.lines() if header.words[0] in line), list(header.words)
+        )
+        headers = dict(selector.column_headers) or {name: name for name in selector.columns}
+        bounds = self._column_bounds(header_line, headers, page.width)
+        if not bounds:
+            return
+
+        region = selector.region or "line_items"
+        spans = regions.resolve(region)(ctx.pages, ctx.page_meta, header.as_anchor())
+        spans = tuple(s for s in spans if self._role(ctx, s.page_number) == "primary")
+
+        matchers = {name: patterns.resolve(p) for name, p in selector.columns.items()}
+        deadline = perf_counter() + self._budget_seconds
+
+        # Vertical rhythm, seeded from the header-to-first-row gap.
+        prev_y: float | None = header_line[0].y0
+        pitch: float | None = None
+
+        for span in spans:
+            for line in span.lines():
+                if perf_counter() > deadline:
+                    ctx.add_modifier("pattern_timeout")
+                    ctx.log(f"s5a: pattern budget exceeded for row_group {selector.row_group!r}")
+                    return
+
+                y = line[0].y0
+                if prev_y is not None and y > prev_y:
+                    gap = y - prev_y
+                    if pitch is None:
+                        pitch = gap
+                    elif gap > max(TABLE_BREAK_FLOOR, pitch * TABLE_BREAK_FACTOR):
+                        ctx.log(
+                            f"s5a: row_group {selector.row_group!r} ended at a "
+                            f"{gap:.0f}pt gap (row pitch {pitch:.0f}pt)"
+                        )
+                        return
+                    else:
+                        pitch = min(pitch, gap)
+                prev_y = y
+
+                if selector.sub_group is not None:
+                    value = self._sub_group_value(selector.sub_group, line, deadline)
+                    if value is not None:
+                        # An annotation line belongs to the row above it, not to
+                        # a row of its own (F19's one permitted nesting level).
+                        if rows:
+                            rows[-1][selector.sub_group.field] = value
+                        continue
+
+                row: dict[str, Any] = {}
+                for column, left, right in bounds:
+                    matcher = matchers.get(column)
+                    if matcher is None:
+                        continue
+                    cell = [w for w in line if left <= (w.x0 + w.x1) / 2.0 < right]
+                    if not cell:
+                        continue
+                    text = " ".join(w.text for w in cell)
+                    value = matcher(text)
+                    if value is not None:
+                        row[column] = value
+                # A row that matched nothing is not a row - it is a page footer,
+                # a continuation note, or the blank space below the table.
+                if row:
+                    rows.append(row)
+
+        # `row_count` is a stated expectation, not a filter. Truncating to `max`
+        # would silently discard real rows, and raising would turn a layout
+        # change into a pipeline error - so a violation is logged and left
+        # visible for the gate to act on. There is no confidence modifier for it
+        # in the closed section 5 enum, and inventing one here is exactly the
+        # kind of quiet vocabulary growth the grammar forbids; wiring this to
+        # review is C4's call, with a modifier added deliberately if it needs one.
+        if selector.row_count is not None:
+            low, high = selector.row_count
+            if not low <= len(rows) <= high:
+                ctx.log(
+                    f"s5a: row_group {selector.row_group!r} found {len(rows)} rows, "
+                    f"outside the declared range {low}-{high}"
+                )
+
+    # -- scanline ----------------------------------------------------------
+
+    def _apply_scanline(self, ctx: JobContext, selector: ScanlineSelector) -> None:
+        """Record the stub's digit run. Produces no field value, ever (F7).
+
+        Not role-filtered: a scan line is scoring-only, so section 7's
+        primary-page rule does not apply, and applying it would lose the stub on
+        every multi-page bill whose final page is a continuation.
+
+        The `asserts` are not consumed here either - corroborating an extracted
+        value against these digits is `crosscheck_scanline`, a Stage 6 op.
+        """
+        spans = regions.resolve(selector.region)(ctx.pages, ctx.page_meta, None)
+        if not spans:
+            return
+
+        # scanline.find works on pages, so each span is presented as a page
+        # carrying only the words inside the region. This is what keeps the
+        # region honest: a long digit run in the invoice body is not a scan line.
+        as_pages: list[PageText] = []
+        for span in spans:
+            source_page = self._page(ctx, span.page_number)
+            if source_page is None:
+                continue
+            as_pages.append(
+                PageText(
+                    page_number=span.page_number,
+                    words=span.words,
+                    width=source_page.width,
+                    height=source_page.height,
+                    source=span.source,
+                )
+            )
+
+        raw = scanline_mod.find(tuple(as_pages))
+        if raw is not None:
+            ctx.scanline = raw

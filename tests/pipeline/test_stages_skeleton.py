@@ -100,7 +100,7 @@ def _routing_runner(persona, quality, vision):
         stages=[
             Intake(), AttachmentFilter(), Classify(),
             PersonaLookup(store=_StubStore(persona)),
-            ApplyCachedRules(executor=_StubExecutor(quality)),
+            ApplyCachedRules(executor_factory=lambda persona: _StubExecutor(quality)),
             VisionOneShot(vision=vision), AgentEscalation(),
             CaptureFields(), ConfidenceGate(), EmitRecord(),
         ],
@@ -132,7 +132,9 @@ def test_soft_miss_still_runs_the_cached_rules_first():
     ctx = new_context(document_id="d1", source_path=CORPUS)
     ctx.persona_status = "soft_miss"
     ctx.persona = _StubPersona()
-    out = ApplyCachedRules(executor=_StubExecutor(0.95)).run(ctx)
+    out = ApplyCachedRules(
+        executor_factory=lambda persona: _StubExecutor(0.95)
+    ).run(ctx)
     assert out.extraction_route == "5a_cached"
     assert out.extracted.get("invoice_number") == "AC-002561"
 

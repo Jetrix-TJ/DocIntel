@@ -715,3 +715,92 @@ SELF-REVIEW found 3 defects before the commit, all in the new tests rather than 
   was neither a string nor a sequence — the boundary must raise ValidationError or
   nothing.
 Cluster C2a: COMPLETE (0 fix rounds). Full detail in task-c2a-report.md.
+Cluster C2b: EXECUTED INLINE (subagents still disallowed). Delivers
+  grammar/executor.py, a persona-bound Stage 5a, the four missing Stage 8 keys,
+  and the scorecard assertions that measure them. 55 new tests, suite 558/558 in
+  7.8s, mypy strict clean over 13 files, ruff clean, gold 95 green.
+  SCORECARD DENOMINATOR MOVED: 39/223 -> 39/242. The +19 is line_items.count (5),
+  line_items.amounts (5), scanline.raw (5), charges (3), sub_account (1). All 19
+  currently FAIL because no personas exist (that is C5) — the numerator is
+  unchanged at 39 by design. THE STANDING CAVEAT IS DISCHARGED: "10/10 green" now
+  means the corpus is satisfied. Before this cluster the loop could have reached
+  10/10 while extracting no line items, no surcharges and no scan line at all.
+CONTROLLER DECISION: Stage 5a holds an executor FACTORY, not an executor. An
+  Executor is bound to one persona and the persona is looked up per document at
+  s4, so a single injected instance would either be stale or belong to whichever
+  document arrived first. This moved the injection seam in two Part A routing
+  tests from `executor=stub` to `executor_factory=lambda persona: stub`; the
+  invariants those tests assert (persona hit costs zero vision calls; collapsed
+  persona falls back to vision) are untouched.
+CONTROLLER DECISION: row groups live in ctx.row_groups keyed by the persona's
+  row_group name, and build_record promotes ONLY line_items, charges and
+  sub_account. A new top-level contract key is a contract change and must need an
+  edit to _PROMOTED_ROW_GROUPS, not appear because a persona author picked a name.
+  Tested. Kept out of ExtractedFields because a repeating table is not a
+  name->value pair and flattening it would make fields.line_items a list inside a
+  mapping every other consumer reads as scalars.
+CONTROLLER DECISION: record `scanline` is a bare string, matching what
+  extract.scanline.find returns. The gold label's scanline is a rich object, but
+  its encodes_* keys are ANALYSIS of what the digits mean, not something the
+  pipeline transcribes — asserting them would score the label rather than the
+  extraction. validate_record rejects a non-string scanline: leading zeros carry
+  meaning to a lockbox scanner.
+PLAN DEVIATION (measured, deliberate): the plan asked for line_items "count and
+  signed sum". Shipped count + a sorted MULTISET of amounts instead, for two
+  reasons. (1) A sum cancels what a multiset catches — two rows with swapped
+  amounts, or compensating errors, net to the same total and pass silently.
+  (2) A sum would imply an arithmetic claim the corpus does not support. Measured
+  across the 5 golds carrying line_items: four close exactly against a printed
+  total (Complete Beverage 1177.70, DTSS 699.00, Federal Recycling 481.20,
+  Veritiv 4608.45 = subtotal), but EDCO does NOT — its statement table prints a
+  `CURRENT CHARGES:` summary row INSIDE the table body, so its amounts total
+  437.58 against a printed 367.96. That is the table faithfully transcribed, not
+  an error. Proving closure is crosscheck_line_sum's job at Stage 6, where it
+  reports a modifier rather than a scorecard failure. NOTE FOR C3: do not treat
+  EDCO's Σ line_items != subtotal as a mismatch to flag.
+RULING: the executor's page-role lookup is FAIL-CLOSED — a page with no PageMeta
+  entry counts as supporting. A pipeline that skipped role assignment therefore
+  extracts nothing visible rather than silently reading totals off a handwritten
+  Bill of Lading (F10). A loud empty result is recoverable; a confident wrong one
+  is not. The scan line is the documented exception (scoring-only, so §7 does not
+  apply, and must not: a multi-page bill's stub routinely lands on a legitimately
+  supporting continuation page). Both directions tested.
+RULING: row_count is a stated expectation, not a filter. Truncating to `max` would
+  silently discard real rows; raising would turn a layout change into a pipeline
+  error. A violation is LOGGED and left visible. There is no modifier for it in
+  the closed §5 enum and inventing one here is the quiet vocabulary growth the
+  grammar forbids — wiring it to review is C4's call, with a modifier added
+  deliberately if it needs one.
+50ms BUDGET, honest residual: a preemptive timeout is not available in pure Python
+  without threads or signals, so the budget is checked BETWEEN candidate strings
+  (each a cell, word or line — short), bounding time per field to the budget plus
+  one candidate's runtime. A single pathological match on one candidate can still
+  overrun. What makes that acceptable is C2a's static restrictions, which is why
+  the two halves were always meant to ship together. On a blown budget whatever
+  was found so far is DISCARDED, not kept: a partial all_matches list is worse
+  than a visible miss because it looks complete.
+THREE DEFECTS found during the run, all in the implementation this time (C2a's
+  were all in tests): (1) _column_bounds abandoned its search after the first
+  header — a for/else/break treated "ran past the needle length" identically to
+  "matched", so every cell of every row landed in the leftmost column. Fixed by
+  extracting a shared _runs helper (anchor lookup and column-header location are
+  the same operation asked twice), which also removed a block of duplication.
+  (2) A persona declaring only SOME columns got one column spanning the full page
+  width, because the grid was derived from the declared columns rather than from
+  the header row. Grid now built from every header cell with declared columns
+  mapped onto it. (3) THE IMPORTANT ONE, caught by the end-to-end test:
+  `line_items` ran to the foot of the page, so the row group swallowed the totals
+  block and the remittance stub. This is the COMMON case, not a corner case —
+  every corpus invoice prints a totals block below its table and five also print
+  a stub — so row groups would have been unusable in C5 and the F8 closure check
+  meaningless. Fixed with a vertical-rhythm break: a gap larger than
+  max(24pt, 2.5x the established row pitch) ends the table, pitch seeded from the
+  header-to-first-row gap. Three tests pin it, including a uniformly spaced
+  20-row table that must NOT break and a 6pt-pitch table that must survive a
+  15pt gap.
+PROCESS NOTE: defect (3) was found only because the cluster ended with an
+  end-to-end test that ran a real validated persona through Stage 5a into a
+  validated Stage 8 record. Every unit test passed with the bug present. NEW
+  STANDING RULE candidate: a cluster that adds a pipeline capability must finish
+  with one test that exercises the whole path, not only its units.
+Cluster C2b: COMPLETE (0 fix rounds). Full detail in task-c2b-report.md.

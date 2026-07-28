@@ -21,7 +21,19 @@ REQUIRED_KEYS = frozenset({
     "confidence_modifiers", "possible_duplicate_of", "disposition",
     "review_flag", "regen_flag", "audit_sample", "text_source", "page_roles",
     "tags", "document_id",
+    # The four structured keys. Until these existed the scorecard could not
+    # assert four whole gold sections, which left the convergence loop blind to
+    # F7 (scanline ground truth), F8 (arithmetic closure), F14 (surcharge
+    # capture) and F19 (row groups) - it could have reached "10/10 green" while
+    # extracting no line items at all.
+    "line_items", "charges", "sub_account", "scanline",
 })
+
+# Row groups that get their own top-level contract key. A row group the persona
+# names anything else stays in `row_groups` and is not emitted: a new top-level
+# key is a contract change, so it needs a deliberate edit here rather than
+# appearing because someone picked a name.
+_PROMOTED_ROW_GROUPS = ("line_items", "charges", "sub_account")
 
 _DISPOSITIONS = {"processed", "skipped", "dead_letter"}
 
@@ -61,6 +73,13 @@ def build_record(ctx: JobContext) -> dict[str, Any]:
              "page": r.page, "pattern_id": r.pattern_id}
             for r in ctx.reference_list
         ],
+        # Row groups (F19), each a list of {column: value}. Column names come
+        # from the persona, so they differ per sender by design - EDCO's
+        # statement table has `charges`/`balance` where Veritiv's has `amount`.
+        **{name: _serialize(ctx.row_groups.get(name, [])) for name in _PROMOTED_ROW_GROUPS},
+        # The remittance scan line, verbatim (F7). Scoring-only: it never
+        # supplies a field value, so it is deliberately NOT inside `fields`.
+        "scanline": ctx.scanline,
         "extraction_rule_version": ctx.extraction_rule_version,
         "extraction_route": ctx.extraction_route,
         "possible_duplicate_of": ctx.possible_duplicate_of,
@@ -148,3 +167,40 @@ def validate_record(rec: dict[str, Any]) -> None:
             raise ContractError(
                 f"{flag_name} must be bool, got {type(rec[flag_name]).__name__}"
             )
+
+    # The three row-group keys: a list of flat mappings. Column names are the
+    # persona's, so they are not constrained here - but the SHAPE is, and no
+    # money may cross as a float, for the same reason `fields` may not: the F8
+    # closure checks demand exact equality and float tolerance is where bugs hide.
+    for key in _PROMOTED_ROW_GROUPS:
+        rows = rec[key]
+        if not isinstance(rows, list):
+            raise ContractError(f"{key} must be a list, got {type(rows).__name__}")
+        for i, row in enumerate(rows):
+            if not isinstance(row, dict):
+                raise ContractError(
+                    f"{key}[{i}] must be a mapping, got {type(row).__name__}"
+                )
+            for column, value in row.items():
+                if not isinstance(column, str):
+                    raise ContractError(
+                        f"{key}[{i}] has a non-string column name: {column!r}"
+                    )
+                if isinstance(value, float):
+                    raise ContractError(
+                        f"{key}[{i}].{column} is a float; money must cross the "
+                        "contract as a string"
+                    )
+                if isinstance(value, (list, dict)):
+                    raise ContractError(
+                        f"{key}[{i}].{column} is nested ({type(value).__name__}); a row "
+                        "group is one level deep, and sub_group values are flattened "
+                        "onto their row (grammar V8)"
+                    )
+
+    # The scan line is a raw digit run or absent. Never a number: it is a
+    # transcription, and its leading zeros carry meaning to a lockbox scanner.
+    if rec["scanline"] is not None and not isinstance(rec["scanline"], str):
+        raise ContractError(
+            f"scanline must be a string or None, got {type(rec['scanline']).__name__}"
+        )

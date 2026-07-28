@@ -180,6 +180,17 @@ class JobContext:
     reference_list: list[ReferenceHit] = field(default_factory=list)
     extraction_route: str | None = None
 
+    # structured extraction (s5*). Row groups are keyed by the persona's
+    # `row_group` name; `build_record` lifts line_items, charges and
+    # sub_account out of here into their own contract keys. Kept separate from
+    # ExtractedFields because a repeating table is not a name->value pair, and
+    # flattening one into `fields` would make `fields.line_items` a list in a
+    # mapping every other consumer reads as scalars.
+    row_groups: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # The remittance scan line, verbatim. Scoring-only (F7): it never supplies a
+    # field value, it only corroborates one that a selector already read.
+    scanline: str | None = None
+
     # capture + gate (s6, s7)
     confidence: dict[str, float] = field(default_factory=dict)
     modifiers: list[str] = field(default_factory=list)

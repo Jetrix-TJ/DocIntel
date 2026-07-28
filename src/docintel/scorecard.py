@@ -98,6 +98,76 @@ CHECKED_FIELDS = (
 
 CHECKED_DERIVED = ("amount_payable", "payable_basis", "document_identity", "identity_basis")
 
+# Columns of a line-item row that hold an amount rather than a rate or a count.
+# `unit_price`, `quantity`, `weight` and `quantity_ordered` are deliberately
+# absent: summing unit prices is meaningless, and including them would make the
+# assertion fail for reasons that say nothing about extraction quality.
+#
+# Column names come from the PERSONA, and the expectations here come from the
+# hand-written gold label, so the two have to agree. That coupling is
+# deliberate - it is what forces a C5 persona to describe the table the way the
+# document actually prints it (F19) rather than inventing its own vocabulary.
+LINE_ITEM_AMOUNT_COLUMNS = frozenset({"amount", "charges", "balance", "total"})
+
+
+def _money_key(value: Any) -> str:
+    """Canonical string for a money value, so 140.9 and "140.90" compare equal.
+
+    Gold holds JSON numbers (which drop trailing zeros) while a record holds the
+    string a Decimal serialized to. `normalize` collapses both to the same
+    representation; `format(..., "f")` keeps it out of scientific notation.
+    """
+    if value is None:
+        return ""
+    try:
+        return format(Decimal(str(value)).normalize(), "f")
+    except (InvalidOperation, ValueError):
+        return str(value)
+
+
+def _line_item_amounts(rows: Any) -> list[str]:
+    """Every amount in a table, as a sorted multiset.
+
+    The plan called for a signed *sum*. A multiset is used instead because it
+    catches everything a sum does and one thing a sum cannot: two rows whose
+    amounts are swapped, or a pair of compensating errors, net to the same total
+    and would pass silently. It costs nothing extra to compare.
+
+    A sum would also have implied an arithmetic claim the corpus does not
+    support. EDCO's statement table carries its own `CURRENT CHARGES:` summary
+    row *inside* the table body, so its amounts total 437.58 against a printed
+    total of 367.96. That is the table faithfully transcribed, not an error -
+    proving closure is `crosscheck_line_sum`'s job at Stage 6, and it reports a
+    confidence modifier rather than a scorecard failure.
+    """
+    out: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        for column, value in row.items():
+            if column in LINE_ITEM_AMOUNT_COLUMNS and value is not None:
+                out.append(_money_key(value))
+    return sorted(out)
+
+
+def _pairs(rows: Any, first: str, second: str) -> list[tuple[str, str]]:
+    """A row list reduced to two named columns, sorted - order is not asserted."""
+    out: list[tuple[str, str]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        out.append((str(row.get(first, "")), _money_key(row.get(second))))
+    return sorted(out)
+
+
+def _id_name_pairs(rows: Any) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        out.append((str(row.get("id", "")), str(row.get("name", ""))))
+    return sorted(out)
+
 
 def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
     cls = gold["classification"]
@@ -143,6 +213,54 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
     if gold_tags:
         items.append(Assertion(
             "tags", sorted(gold_tags), lambda r: r.get("tags", []), kind="superset",
+        ))
+
+    # The four structured keys. Before these existed the loop could not see
+    # F7, F8, F14 or F19 at all: four whole gold sections had no corresponding
+    # contract key, so "10/10 green" was reachable while extracting no line
+    # items, no surcharges and no scan line.
+
+    # Line items (F8, F19). Count and the amount multiset, only where the gold
+    # transcription is complete - U-PAK's label records line_items_complete:
+    # false precisely because its five-page table was not fully transcribed, and
+    # asserting a partial label would fail a record that read the table right.
+    gold_line_items = gold.get("line_items")
+    if gold_line_items and gold.get("line_items_complete", True):
+        items_expected: list[Any] = list(gold_line_items)
+        items.append(Assertion(
+            "line_items.count", len(items_expected),
+            lambda r: len(r.get("line_items") or []),
+        ))
+        items.append(Assertion(
+            "line_items.amounts", _line_item_amounts(items_expected),
+            lambda r: _line_item_amounts(r.get("line_items")),
+        ))
+
+    # Surcharges (F14). Label/amount pairs: U-PAK's fuel and environmental
+    # surcharges are what make its printed total exceed the sum of its services.
+    gold_charges = gold.get("charges")
+    if gold_charges:
+        items.append(Assertion(
+            "charges", _pairs(gold_charges, "label", "amount"),
+            lambda r: _pairs(r.get("charges"), "label", "amount"),
+        ))
+
+    # Scan line (F7). The raw digit run only. The gold label's encodes_* keys are
+    # analysis of what the digits mean, not something the pipeline transcribes,
+    # and asserting them here would score the label rather than the extraction.
+    gold_scanline = gold.get("scanline") or {}
+    if gold_scanline.get("raw"):
+        items.append(Assertion(
+            "scanline.raw", gold_scanline["raw"], lambda r: r.get("scanline"),
+        ))
+
+    # Sub-accounts (F13). id/name pairs - U-PAK's 70+ billing identities are the
+    # reason a single invoice cannot be allocated to one cost centre.
+    gold_sub = gold.get("sub_account")
+    if gold_sub:
+        items.append(Assertion(
+            "sub_account", _id_name_pairs(gold_sub),
+            lambda r: _id_name_pairs(r.get("sub_account")),
         ))
 
     # Reference list (F11). Exact set only where the gold label is complete;

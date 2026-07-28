@@ -266,3 +266,107 @@ def test_finding_5_rejects_non_string_document_id():
     rec["document_id"] = 123
     with pytest.raises(ContractError, match="document_id"):
         validate_record(rec)
+
+
+# ==========================================================================
+# The four structured keys (C2b). Until these existed the scorecard could not
+# assert four whole gold sections, leaving the loop blind to F7, F8, F14 and
+# F19 — it could have reached "10/10 green" while extracting no line items.
+# ==========================================================================
+
+
+def _structured_ctx():
+    ctx = _ctx()
+    ctx.row_groups["line_items"] = [
+        {"description": "BALANCE FORWARD", "balance": Decimal("298.34")},
+        {"description": "CANCEL SERVICE APR 08", "charges": Decimal("69.62")},
+    ]
+    ctx.row_groups["charges"] = [
+        {"label": "FUEL SURCHARGE", "amount": Decimal("1218.04")},
+    ]
+    ctx.row_groups["sub_account"] = [
+        {"id": "1 - 22335", "name": "SHEARER'S FOODS CANADA R/O"},
+    ]
+    ctx.scanline = "25600770871000367962"
+    return ctx
+
+
+def test_the_four_structured_keys_are_required():
+    assert {"line_items", "charges", "sub_account", "scanline"} <= REQUIRED_KEYS
+
+
+def test_row_groups_are_emitted_under_their_own_keys():
+    rec = build_record(_structured_ctx())
+    validate_record(rec)
+    assert rec["line_items"][0]["description"] == "BALANCE FORWARD"
+    assert rec["charges"] == [{"label": "FUEL SURCHARGE", "amount": "1218.04"}]
+    assert rec["sub_account"][0]["id"] == "1 - 22335"
+
+
+def test_row_group_money_serializes_as_string_not_float():
+    """F8's closure checks demand exact equality; a float is where that rots."""
+    rec = build_record(_structured_ctx())
+    assert rec["line_items"][0]["balance"] == "298.34"
+    assert rec["line_items"][1]["charges"] == "69.62"
+
+
+def test_the_scanline_crosses_as_a_raw_string():
+    """Leading zeros carry meaning to a lockbox scanner, so never a number."""
+    rec = build_record(_structured_ctx())
+    assert rec["scanline"] == "25600770871000367962"
+
+
+def test_absent_row_groups_are_empty_lists_not_null():
+    """A consumer iterating line_items must never have to null-check first."""
+    rec = build_record(_ctx())
+    validate_record(rec)
+    assert rec["line_items"] == []
+    assert rec["charges"] == []
+    assert rec["sub_account"] == []
+    assert rec["scanline"] is None
+
+
+def test_an_unpromoted_row_group_is_not_emitted():
+    """A new top-level key is a contract change, not something a persona can
+    create by picking a name."""
+    ctx = _ctx()
+    ctx.row_groups["aging_buckets"] = [{"age": "30 DAYS", "amount": Decimal("0.00")}]
+    rec = build_record(ctx)
+    validate_record(rec)
+    assert "aging_buckets" not in rec
+
+
+def test_validate_rejects_a_float_in_a_row_group():
+    rec = build_record(_structured_ctx())
+    rec["line_items"][0]["balance"] = 298.34
+    with pytest.raises(ContractError, match="float"):
+        validate_record(rec)
+
+
+def test_validate_rejects_a_nested_value_in_a_row_group():
+    """A row group is one level deep; sub_group values flatten onto the row (V8)."""
+    rec = build_record(_structured_ctx())
+    rec["line_items"][0]["nested"] = [{"deeper": 1}]
+    with pytest.raises(ContractError, match="nested"):
+        validate_record(rec)
+
+
+def test_validate_rejects_a_non_list_row_group():
+    rec = build_record(_structured_ctx())
+    rec["charges"] = {"label": "FUEL"}
+    with pytest.raises(ContractError, match="must be a list"):
+        validate_record(rec)
+
+
+def test_validate_rejects_a_non_mapping_row():
+    rec = build_record(_structured_ctx())
+    rec["charges"] = ["FUEL SURCHARGE"]
+    with pytest.raises(ContractError, match="must be a mapping"):
+        validate_record(rec)
+
+
+def test_validate_rejects_a_numeric_scanline():
+    rec = build_record(_structured_ctx())
+    rec["scanline"] = 25600770871000367962
+    with pytest.raises(ContractError, match="scanline"):
+        validate_record(rec)

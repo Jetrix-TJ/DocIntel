@@ -14,7 +14,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 26,
+      "total_count": 28,
       "assertions": [
         {
           "name": "doc_type",
@@ -219,6 +219,33 @@
           "passed": false
         },
         {
+          "name": "charges",
+          "kind": "exact",
+          "expected": [
+            [
+              "Internet Charges",
+              "140.9"
+            ],
+            [
+              "Internet Taxes, Surcharges, & Fees",
+              "0.2"
+            ],
+            [
+              "Special Circuit Charges",
+              "13611.5"
+            ]
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "scanline.raw",
+          "kind": "exact",
+          "expected": "03840384043574000033876408",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -243,7 +270,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 26,
+      "total_count": 28,
       "assertions": [
         {
           "name": "doc_type",
@@ -439,6 +466,29 @@
           "passed": false
         },
         {
+          "name": "charges",
+          "kind": "exact",
+          "expected": [
+            [
+              "Comcast Business services",
+              "217.89"
+            ],
+            [
+              "Taxes and fees",
+              "3.22"
+            ]
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "scanline.raw",
+          "kind": "exact",
+          "expected": "849544462036524200221119",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -462,7 +512,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 25,
+      "total_count": 26,
       "assertions": [
         {
           "name": "doc_type",
@@ -651,6 +701,13 @@
           "passed": false
         },
         {
+          "name": "scanline.raw",
+          "kind": "exact",
+          "expected": "251001 000000752233001 00000000000586878247 8 2 00000024809 2",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -675,7 +732,7 @@
       ],
       "passed": false,
       "passed_count": 3,
-      "total_count": 25,
+      "total_count": 26,
       "assertions": [
         {
           "name": "doc_type",
@@ -862,6 +919,13 @@
           "passed": false
         },
         {
+          "name": "scanline.raw",
+          "kind": "exact",
+          "expected": "7000444000000004106907622507190000012301446",
+          "actual": null,
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -886,7 +950,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 20,
+      "total_count": 22,
       "assertions": [
         {
           "name": "doc_type",
@@ -1036,6 +1100,33 @@
           "passed": false
         },
         {
+          "name": "line_items.count",
+          "kind": "exact",
+          "expected": 12,
+          "actual": 0,
+          "passed": false
+        },
+        {
+          "name": "line_items.amounts",
+          "kind": "exact",
+          "expected": [
+            "-22",
+            "-65",
+            "-9.6",
+            "0",
+            "102",
+            "108",
+            "136",
+            "153",
+            "168",
+            "186",
+            "325",
+            "96.3"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -1059,7 +1150,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 17,
+      "total_count": 19,
       "assertions": [
         {
           "name": "doc_type",
@@ -1178,6 +1269,24 @@
           "passed": false
         },
         {
+          "name": "line_items.count",
+          "kind": "exact",
+          "expected": 3,
+          "actual": 0,
+          "passed": false
+        },
+        {
+          "name": "line_items.amounts",
+          "kind": "exact",
+          "expected": [
+            "50",
+            "550",
+            "99"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -1202,7 +1311,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 20,
+      "total_count": 23,
       "assertions": [
         {
           "name": "doc_type",
@@ -1351,6 +1460,32 @@
             "page_role_fallback"
           ],
           "passed": false
+        },
+        {
+          "name": "line_items.count",
+          "kind": "exact",
+          "expected": 6,
+          "actual": 0,
+          "passed": false
+        },
+        {
+          "name": "line_items.amounts",
+          "kind": "exact",
+          "expected": [
+            "298.34",
+            "367.96",
+            "69.62",
+            "69.62"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "scanline.raw",
+          "kind": "exact",
+          "expected": "25600770871000367962",
+          "actual": null,
+          "passed": false
         }
       ]
     },
@@ -1368,7 +1503,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 18,
+      "total_count": 20,
       "assertions": [
         {
           "name": "doc_type",
@@ -1500,6 +1635,31 @@
           "passed": false
         },
         {
+          "name": "line_items.count",
+          "kind": "exact",
+          "expected": 10,
+          "actual": 0,
+          "passed": false
+        },
+        {
+          "name": "line_items.amounts",
+          "kind": "exact",
+          "expected": [
+            "-137",
+            "-151.4",
+            "-80.6",
+            "-99.8",
+            "200",
+            "200",
+            "200",
+            "200",
+            "75",
+            "75"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -1529,7 +1689,7 @@
       ],
       "passed": false,
       "passed_count": 7,
-      "total_count": 21,
+      "total_count": 23,
       "assertions": [
         {
           "name": "doc_type",
@@ -1690,6 +1850,42 @@
           "passed": false
         },
         {
+          "name": "charges",
+          "kind": "exact",
+          "expected": [
+            [
+              "EFW COMPLIANCE CHRG",
+              "784.18"
+            ],
+            [
+              "ENVIRONMENTAL SURCHARGE",
+              "2342.42"
+            ],
+            [
+              "FUEL SURCHARGE",
+              "1218.04"
+            ],
+            [
+              "H.S.T.",
+              "2325.69"
+            ]
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
+          "name": "sub_account",
+          "kind": "exact",
+          "expected": [
+            [
+              "1 - 22335",
+              "SHEARER'S FOODS CANADA R/O"
+            ]
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "superset",
           "expected": [
@@ -1717,7 +1913,7 @@
       ],
       "passed": false,
       "passed_count": 4,
-      "total_count": 25,
+      "total_count": 27,
       "assertions": [
         {
           "name": "doc_type",
@@ -1895,6 +2091,22 @@
           "passed": false
         },
         {
+          "name": "line_items.count",
+          "kind": "exact",
+          "expected": 1,
+          "actual": 0,
+          "passed": false
+        },
+        {
+          "name": "line_items.amounts",
+          "kind": "exact",
+          "expected": [
+            "4608.45"
+          ],
+          "actual": [],
+          "passed": false
+        },
+        {
           "name": "reference_list.values",
           "kind": "set",
           "expected": [
@@ -1912,6 +2124,6 @@
     "passed": 0,
     "failed": 10,
     "assertions_passed": 39,
-    "assertions_total": 223
+    "assertions_total": 242
   }
 }
