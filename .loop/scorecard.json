@@ -1989,7 +1989,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 5,
+      "passed_count": 6,
       "total_count": 29,
       "assertions": [
         {
@@ -2024,8 +2024,8 @@
           "name": "lane",
           "kind": "exact",
           "expected": "review",
-          "actual": "low",
-          "passed": false
+          "actual": "review",
+          "passed": true
         },
         {
           "name": "page_roles",
@@ -2814,7 +2814,7 @@
     "total": 10,
     "passed": 0,
     "failed": 10,
-    "assertions_passed": 41,
+    "assertions_passed": 42,
     "assertions_total": 339
   }
 }

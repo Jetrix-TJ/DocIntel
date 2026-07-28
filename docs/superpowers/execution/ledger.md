@@ -982,3 +982,75 @@ STILL UNMEASURED, deliberately: ctx.boosts never reaches the record (a boost sho
   are overlays; and 9 of the 16 modifiers have no gold signal implying them, which
   is the right place for them since no gold label states them.
 Cluster C3b: COMPLETE (0 fix rounds). Full detail in task-c3b-report.md.
+Cluster C4: EXECUTED INLINE. Delivers a real s7_gate (four lanes, forced-review
+  overrides, deterministic audit sampling) and tests/test_f3_forced_review.py
+  (GUARDRAIL 4). 40 new tests, suite 1101/1101 in 7.8s, mypy strict clean over 18
+  files, ruff clean, gold 95 green. Scorecard 41/339 -> 42/339.
+THE +1 IS THE DELIVERABLE RESUME HAD OWED SINCE C1b: Federal Recycling's `lane`
+  now passes and the F3 chain works end to end across three clusters —
+  annotations.detect_flattened (C1b) -> has_flattened_annotations tag ->
+  flattened_annotations modifier (C3) -> forced review + `review` lane (C4).
+SPEC ERRATUM 1: the spec's Stage 7 table lists THREE lanes (High, Medium/Low, Very
+  Low). Two gold files expect a FOURTH, `review`, and gold is the objective
+  function. It earns its place rather than being a synonym for `medium`: Federal
+  Recycling's fields may extract perfectly and the reason a human must look is that
+  the page carries values invisible to the text layer. Filing it under `medium`
+  would put it in the queue for documents whose NUMBERS look shaky, a different
+  queue with a different fix. Corpus: 7 high, 1 medium, 2 review, 0 low.
+SPEC ERRATUM 2: handwriting_detected now fires on the `handwritten_supporting` tag.
+  §5 defines it as "Primary page has handwriting" and the tag says the opposite, so
+  C3 had not applied it — but Complete Beverage's gold routing DEPENDS on it, its
+  expected_routing.reason names it explicitly ("ocr_source and handwriting
+  modifiers apply"), and it is the better reading: a supporting page exists to
+  corroborate the primary one (F10), so handwritten corroboration is weaker
+  evidence. §5's wording is too narrow rather than this being too broad.
+DESIGN CORRECTION (the gate needed a SECOND dimension): the inherited rule was
+  `low` when the SHARE of short fields reaches 0.60. That cannot work. A
+  document-wide modifier (ocr_source, draft_rules, handwriting_detected) penalizes
+  EVERY field equally, so the share is always 0.0 or 1.0 and `medium` is
+  unreachable for any document whose only penalties are document-wide. Complete
+  Beverage is exactly that: 0.90 x 0.60 = 0.54 on every field, gold expects
+  `medium` with regen False, and the share rule alone routes it to `low` and raises
+  a regen flag telling someone to rewrite a persona that is working correctly.
+  `low` now ALSO requires most fields below VERY_LOW_FLOOR (0.50). 0.50 is chosen
+  to sit below 0.60, the harshest single modifier in the §5 enum — one harsh signal
+  must never on its own read as "the rules are broken", because the fix for a
+  handwritten page is not a new persona. A test asserts that RELATIONSHIP rather
+  than the bare number.
+THE BUG (real, and the important part of this cluster): the first implementation
+  treated a pre-existing ctx.review_flag as a forcing reason, on the strength of
+  C3's own handover note. ALL 34 GATE UNIT TESTS PASSED AND ALL TEN CORPUS
+  DOCUMENTS CAME OUT `review` — including DTSS, which has no tags, no modifiers and
+  nothing wrong with it. Cause: s5c_agent sets review_flag for every hard miss,
+  correctly (spec Part 3: a first-time sender "emits anyway with the one-shot
+  result and a review flag"), and with no personas EVERY document is a first-time
+  sender. review_flag is too coarse to route on: "we have no rules for this sender
+  yet" is not "this document has a problem", and one queue for both would bury
+  Federal Recycling's invisible overlays under every new vendor. Forcing now reads
+  the closed §5 modifier enum instead — flattened_annotations ("forces review,
+  unconditionally") and arith_balance_mismatch ("also raises review"). U-PAK
+  therefore reaches `review` through EVIDENCE rather than a flag anyone could set,
+  which means its lane correctly FAILS today and will pass when C5 gives it a
+  persona. That is why the numerator went to 42 and not 43. The flag itself is
+  still never cleared; there are tests for both halves.
+PROCESS: STANDING RULE 9 EARNED ITS KEEP ON THE CLUSTER RIGHT AFTER IT WAS WRITTEN.
+  Every link in the F3 chain had passing unit tests while the chain was broken;
+  only running a real PDF through all eight stages showed it. GUARDRAIL 4
+  (tests/test_f3_forced_review.py) now walks the whole chain in one module.
+RULINGS on precedence, each tested: a systemic collapse OUTRANKS a forced review
+  (both true, but `low` carries the actionable regen signal and review_flag is set
+  either way); a forced review OUTRANKS an empty confidence map (a forcing reason
+  is a fact about the DOCUMENT, not about whether extraction ran — without this
+  Federal Recycling reads `low` today and the F3 chain stays untestable until C5);
+  an empty confidence map NEVER raises regen ("there are no rules yet" is not "the
+  rules are wrong", and this also protects ten passing regen_flag assertions from
+  flipping for a reason that says nothing about the pipeline); audit sampling never
+  fires outside `high` and never changes the lane (a document already going to a
+  human does not need sampling, and marking it would corrupt the statistic the
+  sample exists to produce).
+CARRIED FORWARD TO C5, important: pack-supplied thresholds are accepted by
+  ConfidenceGate and supplied by nothing, so every field uses the 0.90 default.
+  A `draft` persona applies draft_rules (0.85) to EVERY field, so a draft persona
+  can NEVER produce a `high` lane — and seven documents expect one. C5's personas
+  must reach `active` status, or must ship thresholds below 0.85.
+Cluster C4: COMPLETE (0 fix rounds). Full detail in task-c4-report.md.

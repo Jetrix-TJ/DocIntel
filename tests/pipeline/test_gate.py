@@ -1,0 +1,354 @@
+"""Stage 7: the confidence gate. Three exits, but every document leaves.
+
+The plan's block comes first, verbatim. After it, the cases the corpus actually
+requires — which turned out to need a fourth lane and a second dimension the
+plan's tests do not reach.
+"""
+
+from __future__ import annotations
+
+import random
+
+import pytest
+
+from docintel.core.models import new_context
+from docintel.pipeline.stages.s7_gate import (
+    DEFAULT_FORCED_REVIEW_TAGS,
+    FORCING_MODIFIERS,
+    VERY_LOW_FLOOR,
+    ConfidenceGate,
+)
+
+
+def _gate(**kw):
+    kw.setdefault("rng", random.Random(0))
+    return ConfidenceGate(**kw)
+
+
+# ==========================================================================
+# The plan's block, verbatim
+# ==========================================================================
+
+
+def test_all_fields_clear_thresholds_goes_high():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.98, "invoice_number": 0.95}
+    out = _gate(thresholds={"total_printed": 0.95, "invoice_number": 0.92}).run(ctx)
+    assert out.lane == "high"
+    assert out.review_flag is False
+
+
+def test_one_weak_field_goes_medium_with_review():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"vendor_name": 0.97, "total_printed": 0.55}
+    out = _gate(thresholds={"total_printed": 0.95, "vendor_name": 0.90}).run(ctx)
+    assert out.lane == "medium"
+    assert out.review_flag is True
+    assert out.regen_flag is False
+
+
+def test_most_fields_weak_goes_low_with_regen_not_just_review():
+    """Systemic failure means 'fix the rules', not 'a human reads this one'."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.2, "b": 0.3, "c": 0.25, "d": 0.9}
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "low"
+    assert out.regen_flag is True
+
+
+def test_flattened_annotations_force_review_regardless_of_confidence():
+    """F3: Federal Recycling. Never fast-lane an annotated document."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_tag("has_flattened_annotations")
+    out = _gate(thresholds={}, forced_review_tags={"has_flattened_annotations"}).run(ctx)
+    assert out.review_flag is True
+    assert out.lane != "high"
+
+
+def test_audit_sampling_is_deterministic_under_a_seeded_rng():
+    lanes = []
+    for seed in range(20):
+        ctx = new_context("d", "/x.pdf")
+        ctx.confidence = {"total_printed": 0.99}
+        out = ConfidenceGate(thresholds={}, audit_rate=0.5,
+                             rng=random.Random(seed)).run(ctx)
+        lanes.append(out.audit_sample)
+    assert any(lanes) and not all(lanes)
+
+
+def test_audit_sample_stays_in_the_high_lane_but_is_flagged():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    out = ConfidenceGate(thresholds={}, audit_rate=1.0, rng=random.Random(1)).run(ctx)
+    assert out.lane == "high"
+    assert out.audit_sample is True
+    assert out.review_flag is True
+
+
+def test_no_confidence_at_all_is_low_not_high():
+    """An empty confidence dict must never be read as 'nothing fell short'."""
+    out = _gate(thresholds={}).run(new_context("d", "/x.pdf"))
+    assert out.lane == "low"
+    assert out.review_flag is True
+
+
+# ==========================================================================
+# The fourth lane: `review`
+# ==========================================================================
+
+
+def test_the_review_lane_exists_because_gold_requires_it():
+    """The spec's Stage 7 table lists three lanes (High, Medium/Low, Very Low).
+    Two gold files expect a fourth, `review`, and gold is the objective function.
+
+    It is a real distinction, not a synonym for `medium`: Federal Recycling's
+    fields may extract perfectly, and the reason a human must look is that the
+    page carries values invisible to the text layer (F3) — not low confidence.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_tag("has_flattened_annotations")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "review"
+
+
+def test_flattened_annotations_are_forced_by_default_not_by_configuration():
+    """Section 5 says this modifier forces review *unconditionally*, so it is a
+    spec-mandated default rather than something a pack opts into."""
+    assert "has_flattened_annotations" in DEFAULT_FORCED_REVIEW_TAGS
+
+
+def test_the_forcing_modifier_alone_also_forces_review():
+    """Section 5 attaches the forcing to the MODIFIER, so a document carrying it
+    without the tag must still be forced."""
+    assert "flattened_annotations" in FORCING_MODIFIERS
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_modifier("flattened_annotations")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "review"
+    assert out.review_flag is True
+
+
+def test_arith_balance_mismatch_forces_the_review_lane():
+    """U-PAK. Section 5: this modifier "also raises review". It is what
+    `derive_amount_payable` applies when it refuses to guess the payable (F8)."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_modifier("arith_balance_mismatch")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "review"
+
+
+def test_a_bare_upstream_review_flag_does_NOT_force_the_review_lane():
+    """The bug this caught, and why forcing reads modifiers rather than a boolean.
+
+    `s5c_agent` sets `review_flag` for every first-time sender, correctly: spec
+    Part 3 says a hard miss "emits anyway with the one-shot result and a review
+    flag". Treating that as forcing routed ALL TEN corpus documents to `review`,
+    including DTSS with no tags and no modifiers at all.
+
+    "We have no rules for this sender yet" is not "this document has a problem",
+    and putting the two in one queue would bury Federal Recycling's invisible
+    overlays under every new vendor.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.review_flag = True
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "high"
+    assert out.review_flag is True, "preserved, just not lane-determining"
+
+
+def test_the_gate_never_clears_an_upstream_review_flag():
+    """Three C3 ops raise it. A gate that reset it would silently discard the
+    reason a human was supposed to look."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.review_flag = True
+    out = _gate(thresholds={}, audit_rate=0.0).run(ctx)
+    assert out.review_flag is True
+
+
+def test_a_systemic_failure_outranks_a_forced_review():
+    """Both are true, but `low` carries the actionable signal: regenerate the
+    rules. `review_flag` is set either way, so nothing is lost by preferring it.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.1, "b": 0.1, "c": 0.1}
+    ctx.add_tag("has_flattened_annotations")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "low"
+    assert out.regen_flag is True
+    assert out.review_flag is True
+
+
+def test_an_unforced_tag_does_not_force_review():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_tag("past_due")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "high"
+    assert out.review_flag is False
+
+
+# ==========================================================================
+# The second dimension: how far short, not just how many
+# ==========================================================================
+
+
+def test_a_document_wide_modifier_does_not_trigger_regen():
+    """THE case the plan's tests miss, and the reason a share-only rule fails.
+
+    A document-wide modifier (`ocr_source`, `draft_rules`) penalizes *every*
+    field equally, so the share of short fields is always 0.0 or 1.0 and the
+    `medium` lane becomes unreachable. Complete Beverage is exactly this: OCR
+    plus handwritten supporting pages gives 0.90 x 0.60 = 0.54 on every field,
+    and its gold expects `medium` with regen False — not `low`.
+
+    So `low` requires fields to be *very* low, not merely below threshold.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.54, "b": 0.54, "c": 0.54, "d": 0.54}
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "medium"
+    assert out.regen_flag is False
+    assert out.review_flag is True
+
+
+def test_the_very_low_floor_sits_below_the_harshest_single_modifier():
+    """0.60 is the harshest modifier in the section 5 enum
+    (`handwriting_detected`). Putting the floor below it means one harsh signal
+    can never on its own be read as "the rules are broken" — regen requires a
+    genuine collapse across several signals.
+    """
+    assert VERY_LOW_FLOOR < 0.60
+
+
+@pytest.mark.parametrize("score,lane", [
+    (0.89, "medium"),   # just below a 0.90 threshold
+    (0.51, "medium"),   # weak, but one bad modifier explains it
+    (0.49, "low"),      # below the floor
+    (0.10, "low"),
+])
+def test_the_boundary_between_medium_and_low(score: float, lane: str):
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": score, "b": score, "c": score}
+    assert _gate(thresholds={}).run(ctx).lane == lane
+
+
+def test_a_single_very_low_field_among_healthy_ones_is_medium_not_low():
+    """One field collapsing is a document problem; most of them collapsing is a
+    rules problem. Only the second warrants regen."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.95, "b": 0.95, "c": 0.95, "d": 0.05}
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "medium"
+    assert out.regen_flag is False
+
+
+# ==========================================================================
+# Thresholds
+# ==========================================================================
+
+
+def test_a_per_field_threshold_overrides_the_default():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"vendor_name": 0.80}
+    assert _gate(thresholds={"vendor_name": 0.75}).run(ctx).lane == "high"
+    ctx2 = new_context("d", "/x.pdf")
+    ctx2.confidence = {"vendor_name": 0.80}
+    assert _gate(thresholds={"vendor_name": 0.95}).run(ctx2).lane == "medium"
+
+
+def test_a_field_exactly_on_its_threshold_clears_it():
+    """Thresholds are a floor, not a strict inequality — an extracted field at
+    exactly the stated confidence has met the bar it was given."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.90}
+    assert _gate(thresholds={"total_printed": 0.90}).run(ctx).lane == "high"
+
+
+# ==========================================================================
+# Audit sampling
+# ==========================================================================
+
+
+def test_audit_sampling_never_fires_outside_the_high_lane():
+    """A document already going to a human does not need to be sampled into
+    review, and marking it `audit_sample` would corrupt the audit statistics."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.10, "b": 0.10}
+    out = ConfidenceGate(thresholds={}, audit_rate=1.0, rng=random.Random(1)).run(ctx)
+    assert out.lane == "low"
+    assert out.audit_sample is False
+
+
+def test_a_zero_audit_rate_never_samples():
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    out = ConfidenceGate(thresholds={}, audit_rate=0.0, rng=random.Random(1)).run(ctx)
+    assert out.audit_sample is False
+    assert out.review_flag is False
+
+
+def test_the_same_seed_gives_the_same_decision():
+    """Deterministic under a seeded rng: an audit rate that could not be replayed
+    would make the audit sample unauditable."""
+    def _decide():
+        ctx = new_context("d", "/x.pdf")
+        ctx.confidence = {"total_printed": 0.99}
+        return ConfidenceGate(
+            thresholds={}, audit_rate=0.5, rng=random.Random(7)
+        ).run(ctx).audit_sample
+
+    assert _decide() == _decide()
+
+
+# ==========================================================================
+# Every document leaves
+# ==========================================================================
+
+
+@pytest.mark.parametrize("confidence", [
+    {}, {"a": 0.0}, {"a": 1.0}, {"a": 0.5, "b": 0.5},
+])
+def test_every_document_gets_a_lane(confidence: dict[str, float]):
+    """Stage 7 has three exits but no dead end: count(intaken) == count(emitted)
+    depends on this stage always deciding something."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = dict(confidence)
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane in {"high", "medium", "low", "review"}
+
+
+def test_regen_implies_review():
+    """A regen flag says the rules are wrong, which means this document's output
+    cannot be trusted either — it must not be emitted as if it were clean."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.1, "b": 0.1}
+    out = _gate(thresholds={}).run(ctx)
+    assert out.regen_flag is True
+    assert out.review_flag is True
+
+
+def test_a_forced_review_outranks_an_empty_confidence_map():
+    """Federal Recycling, and why the forcing check runs first.
+
+    A forcing reason is a fact about the DOCUMENT, not about whether extraction
+    happened: the page carries values invisible to the text layer whether or not
+    a persona ever ran. Its gold expects `review`, not `low`.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.add_tag("has_flattened_annotations")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "review"
+    assert out.review_flag is True
+    assert out.regen_flag is False, "no rules ran, so the rules are not wrong"
+
+
+def test_an_unforced_empty_confidence_map_is_still_low():
+    out = _gate(thresholds={}).run(new_context("d", "/x.pdf"))
+    assert out.lane == "low"
+    assert out.regen_flag is False

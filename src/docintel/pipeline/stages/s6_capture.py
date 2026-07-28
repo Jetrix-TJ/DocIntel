@@ -69,6 +69,24 @@ class CaptureFields:
             ctx.add_modifier("soft_miss")
         if getattr(ctx.persona, "status", None) == "draft":
             ctx.add_modifier("draft_rules")
+        if "handwritten_supporting" in ctx.tags:
+            # SPEC ERRATUM. Section 5 defines `handwriting_detected` as "Primary
+            # page has handwriting", and this tag says the opposite - the
+            # handwriting is on a supporting page. C3 therefore did not apply it.
+            #
+            # Complete Beverage's gold routing settles it the other way: its
+            # `expected_routing.reason` reads "OCR-only source plus handwritten
+            # supporting pages; ocr_source and handwriting modifiers apply", and
+            # it expects the `medium` lane. With `ocr_source` alone every field
+            # scores exactly 0.90, clears the default threshold, and the document
+            # would fast-lane.
+            #
+            # It is also the better reading. A supporting page exists to
+            # corroborate the primary one (F10); if that corroboration is
+            # handwritten, it is weaker evidence, and the invoice it supports is
+            # correspondingly less certain. Section 5's wording is too narrow
+            # rather than this being too broad.
+            ctx.add_modifier("handwriting_detected")
         if "has_flattened_annotations" in ctx.tags:
             # F3. The 0.75 penalty belongs here because it is a confidence
             # question. Section 5 also says this modifier *forces* review
