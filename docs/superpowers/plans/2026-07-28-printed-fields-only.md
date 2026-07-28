@@ -399,7 +399,11 @@ python3 -m pytest -q && python3 -m mypy && ruff check src tests \
 python3 -m docintel.cli replay-gold 2>&1 | tail -20
 ```
 
-Expected: all four clean. Two test files report as skipped. The assertion denominator drops from 339; the numerator drops with it. Write both numbers into the commit message — the spec predicts roughly 175–200 of ~230, and a number far outside that range means something was re-verdicted that should not have been.
+Expected: all four clean. Two test files report as skipped. The denominator drops from 339 as the derived assertions leave. Write both numbers into the commit message.
+
+**Do not measure this task against the spec's 175–200 of ~230.** That is the *end-state* prediction, after Tasks 3 and 4 unwire the ops. Every assertion retired here was already passing, so the numerator cannot fall in this task — retiring a passing expectation removes it from both sides of the fraction. A numerator that *does* fall here means a printed-field assertion was deferred by mistake.
+
+The honest check for this task is the reverse of the spec's: **numerator drop should equal denominator drop.** If they differ, something that was failing got deferred, which hides a real gap.
 
 - [ ] **Step 7: Commit**
 
@@ -765,6 +769,55 @@ print('all four satisfy V13')
 - [ ] **Step 6: Drop thresholds for dropped fields**
 
 Read `src/docintel/packs/digitaldirection/thresholds.py` in full and remove entries for names no longer in `FIELDS`.
+
+- [ ] **Step 6b: Narrow `CHECKED_FIELDS` — both packs, once, here**
+
+Deliberately deferred to this task rather than split across Tasks 3 and 4. `CHECKED_FIELDS` (`scorecard.py:155`) is scorecard-global, so narrowing it while only one pack had changed would have been a global edit for a pack-local reason. Both packs are narrowed now, so the full set of no-longer-extracted fields is finally knowable.
+
+Compute it rather than guessing:
+
+```bash
+python3 -c "
+import json,glob
+from docintel.scorecard import CHECKED_FIELDS
+from docintel.packs.northstar import fields as ns
+from docintel.packs.digitaldirection import fields as dd
+extractable = ns.FIELDS | dd.FIELDS
+gone = sorted(n for n in CHECKED_FIELDS if n not in extractable)
+in_gold = set()
+for f in glob.glob('docs/corpus/gold/*.json'):
+    in_gold |= set(json.load(open(f)).get('fields') or {})
+print('no longer extractable:', gone)
+print('...and still present in gold:', sorted(set(gone) & in_gold))
+"
+```
+
+Remove the first list from `CHECKED_FIELDS`. The second list is the subset that will then trip `test_every_gold_field_is_either_asserted_or_declared_prose` — those gold facts still exist and must be accounted for.
+
+Account for them the way Task 2 accounted for the derived keys, mirroring `DEFERRED_DERIVED_KEYS`. In `tests/test_scorecard_coverage.py`:
+
+```python
+# Gold records these, and the documents really do print some of them, but no
+# pack extracts them under printed-fields-only: `currency` comes from the F14
+# inference ladder and `prior_balance_basis` from a vendor convention. Gold is
+# read-only and keeps the evidence, so re-enabling is a wiring change.
+DEFERRED_FIELDS: frozenset[str] = frozenset({ ... })  # the computed list
+```
+
+Extend `test_every_gold_field_is_either_asserted_or_declared_prose` to accept a third account — `name in DEFERRED_FIELDS` — and add the pin that keeps the allowance honest, mirroring `test_the_deferred_derived_list_holds_only_derived_only_names`:
+
+```python
+def test_the_deferred_field_list_holds_only_unextractable_names() -> None:
+    """An entry here for a field a pack still extracts is a free pass, not a
+    deferral — it would hide a real extraction failure behind a spec decision."""
+    from docintel.packs.northstar import fields as ns
+    from docintel.packs.digitaldirection import fields as dd
+
+    assert not (DEFERRED_FIELDS & (ns.FIELDS | dd.FIELDS))
+    assert not (DEFERRED_FIELDS & set(CHECKED_FIELDS))
+```
+
+**Do not widen `PROSE_FIELDS`** to absorb these — it is capped at two entries and every member must end in `_note`, and both guards exist to stop exactly this kind of drift.
 
 - [ ] **Step 7: Run the full verification**
 
