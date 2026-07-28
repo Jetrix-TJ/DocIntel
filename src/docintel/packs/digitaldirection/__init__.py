@@ -33,6 +33,7 @@ from docintel.packs.digitaldirection import (
     fields,
     hooks,
     ladder,
+    references,
     thresholds,
 )
 from docintel.packs.registry import normalize_name, primary_text
@@ -127,5 +128,6 @@ __all__ = [
     "fields",
     "hooks",
     "ladder",
+    "references",
     "thresholds",
 ]

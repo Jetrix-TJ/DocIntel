@@ -13,7 +13,7 @@
         "F11"
       ],
       "passed": false,
-      "passed_count": 27,
+      "passed_count": 30,
       "total_count": 39,
       "assertions": [
         {
@@ -154,8 +154,8 @@
           "name": "fields.circuit_id",
           "kind": "text",
           "expected": "4351003276",
-          "actual": null,
-          "passed": false
+          "actual": "4351003276",
+          "passed": true
         },
         {
           "name": "fields.bill_date",
@@ -238,8 +238,8 @@
           "name": "fields.billing_group",
           "kind": "text",
           "expected": "0384 - ACRA",
-          "actual": null,
-          "passed": false
+          "actual": "0384 - ACRA",
+          "passed": true
         },
         {
           "name": "derived.amount_payable",
@@ -333,8 +333,11 @@
             "0384043574",
             "4351003276"
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            "0384043574",
+            "4351003276"
+          ],
+          "passed": true
         }
       ]
     },
@@ -350,7 +353,7 @@
         "F13"
       ],
       "passed": false,
-      "passed_count": 24,
+      "passed_count": 25,
       "total_count": 38,
       "assertions": [
         {
@@ -650,8 +653,10 @@
           "expected": [
             "8495444620365242"
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            "8495444620365242"
+          ],
+          "passed": true
         }
       ]
     },
@@ -667,7 +672,7 @@
         "F12"
       ],
       "passed": false,
-      "passed_count": 28,
+      "passed_count": 29,
       "total_count": 39,
       "assertions": [
         {
@@ -966,8 +971,11 @@
             "5-QXH7QKM7",
             "752233001"
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            "752233001",
+            "5-QXH7QKM7"
+          ],
+          "passed": true
         }
       ]
     },
@@ -983,7 +991,7 @@
         "F9"
       ],
       "passed": false,
-      "passed_count": 27,
+      "passed_count": 28,
       "total_count": 36,
       "assertions": [
         {
@@ -1259,8 +1267,11 @@
             "041069076",
             "918-653-3103"
           ],
-          "actual": [],
-          "passed": false
+          "actual": [
+            "041069076",
+            "918-653-3103"
+          ],
+          "passed": true
         }
       ]
     },
@@ -3016,7 +3027,7 @@
     "total": 10,
     "passed": 1,
     "failed": 9,
-    "assertions_passed": 230,
+    "assertions_passed": 236,
     "assertions_total": 339
   }
 }

@@ -100,9 +100,8 @@
     },
     {
       "field": "circuit_id",
-      "anchor": "Special Circuit:",
-      "region": "near-anchor",
-      "pattern": "([0-9]{10})",
+      "region": "any-page",
+      "pattern": "Circuit:\\s?([0-9]{10})",
       "required": false
     },
     {
@@ -153,6 +152,12 @@
       "anchor": "Remit To:",
       "region": "label-block",
       "pattern": "text",
+      "required": false
+    },
+    {
+      "field": "billing_group",
+      "region": "first-page",
+      "pattern": "([0-9]{4} - [A-Z]{3,6})",
       "required": false
     }
   ],

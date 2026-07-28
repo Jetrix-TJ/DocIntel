@@ -16,7 +16,7 @@ monthly rhythm.
 from __future__ import annotations
 
 from docintel.core.models import JobContext
-from docintel.packs.digitaldirection import aliases, conventions, ladder
+from docintel.packs.digitaldirection import aliases, conventions, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
 
@@ -45,6 +45,21 @@ def apply_billing_conventions(ctx: JobContext, next_: Next) -> JobContext:
     return next_(conventions.apply_prior_balance_basis(ctx))
 
 
+def collect_references(ctx: JobContext, next_: Next) -> JobContext:
+    """Promote the extracted identity fields into `reference_list` (F11).
+
+    Registered at `beforeConfidenceGate`, NOT `afterExtraction`, and the
+    difference is load-bearing. These hits are the extracted fields themselves, and
+    `afterExtraction` fires *before* Stage 6 runs the value ops - so Comcast's
+    `account_number_normalized` would still read `8495 44 462 0365242` with its
+    printed spacing intact, and the reference hit would be unjoinable (F6).
+
+    Northstar's equivalent can run at `afterExtraction` because it scans page text
+    and depends on nothing Stage 6 does.
+    """
+    return next_(references.collect(ctx))
+
+
 def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
     """`prior_balance_present` vs `_cleared`, decided on the carried balance.
 
@@ -58,4 +73,5 @@ def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", telecom_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_carrier_fingerprint, PACK_NAME)
     registry.register("afterExtraction", apply_billing_conventions, PACK_NAME)
+    registry.register("beforeConfidenceGate", collect_references, PACK_NAME)
     registry.register("beforeConfidenceGate", refine_prior_balance_tags, PACK_NAME)
