@@ -188,6 +188,20 @@ class RowGroupSelector:
     # amount as a legitimate row. EDCO's gold agrees. So this cannot be the
     # default without contradicting a decision the corpus already encodes.
     require_amount: bool = False
+    # Opt in to ending the table at a row whose amount equals the sum of the rows
+    # above it. GRAMMAR EXTENSION, same section 10 justification as above.
+    #
+    # The reason: on Complete Beverage and Federal Recycling the totals row is
+    # printed TIGHTER than the body it follows (16.56pt against an 18.00pt pitch;
+    # 16.92 against 19.98), so `TABLE_BREAK_FACTOR` can never reach it - no
+    # multiple greater than 1 fires on a gap smaller than the pitch. Arithmetic
+    # reaches it: their 12 and 10 gold rows sum to exactly 1177.70 and 481.20,
+    # which are precisely the values being swallowed as an extra row.
+    #
+    # Default False for the same reason as `require_amount`: EDCO's gold counts
+    # `CURRENT CHARGES:` as a line item, so a roll-up row is a real row on some
+    # documents and a terminator on others. Only the persona can say which.
+    stop_at_subtotal: bool = False
 
 
 @dataclass(frozen=True)
@@ -318,6 +332,7 @@ def _parse_row_group(raw: Mapping[str, Any]) -> RowGroupSelector:
         row_count=_parse_range(raw.get("row_count"), "row_count"),
         allow_empty_cells=bool(raw.get("allow_empty_cells", True)),
         require_amount=bool(raw.get("require_amount", False)),
+        stop_at_subtotal=bool(raw.get("stop_at_subtotal", False)),
     )
 
 

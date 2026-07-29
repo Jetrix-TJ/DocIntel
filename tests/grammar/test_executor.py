@@ -430,6 +430,67 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_a_row_equal_to_the_running_sum_ends_the_table() -> None:
+    """Every invoice in the corpus prints a totals row below its items, and on
+    Complete Beverage and Federal Recycling it is TIGHTER than the body it follows
+    (16.56pt against an 18.00pt pitch; 16.92 against 19.98), so no gap multiple
+    greater than 1 can ever terminate it. Arithmetic can: the row's amount equals
+    the sum of the rows above it.
+
+    Measured: CB's 12 gold rows sum to exactly 1177.70 and FR's 10 to exactly
+    481.20 - which are precisely the values being swallowed as a 13th and 11th row.
+    """
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("One", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("Two", 50.0, 140.0), ("15.00", 400.0, 140.0),
+        ("Three", 50.0, 160.0), ("5.00", 400.0, 160.0),
+        ("TOTAL", 50.0, 180.0), ("30.00", 400.0, 180.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+        "stop_at_subtotal": True,
+    })
+    assert [str(r["amount"]) for r in ctx.row_groups["line_items"]] == [
+        "10.00", "15.00", "5.00",
+    ]
+
+
+def test_the_subtotal_rule_needs_at_least_two_rows_above_it() -> None:
+    """A two-row table whose second row happens to equal the first is a coincidence,
+    not a total - and `10.00 / 10.00` is an ordinary shape on a repeated service."""
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("One", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("Two", 50.0, 140.0), ("10.00", 400.0, 140.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+        "stop_at_subtotal": True,
+    })
+    assert len(ctx.row_groups["line_items"]) == 2
+
+
+def test_a_zero_running_sum_never_terminates_the_table() -> None:
+    """A credit memo nets to zero part-way through. Without the guard the next 0.00
+    row would look like the total of everything above it."""
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Charge", 50.0, 120.0), ("50.00", 400.0, 120.0),
+        ("Credit", 50.0, 140.0), ("-50.00", 400.0, 140.0),
+        ("Nil", 50.0, 160.0), ("0.00", 400.0, 160.0),
+        ("After", 50.0, 180.0), ("7.00", 400.0, 180.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency_signed"},
+        "stop_at_subtotal": True,
+    })
+    assert len(ctx.row_groups["line_items"]) == 4
+
+
 def test_a_line_matching_only_a_text_column_is_not_a_row() -> None:
     """Wrapped descriptions and boilerplate match the text column and nothing else.
     `if row:` counted them, so Veritiv's five terms-and-conditions lines became

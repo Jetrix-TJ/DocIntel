@@ -33,6 +33,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from statistics import median
 from time import perf_counter
 from typing import Any
@@ -521,11 +522,21 @@ class Executor:
         #
         # Also guarded on the group DECLARING money, so setting the flag on a ladder
         # that has no money column is inert rather than emptying it.
-        money_columns = (
-            {n for n, p in selector.columns.items() if p in MONEY_PATTERNS}
-            if selector.require_amount
-            else set()
-        )
+        declared_money = {n for n, p in selector.columns.items() if p in MONEY_PATTERNS}
+        money_columns = declared_money if selector.require_amount else set()
+
+        # The column a subtotal would be a subtotal OF: the RIGHTMOST money column
+        # in the resolved bounds, not the last declared one. Complete Beverage
+        # declares both `unit_price` and `amount` as currency, and summing unit
+        # prices would be arithmetic about nothing. Rightmost is the geometric
+        # convention every invoice in the corpus follows for a line total, and it
+        # does not depend on the order someone happened to write the JSON in.
+        total_column: str | None = None
+        if selector.stop_at_subtotal:
+            money_bounds = [(c, left) for c, left, _ in bounds if c in declared_money]
+            if money_bounds:
+                total_column = max(money_bounds, key=lambda b: b[1])[0]
+        running_sum = Decimal("0")
 
         # Vertical rhythm, seeded from the header-to-first-row gap.
         #
@@ -596,7 +607,25 @@ class Executor:
                 # a continuation note, or the blank space below the table. Nor is a
                 # row that matched no money on a table that prints money.
                 if row and (not money_columns or not money_columns.isdisjoint(row)):
+                    total = row.get(total_column) if total_column else None
+                    if (
+                        isinstance(total, Decimal)
+                        # Two rows above, so a repeated service priced the same
+                        # twice (`10.00 / 10.00`) is not read as its own total.
+                        and len(rows) >= 2
+                        # A credit memo nets to zero part-way down. Without this
+                        # the next 0.00 row would look like the total so far.
+                        and running_sum != 0
+                        and total == running_sum
+                    ):
+                        ctx.log(
+                            f"s5a: row_group {selector.row_group!r} ended at a "
+                            f"subtotal row ({total_column}={total})"
+                        )
+                        return
                     rows.append(row)
+                    if isinstance(total, Decimal):
+                        running_sum += total
 
         # `row_count` is a stated expectation, not a filter. Truncating to `max`
         # would silently discard real rows, and raising would turn a layout

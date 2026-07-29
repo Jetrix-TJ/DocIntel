@@ -87,7 +87,9 @@
         "min": 1,
         "max": 40
       },
-      "allow_empty_cells": true
+      "allow_empty_cells": true,
+      "require_amount": true,
+      "stop_at_subtotal": true
     },
     {
       "field": "vendor_address",
