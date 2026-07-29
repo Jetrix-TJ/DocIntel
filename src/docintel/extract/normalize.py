@@ -1,14 +1,22 @@
-"""Decide once, per document, whether to trust the text layer or run OCR.
+"""Decide per PAGE whether to trust the text layer or run OCR.
 
-F2's measured rule: a document whose average characters-per-page falls below
+F2's measured rule: a page whose character count falls below
 `NATIVE_CHAR_THRESHOLD` gets zero characters back from a "successful" parse of
 a perfectly clean invoice, so `char_count == 0` and `char_count` too small to
 be real text both mean the same thing here — there is nothing to read.
 
-The decision is made for the whole document, never per page (a later
-confidence modifier keys off the single `text_source` value this returns),
-and OCR happens exactly once **per (path, size, mtime, content) combination**
-— see the in-process memo below. `ocr.ocr_pages` also carries its own
+The routing decision is per page — a document-wide average was fitted to a
+corpus that is bimodal at the document level (every document averages 0
+chars/page or 500+, never mixed), so it never met a document with both native
+and scanned pages, and silently left the scanned ones wordless. `text_source`
+stays a two-valued *document* summary, though: any starved page makes the
+whole document `"ocr"`, because a later confidence modifier and two Northstar
+ladder checks key off `text_source == "ocr"` exactly (see
+`_load_document_uncached` for the full reasoning). Per-page provenance still
+travels on `PageText.source` and `Span.source`.
+
+OCR happens exactly once **per (path, size, mtime, content) combination** —
+see the in-process memo below. `ocr.ocr_pages` also carries its own
 disk-backed cache (`ocr_cache.py`) so a fresh OCR run stays rare even across
 separate process invocations, e.g. `pytest` followed by `docintel
 replay-gold`.
@@ -42,6 +50,7 @@ from __future__ import annotations
 import functools
 import os
 
+from docintel.core.errors import TransientError
 from docintel.core.models import PageMeta, PageText
 from docintel.extract import ocr, ocr_cache, pdf
 
@@ -105,13 +114,35 @@ def _load_document_cached(
 
 def _load_document_uncached(path: str) -> tuple[tuple[PageText, ...], tuple[PageMeta, ...], str]:
     meta = pdf.read_meta(path)
-    total_chars = sum(m.char_count for m in meta)
-    avg_chars_per_page = total_chars / len(meta) if meta else 0.0
+    # Per PAGE, not per document. The document-wide average was fitted to a
+    # bimodal corpus (every document is 0 chars/page or 500+); a native invoice
+    # with three scanned attachment pages averages ~586, took the native path,
+    # and left those pages wordless - and a wordless page is role `unknown`, so
+    # reference matching across attachments silently found nothing.
+    #
+    # `text_source` stays a two-valued document summary: ANY starved page makes
+    # the document "ocr". Per-page provenance already travels on
+    # `PageText.source` and on `Span.source`. A third value would have skipped
+    # the `ocr_source` confidence penalty (s6_capture.py:73), the `ocr_only` tag
+    # and `_handwritten_supporting` (ladder.py:176,196), all three of which test
+    # `== "ocr"` exactly - inflating confidence on precisely the pages whose text
+    # we trust least. Conservative on purpose.
+    starved = [m.page_number for m in meta if m.char_count < NATIVE_CHAR_THRESHOLD]
+    if not starved:
+        return pdf.read_pages(path), meta, "native"
+    if len(starved) == len(meta):
+        return ocr.ocr_pages(path, starved), meta, "ocr"
 
-    if avg_chars_per_page < NATIVE_CHAR_THRESHOLD:
-        page_numbers = [m.page_number for m in meta]
-        pages = ocr.ocr_pages(path, page_numbers)
-        return pages, meta, "ocr"
-
-    pages = pdf.read_pages(path)
-    return pages, meta, "native"
+    native = {p.page_number: p for p in pdf.read_pages(path)}
+    ocred = {p.page_number: p for p in ocr.ocr_pages(path, starved)}
+    # ENG REVIEW: without this, a short OCR result falls back to the WORDLESS
+    # native page - silent data loss on exactly the page this change exists to
+    # rescue. A raise here becomes a dead_letter with a reason, which is visible.
+    missing = [n for n in starved if n not in ocred]
+    if missing:
+        raise TransientError(
+            f"OCR returned no page for {missing} of {path!r}; "
+            "refusing to fall back to a page with no text layer"
+        )
+    pages = tuple(ocred.get(m.page_number) or native[m.page_number] for m in meta)
+    return pages, meta, "ocr"
