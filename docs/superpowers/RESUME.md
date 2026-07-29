@@ -1,32 +1,41 @@
 # Resume here
 
-Stopped deliberately on 2026-07-29 after the printed-fields-only narrowing.
-Everything needed to pick up is in git. Nothing is half-committed.
+Stopped deliberately on 2026-07-29, after a generalisation pass on top of the
+printed-fields-only narrowing. Everything needed to pick up is in git. Nothing
+is half-committed.
 
 ## State in one block
 
 ```
-branch      feat/pipeline          (base: main @ c82eb76, docs-only baseline)
-tests       1,426 passing, 12 skipped, in ~8.5s
+branch      dev                    (base: main @ c82eb76, docs-only baseline)
+tests       1,446 passing, 12 skipped, in ~7.5s
 mypy        python3 -m mypy        -> 0 errors (core/, grammar/, adapters/vision/)
 ruff        ruff check src tests   -> clean
 gold        python3 docs/corpus/validate_gold.py -> 95 checks green
-scorecard   1/10 documents green, 193/263 assertions
+scorecard   1/10 documents green, 201/263 assertions
 ```
 
 **All 12 skips are guardrails 2 and 6**, skipped with the deferral reason as the
 skip message. Nothing else in the suite is skipped, and no skip is
 unexplained — see "printed-fields-only" below.
 
-Per document, measured 2026-07-29:
+Per document, measured 2026-07-29 (after the generalisation pass):
 
 | Document | | Document | |
 |---|--:|---|--:|
 | Centracom | 25/29 | EDCO | 17/26 |
-| Comcast | 25/29 | Complete Beverage | 17/25 |
-| Lumen | 24/29 | Veritiv | 16/31 |
-| Windstream | 24/27 | Federal Recycling | 14/23 |
+| Comcast | 25/29 | Complete Beverage | 20/25 |
+| Lumen | 25/29 | Veritiv | 18/31 |
+| Windstream | 24/27 | Federal Recycling | 16/23 |
 | **DTSS** | **19/19 PASS** | U-PAK | 12/25 |
+
+**Read "The generalisation pass" below before trusting this number.** 13 of the
+201 passing assertions (6.5%) are *asserted rather than extracted* — they rest on
+a selector whose pattern spells out the answer. GUARDRAIL 9 measures that and
+stops it growing; it does not remove it. On a corpus of ten samples the score is
+the goal, but the deliverable is thousands of documents from arbitrary senders,
+and against that target **the absence of value-keyed rules matters more than the
+score.**
 
 **The 10/10 caveat is discharged, and now enforced.** C2b closed it for the four
 contract keys; C3b closed it for the confidence modifiers, 29 unasserted gold
@@ -61,7 +70,7 @@ python3 -m pytest -q && python3 -m mypy && ruff check src tests \
 | `docs/superpowers/execution/ledger.md` | **Everything that happened.** Every ruling, finding, erratum and process decision, in order. This is the recovery map. |
 | `docs/superpowers/execution/task-*-report.md` | Per-task implementer reports — what was tried, measured, and why. |
 | `.loop/journal.md` | Convergence-loop journal. |
-| `.loop/scorecard.json` | Current machine-readable scorecard. |
+| `.loop/scorecard.json` | **STALE — do not trust.** Records 274/339, the *pre-narrowing* numbers, last written at `32b01f3`. Nothing in the shipped code regenerates it; it came from convergence-loop tooling under gitignored scratch. Get the live figure from `python3 -m docintel.cli replay-gold`. |
 
 ## Where the work stopped
 
@@ -169,13 +178,120 @@ under injected failures at every stage.
 
 **Read `execution/task-c5b-report.md`'s "What is still failing" before continuing.**
 The `label-block` region it proposed **is shipped**, and it closed most of the
-address failures (211 → 274). The two vendor names it flagged as unreachable
-(Lumen's logo, Windstream's `Windstre am`) are still not in the text layer and
-still cannot be captured by any pattern — they are vision's job, not a persona's.
+address failures (211 → 274).
+
+**CORRECTED 2026-07-29 — the "vision's job" claim was wrong.** This file used to
+say Lumen's logo vendor name and Windstream's `Windstre am` were unreachable by any
+pattern and needed vision. Both `fields.vendor_name` assertions **pass today**,
+via pattern selectors:
+
+```
+lumen      fields.vendor_name  PASS  'Lumen'
+windstream fields.vendor_name  PASS  'Kinetic Business by Windstream'
+```
+
+Verify with `replay-gold` before re-asserting otherwise. **Vision is currently
+needed for zero of the failing assertions** — classified, the remaining 62 are 33
+unauthored selectors, 14 selectors that exist but read the wrong value, 5
+routing/confidence, 4 tag rules, 4 table/row-group and 2 other. OCR is a different
+matter and is *not* optional: Federal Recycling and Complete Beverage have
+0-character text layers, so Tesseract is load-bearing for those two.
 
 The title-case question C5a raised **is decided and shipped**: the scorecard now
 compares transcribed text case-insensitively (`kind="text"`). A `title_case` op
 was rejected because it would be actively wrong — `LLC` → `Llc`, `OCC` → `Occ`.
+
+## The generalisation pass (2026-07-29, 11 commits, 193 → 201/263)
+
+Driven by one constraint: **the corpus is ten samples, the target is thousands of
+documents from many senders, and a rule that only works on the file that induced it
+is worthless at that scale.** Several changes here bought no assertions on purpose.
+
+**Fixed, with an assertion:**
+
+- Re-anchored three address selectors off the value they capture. `_apply_field`
+  puts the anchor's words in `skip` and `_candidates` drops them, so an anchor on
+  the address's own first line *deletes that line*. +2.
+- `HEADER_BAND` merge for a column header wrapped onto the line above. Veritiv's
+  `Extended` sits 8.26pt above its `Product No.` anchor and `_LINE_TOLERANCE = 3.0`
+  split them, so the amount column was never bound — silently, because the
+  declared-header error only fires when *no* column binds. +1.
+- `require_amount` (opt-in): a line matching no money column is not a row. Killed
+  Veritiv's five terms-and-conditions lines. +1.
+- `stop_at_subtotal` (opt-in): a row whose amount equals the running sum above it
+  ends the table. CB's 12 gold rows sum to exactly 1177.70 and FR's 10 to exactly
+  481.20 — the very values being swallowed. Their totals rows print *tighter* than
+  the body (16.56pt against an 18.00pt pitch; 16.92 against 19.98) so no gap
+  multiple greater than 1 can ever reach them. +4.
+
+Both table flags are **opt-in and must stay that way**: F15 and EDCO's gold both
+treat a blank-amount roll-up row as a real line item. I implemented `require_amount`
+unconditionally first and `test_empty_cells_are_omitted_when_allowed` caught it.
+
+**Fixed, with no assertion, deliberately:**
+
+- **A hole in GUARDRAIL 7.** `policy.py` clamped vision confidence to `[0.0, CEILING]`
+  — upper bound only. A model reporting <0.50 on ≥60% of its fields reached
+  `_confidence_lane` → `low` lane → `regen_flag`, i.e. lane-routing *and*
+  rule-lifecycle power from a number the model chose. Unreachable only because
+  Stage 5b never runs; enabling any escalation arms it. Now floored at `VISION_FLOOR`.
+- **`pitch = min(pitch, gap)` → median.** One tight line permanently redefined a
+  table's rhythm as that outlier (CB 18.00 → 3.60, FR 19.98 → 4.68), collapsing the
+  break threshold to the floor so the next *ordinary* gap truncated the table.
+- **`column_cut`** replaces `LABEL_BLOCK_RIGHT = 300.0` with the first ≥24pt gutter
+  measured across the block's own rows. Applied in the executor for `text_block`
+  only — I put it in `_label_block` first and it broke four tests and cost two
+  assertions, because that region also serves label/amount ladders where the wide
+  gap before a right-aligned amount *is* the layout. A resolver never sees the
+  pattern; `_candidates` does.
+- **`HEADER_BAND` made relative** — `max(12.0, median_pitch × 1.5)`. The absolute
+  12.0 was fitted to Veritiv's 8.26pt offset. Corpus median pitch is 5.8–12.4pt so
+  it covered everything here; a sender using 20pt leading loses its wrapped header
+  and every amount under it.
+- **GUARDRAIL 9**, below.
+- **`anchor_occurrence`** (`first`/`last`), because `_resolve_anchor` returns
+  `hits[0]` and four addresses are anchored on a payee name printed 2–3× per page.
+  **No persona uses it yet:** probing all four showed `last` reaches the right block
+  and the x-window then wrecks it. Committed as a documented prerequisite, not dead
+  code.
+
+### What GUARDRAIL 9 found, and what it did not fix
+
+21 selectors restate a value instead of reading it — 5 where the anchor is inside
+its own value, 16 where the pattern spells out the answer. The dangerous class is
+`bill_to_name` / `bill_to_attention` on Digital Direction: it is a telecom expense
+manager billing several managed clients, so the bill-to **varies per document** and
+is hardcoded on all four carriers. A new client's invoice returns `None`.
+
+**I did not fix those 16, and the reason matters.** There is no `Bill To` label on
+any of the four carriers — the name is simply the first line of an address block,
+located only by position. Replacing a literal with a positional selector fitted to
+one invoice is fitting *position* to one sample instead of *text* to one sample:
+the same overfit, unverifiable from a single document. **What they need is a second
+invoice per sender**, so a candidate can be validated against a document that did
+not induce it. Production has that; this corpus does not.
+
+### Constants: which generalise and which do not
+
+Relative to something measured, so they scale — `HEADER_FRACTION 0.25`,
+`TOP_FRACTION 1/3`, `REMITTANCE_FRACTION 0.70`, `TOTALS_FALLBACK 0.60`,
+`TABLE_BREAK_FACTOR 2.5`, `LABEL_BLOCK_GAP_FACTOR 2.0`, `HEADER_BAND_PITCHES 1.5`.
+
+Absolute points, so font-size dependent and a real risk across many senders:
+
+| Constant | Risk |
+|---|---|
+| **`_LINE_TOLERANCE = 3.0`** | **Fix this first.** Complete Beverage's tightest inter-line gap is 3.60pt — 0.6pt of margin. A slightly tighter document merges two logical lines, corrupting every row and column derived from them. |
+| `NEAR_ANCHOR_BELOW = 40.0` | ~3 lines at 14pt leading, ~2 at 20pt, ~7 at 6pt |
+| `TOTALS_BAND = 80.0` | same |
+| `LABEL_BLOCK_MAX = 140.0` | its comment says "~10 lines", silently assuming ~14pt |
+| `CELL_GAP = 12.0` | column separation, font-dependent |
+| `LABEL_BLOCK_RIGHT` / `NEAR_ANCHOR_RIGHT = 300.0` | now bypassed for `text_block`; still absolute for every other pattern |
+
+Also still true and unfixed: `pitch = min(pitch, gap)` survives in
+`regions.py::_label_block` — the same latent bug fixed for row groups. Centracom's
+`vendor_address` is now free of cross-column contamination and still carries a promo
+line below the address, which is that bug.
 
 ## Next: four dispatch units
 
@@ -321,8 +437,9 @@ of the same invoice both arrive.
 | 4 | `test_f3_forced_review.py` | values invisible to the text layer emitted without a human ever looking |
 | 5 | `test_personas_validate.py` | a rejected persona is a lookup *miss*, so the document falls back to vision quietly |
 | 6 | `test_f1_centracom_trap.py` **(`skip`ped)** | every corroboration signal points at the wrong number |
-| 7 | `test_vision_policy.py` | a vision model gains the power to route a document's lane |
+| 7 | `test_vision_policy.py` | a vision model gains the power to route a document's lane — **or, via a second path found 2026-07-29, to demand a persona regeneration** |
 | 8 | `test_cassette_provenance.py` | a hand-authored answer scores against the gold it was copied from |
+| 9 | `test_no_hardcoded_values.py` | a selector that restates a value instead of reading it scores 100% here and returns `None` on the next invoice |
 
 Guardrails 2 and 6 are the only skipped tests in the suite. The skip message on
 each is the deferral reason and the instruction: un-skip them in the same change
