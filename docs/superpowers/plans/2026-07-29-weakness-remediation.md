@@ -790,6 +790,38 @@ accidental floor-clamping) means **Task 2 may legitimately end at 200/263 with a
 justification rather than at 202.** That is a decision for whoever runs Wave 2, and it is
 the one place in this plan where a lower number can be the right answer.
 
+### Task 8c: The grammar has no nth-occurrence primitive — NEW, found during Wave 1
+
+Two independent cases in Task 5 demonstrate the same gap, which is stronger evidence than
+either alone:
+
+- **EDCO is blocked outright.** Its payee name prints identically three times with no
+  distinguishing feature. `anchor_occurrence` supports only `first` and `last`, and the
+  remittance block is under the **middle** one. Reaching further up the column leaks the
+  invoice's own total into the capture. Its `ANCHOR_IN_VALUE_DEBT` entry is retained.
+- **Veritiv and Windstream work, but by count.** `anchor_occurrence: "last"` resolves
+  correctly today only because exactly two bare-word matches exist per primary page.
+  Veritiv has a third occurrence (`Veritiv,` at y=384.4) and Windstream two more
+  (`Windstream.` y=522.8, `WINDSTREAM,` y=541.6) that miss **only** because `_norm`
+  (`grammar/executor.py:141`) strips a trailing colon but not a comma or period. One
+  punctuation change in a future invoice and `last` silently resolves to a footer line.
+  Nothing catches it: GUARDRAIL 5 validates grammar *shape*, not layout stability.
+
+`anchor_occurrence` was built earlier in this project precisely for addresses anchored on a
+payee name printed 2–3× per page, and shipped with no persona using it. Task 5 is its first
+real user, and the feature as built does not cover the case that motivated it.
+
+**What it needs:** an occurrence selector that can address the nth match, or better, one that
+disambiguates by what follows the anchor rather than by ordinal position — "the occurrence
+with an address block under it" is the actual intent, and it is stable under both punctuation
+drift and a changed number of mentions. Design it with Task 8, where the geometry constants
+are already in play.
+
+**Also fix while there:** `grammar/schema.py:181-186` asserts "the occurrence sitting above
+the remittance block is the LAST one" for all three personas *including EDCO*. Verified false
+for EDCO. A stale comment that would mislead a future author into thinking EDCO is a trivial
+`anchor_occurrence: "last"` fix.
+
 ### Task 7: Derive the line tolerance from the page, and define it once
 
 **Files:**
