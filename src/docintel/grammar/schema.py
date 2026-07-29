@@ -26,6 +26,7 @@ from docintel.core.errors import ValidationError
 
 PersonaWriteStatus = Literal["draft", "active"]
 Capture = Literal["first", "all_matches"]
+AnchorOccurrence = Literal["first", "last"]
 TotalsPageRole = Literal["last", "first"]
 FingerprintTextSource = Literal["native", "ocr", "either"]
 
@@ -144,6 +145,18 @@ class FieldSelector:
     region: str
     anchor: str | None = None
     anchor_alts: tuple[str, ...] = ()
+    # Which occurrence of `anchor` to resolve to. GRAMMAR EXTENSION, section 10.
+    #
+    # The reason: `_resolve_anchor` returns `hits[0]`, so a label printed more than
+    # once always resolves to the first in reading order. Four remit addresses fail
+    # purely because of that - EDCO prints its own name 3x, `VERITIV OPERATING
+    # COMPANY` and `Windstream` twice each, and the occurrence sitting above the
+    # remittance block is the LAST one. The correct anchor already exists on the
+    # page and is simply unreachable.
+    #
+    # Default "first", pinned by a test: flipping it would silently move every
+    # anchored selector in both packs.
+    anchor_occurrence: AnchorOccurrence = "first"
     capture: Capture = "first"
     adjust: tuple[str, ...] = ()
     required: bool = True
@@ -291,12 +304,22 @@ def _parse_field_selector(raw: Mapping[str, Any]) -> FieldSelector:
     capture = raw.get("capture", "first")
     if capture not in ("first", "all_matches"):
         raise ValidationError(f"capture must be 'first' or 'all_matches', got {capture!r}")
+    occurrence = raw.get("anchor_occurrence", "first")
+    if occurrence not in ("first", "last"):
+        raise ValidationError(
+            f"anchor_occurrence must be 'first' or 'last', got {occurrence!r}"
+        )
+    if occurrence != "first" and raw.get("anchor") is None:
+        # An occurrence selector with no anchor to select an occurrence OF is a
+        # typo that would otherwise do nothing quietly.
+        raise ValidationError("anchor_occurrence requires an anchor")
     return FieldSelector(
         field=str(_require_key(raw, "field")),
         pattern=str(_require_key(raw, "pattern")),
         region=str(_require_key(raw, "region")),
         anchor=None if raw.get("anchor") is None else str(raw["anchor"]),
         anchor_alts=_as_tuple(raw.get("anchor_alts")),
+        anchor_occurrence=occurrence,
         capture=capture,
         adjust=_as_tuple(raw.get("adjust")),
         required=bool(raw.get("required", True)),

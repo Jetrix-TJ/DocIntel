@@ -239,14 +239,20 @@ class Executor:
         if selector.anchor is None:
             return None, False, False
 
+        # `hits` is in reading order, so "last" is simply the other end. An
+        # ambiguous anchor stays ambiguous either way: the modifier still applies,
+        # because choosing an occurrence deliberately is not the same as the page
+        # having only one.
+        pick = -1 if selector.anchor_occurrence == "last" else 0
+
         hits = self._find_anchors(ctx, selector.anchor)
         if hits:
-            return hits[0], False, len(hits) > 1
+            return hits[pick], False, len(hits) > 1
 
         for alt in selector.anchor_alts:
             hits = self._find_anchors(ctx, alt)
             if hits:
-                return hits[0], True, len(hits) > 1
+                return hits[pick], True, len(hits) > 1
         return None, False, False
 
     # -- candidate generation ---------------------------------------------

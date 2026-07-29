@@ -430,6 +430,41 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_an_anchor_can_target_its_last_occurrence() -> None:
+    """`_resolve_anchor` returns `hits[0]`, so a label printed more than once always
+    resolves to the first one in reading order. Four remit addresses fail purely for
+    this reason: EDCO prints its own name 3x, `VERITIV OPERATING COMPANY` and
+    `Windstream` twice each, and the occurrence above the remittance block is the
+    LAST one - so the correct anchor exists and is simply unreachable.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0), ("letterhead", 50.0, 112.0),
+        ("ACME", 50.0, 300.0), ("PO", 50.0, 312.0), ("BOX", 70.0, 312.0), ("7", 95.0, 312.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "last",
+        "adjust": ["join_lines_comma"],
+    })
+    assert ctx.extracted.get("remit_address") == "PO BOX 7"
+
+
+def test_the_default_occurrence_is_still_the_first() -> None:
+    """Pinned, because flipping the default would silently move every anchored
+    selector in both packs."""
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0), ("letterhead", 50.0, 112.0),
+        ("ACME", 50.0, 300.0), ("PO", 50.0, 312.0), ("BOX", 70.0, 312.0), ("7", 95.0, 312.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block",
+    })
+    assert ctx.extracted.get("remit_address") == "letterhead"
+
+
 def test_a_row_equal_to_the_running_sum_ends_the_table() -> None:
     """Every invoice in the corpus prints a totals row below its items, and on
     Complete Beverage and Federal Recycling it is TIGHTER than the body it follows
