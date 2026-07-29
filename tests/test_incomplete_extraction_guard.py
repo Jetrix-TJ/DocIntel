@@ -53,6 +53,7 @@ import pytest
 
 from docintel.adapters.vision.fake import FakeVision
 from docintel.grammar.schema import parse_persona
+from docintel.packs.digitaldirection import aliases as dd_aliases
 from docintel.packs.registry import load_packs, register_all
 from docintel.packs.store import PackPersonaStore
 from docintel.pipeline.hooks import HookRegistry
@@ -140,19 +141,23 @@ def test_the_shipped_persona_still_reaches_the_fast_lane(shipped: dict) -> None:
 # -- mechanism 1: declared, required, produced nothing ------------------------
 
 
-def test_an_unseen_end_customer_does_not_auto_approve() -> None:
-    """Digital Direction's bills are addressed to several managed clients, and
-    three of its four carriers hardcode the client name as the `bill_to_name`
-    pattern. A client onboarded last week is exactly this shape: one required
-    field silently empty on an otherwise perfect document."""
-    record = _run(lambda raw: _break_all_but(
-        raw, {f["field"] for f in raw["field_selectors"] if "field" in f}
-                - {"bill_to_name"}
-    ))
+def test_an_unseen_end_customer_does_not_auto_approve(monkeypatch) -> None:
+    """Digital Direction's bills are addressed to several managed clients, so the
+    bill-to varies per document. A client onboarded last week is exactly this
+    shape: one required field empty on an otherwise perfect document.
+
+    Simulated by emptying the pack's roster rather than by breaking a selector,
+    because that is now where the client list lives - Comcast's template prints no
+    bill-to label, so `resolve_bill_to_alias` reads it from `MANAGED_CLIENTS`. An
+    unrostered client is the production event this guards.
+    """
+    monkeypatch.setattr(dd_aliases, "MANAGED_CLIENTS", ("Somebody Else Entirely",))
+    record = _run()
 
     assert record["fields"].get("bill_to_name") is None, (
         "the test did not achieve the condition it is asserting about"
     )
+    assert record["derived"].get("bill_to_name") is None
     assert record["lane"] != "high", (
         "a required field extracted nothing and the document was auto-approved"
     )
@@ -204,13 +209,11 @@ def test_a_wholesale_layout_change_asks_for_the_rules_to_be_regenerated() -> Non
     assert record["review_flag"] is True
 
 
-def test_one_missing_field_is_not_a_collapse() -> None:
+def test_one_missing_field_is_not_a_collapse(monkeypatch) -> None:
     """`low` triggers a rule rewrite, so it must stay rare. A single missing field
     is a gap in one rule, not a broken persona."""
-    record = _run(lambda raw: _break_all_but(
-        raw, {f["field"] for f in raw["field_selectors"] if "field" in f}
-                - {"bill_to_name"}
-    ))
+    monkeypatch.setattr(dd_aliases, "MANAGED_CLIENTS", ("Somebody Else Entirely",))
+    record = _run()
     assert record["lane"] == "review"
     assert record["regen_flag"] is False
 

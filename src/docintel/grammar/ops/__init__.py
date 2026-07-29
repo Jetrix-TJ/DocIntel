@@ -47,6 +47,7 @@ OPS: dict[str, DocumentOp] = {
     # 4.4 inference
     "infer_currency": infer.infer_currency,
     "resolve_vendor_alias": infer.resolve_vendor_alias,
+    "resolve_bill_to_alias": infer.resolve_bill_to_alias,
 }
 
 ALL_OP_NAMES: frozenset[str] = frozenset(base.VALUE_OPS) | frozenset(OPS)
@@ -79,6 +80,10 @@ ORDER: tuple[str, ...] = (
     "derive_amount_payable",
     "infer_currency",
     "resolve_vendor_alias",
+    # After the vendor, before the cross-checks: it only reads page text and the
+    # already-extracted bill_to_name, so nothing it produces is an input to a
+    # derivation - but a cross-check may want the party it resolved.
+    "resolve_bill_to_alias",
     "crosscheck_line_sum",
     "crosscheck_total_composition",
     "crosscheck_balance_composition",

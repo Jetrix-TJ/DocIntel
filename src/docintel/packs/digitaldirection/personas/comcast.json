@@ -6,12 +6,6 @@
   "notes": "Account number label and value are split by a column boundary, so the value line is glued to `Taxes and fees 3.22`. The credit carries BOTH a leading minus and a trailing `cr`, which parse_money resolves with an OR rather than negating twice.",
   "field_selectors": [
     {
-      "field": "vendor_name",
-      "region": "any-page",
-      "pattern": "(Comcast Business)",
-      "required": false
-    },
-    {
       "field": "account_number",
       "anchor": "Account number",
       "region": "near-anchor",
@@ -35,11 +29,6 @@
         "normalize_date_iso"
       ],
       "required": false
-    },
-    {
-      "field": "bill_to_name",
-      "region": "any-page",
-      "pattern": "(Clyde Administration Servi)"
     },
     {
       "field": "service_location",
@@ -80,7 +69,8 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "resolve_vendor_alias"
+        "resolve_vendor_alias",
+        "resolve_bill_to_alias"
       ]
     },
     {
@@ -113,9 +103,10 @@
     },
     {
       "field": "remit_payee",
-      "region": "any-page",
-      "pattern": "payable to (Comcast)",
-      "required": false
+      "region": "near-anchor",
+      "pattern": "([A-Z][A-Za-z0-9&.'-]{1,30})",
+      "required": false,
+      "anchor": "Make checks payable to"
     },
     {
       "field": "bill_to_address",
@@ -129,14 +120,14 @@
     },
     {
       "field": "bill_to_attention",
-      "region": "any-page",
-      "pattern": "(ATTN CLYDE COMPANIES-IT)",
+      "region": "remittance-block",
+      "pattern": "(ATTN[ :][A-Z0-9 .,&'-]{2,40})",
       "required": false
     },
     {
       "field": "return_address",
-      "region": "any-page",
-      "pattern": "(PO BOX 4118 ENGLEWOOD CO 80155)",
+      "region": "remittance-block",
+      "pattern": "(P\\.?O\\.? BOX [0-9]{1,7} [A-Z .]{3,30} [A-Z]{2} [0-9]{5})",
       "required": false
     }
   ],

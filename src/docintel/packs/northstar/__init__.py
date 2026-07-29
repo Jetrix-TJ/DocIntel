@@ -60,6 +60,18 @@ class NorthstarPack:
         """canonical key -> the name to report. See `aliases.DISPLAY_NAMES`."""
         return dict(aliases.DISPLAY_NAMES)
 
+    @property
+    def bill_to_roster(self) -> tuple[str, ...]:
+        """Every rendering of this AP department's own name, for
+        `resolve_bill_to_alias`.
+
+        One party, many spellings - the variation is the vendors', not the
+        client's. This is the pack's guard against an invoice that arrived in the
+        wrong inbox, held in one place instead of copied into each persona. See
+        `aliases.BILL_TO_RENDERINGS`.
+        """
+        return aliases.BILL_TO_RENDERINGS
+
     # -- grammar.schema.Pack -------------------------------------------------
 
     def fields_for(self, doc_type: str) -> frozenset[str]:

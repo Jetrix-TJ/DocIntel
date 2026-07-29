@@ -754,3 +754,131 @@ def test_the_worked_edco_example_from_section_nine_validates() -> None:
         },
     }
     validate_persona(edco, pack=None)
+
+
+# ==========================================================================
+# V14: a literal capture must say WHERE, not just WHAT
+# ==========================================================================
+#
+# The rule V6 already states in the other direction. V6 says a pattern with no
+# literal text needs a narrowing region, because a bare digit run matches phone
+# numbers. V14 says the converse: a pattern that captures nothing BUT literal text
+# needs a narrowing region or an anchor, because a capture with no shape to it is a
+# restatement of one document's answer rather than a description of where the value
+# lives.
+#
+# Measured motivation: 19 of 118 shipped field rules were such literals, and on
+# three of four telecom carriers the hardcoded value was `bill_to_name` - a field
+# whose value is a different managed client on every document. Since extraction
+# completeness now routes a missing required field to `review`, a literal there does
+# not merely fail, it sends 100% of a newly onboarded client's invoices to manual
+# review. The blast radius grew, which is why this is a validator rule and not a
+# style note.
+
+
+def test_a_literal_capture_on_a_whole_page_region_is_rejected() -> None:
+    """The shape that broke: nothing about position, everything about content."""
+    with pytest.raises(ValidationError, match="V14"):
+        validate_persona(_base(field_selectors=[
+            {"field": "bill_to_name", "region": "any-page",
+             "pattern": "(CITY OF DUBLIN)"},
+        ]), pack=None)
+
+
+def test_a_literal_capture_is_allowed_when_an_anchor_places_it() -> None:
+    """With an anchor the persona has made a claim about location, and the literal
+    is confirming what should be found there rather than standing in for it."""
+    validate_persona(_base(field_selectors=[
+        {"field": "vendor_name", "anchor": "Remit to", "region": "near-anchor",
+         "pattern": "(ACME HAULING)"},
+    ]), pack=None)
+
+
+def test_a_literal_capture_is_allowed_when_the_region_narrows() -> None:
+    """`top-left` is a positional claim: the vendor's own name on its own
+    letterhead is invariant across that vendor's documents, and where it is
+    printed is the real content of the rule."""
+    validate_persona(_base(field_selectors=[
+        {"field": "vendor_name", "region": "top-left", "pattern": "(CENTRACOM)"},
+    ]), pack=None)
+
+
+def test_a_shape_capture_needs_no_positional_help() -> None:
+    """A pattern describing FORM generalises by construction, so V14 has no
+    opinion about where it is applied."""
+    validate_persona(_base(field_selectors=[
+        {"field": "invoice_number", "region": "any-page",
+         "pattern": "(715-[0-9]{8})"},
+    ]), pack=None)
+
+
+def test_an_inline_label_does_not_excuse_a_literal_capture() -> None:
+    """`payable to (Comcast)` reads as anchored, but the CAPTURE is still one
+    vendor's name. The label belongs in `anchor`, where the grammar can see it -
+    hiding it in the pattern buys the appearance of a location claim without one."""
+    with pytest.raises(ValidationError, match="V14"):
+        validate_persona(_base(field_selectors=[
+            {"field": "remit_payee", "region": "any-page",
+             "pattern": "payable to (Comcast)"},
+        ]), pack=None)
+
+
+def test_a_named_pattern_is_never_a_literal() -> None:
+    """`text` and `text_block` capture whatever is there; they are the opposite of
+    a content assertion and must not be caught by this rule."""
+    validate_persona(_base(field_selectors=[
+        {"field": "vendor_name", "region": "any-page", "pattern": "text"},
+    ]), pack=None)
+
+
+def test_an_anchor_may_not_restate_a_value_captured_elsewhere() -> None:
+    """The residual half of the same mistake, and the only part of it that is
+    decidable at write time.
+
+    An anchor is a literal string by nature, so `Account Name:` and
+    `CLYDE COMPANIES` are indistinguishable to the validator - except when the
+    same persona also captures that string as a field value. Then the persona has
+    told us itself that the string is a value, and anchoring on it keys the rule
+    to one document just as surely as the pattern did.
+    """
+    with pytest.raises(ValidationError, match="V14"):
+        validate_persona(_base(field_selectors=[
+            {"field": "bill_to_attention", "region": "top-left",
+             "pattern": "(ATTN CLYDE COMPANIES-IT)"},
+            {"field": "bill_to_address", "anchor": "ATTN CLYDE COMPANIES-IT",
+             "region": "label-block", "pattern": "text_block"},
+        ]), pack=None)
+
+
+# ==========================================================================
+# V13 and the fields an op supplies
+# ==========================================================================
+
+
+def test_a_required_field_an_op_supplies_needs_no_selector() -> None:
+    """V13 asks that every required field be *covered*, not that it be selected.
+
+    `amount_payable` was already exempt on those grounds - it is required and V10
+    forbids selecting it, so demanding a selector made V10 and V13 jointly
+    unsatisfiable. A field an `adjust` op supplies from a pack table is the same
+    situation arrived at from the other direction: two of the four telecom
+    templates print their bill-to with no label, so `resolve_bill_to_alias` reads
+    it from the pack roster and no selector can or should exist.
+    """
+    validate_persona(_base(status="active", field_selectors=[
+        {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+         "pattern": "currency", "adjust": ["resolve_bill_to_alias"]},
+    ]), pack=FakePack(fields={"total_printed", "bill_to_name"},
+                      required={"bill_to_name"},
+                      ops={"resolve_bill_to_alias"}))
+
+
+def test_a_required_field_with_neither_selector_nor_op_still_fails_v13() -> None:
+    """The exemption is specific to what an op actually supplies. Without the op
+    the persona has simply not covered the field, and V13 must still say so."""
+    with pytest.raises(ValidationError, match="V13"):
+        validate_persona(_base(status="active", field_selectors=[
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+        ]), pack=FakePack(fields={"total_printed", "bill_to_name"},
+                          required={"bill_to_name"}))

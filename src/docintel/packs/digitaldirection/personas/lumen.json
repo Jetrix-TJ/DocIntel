@@ -6,12 +6,6 @@
   "notes": "The only bill in the pack printing an ISO currency code, and the only one with a real invoice number. The LUMEN letterhead is an IMAGE - the token never appears in the text layer - and `INVOICE START_11755352` on line 0 is a print-stream control token that an `INVOICE\\s*(\\d+)` pattern would grab instead of the real 752233001.",
   "field_selectors": [
     {
-      "field": "vendor_name",
-      "region": "any-page",
-      "pattern": "(Lumen)",
-      "required": false
-    },
-    {
       "field": "invoice_number",
       "anchor": "Invoice Number",
       "region": "near-anchor",
@@ -44,8 +38,9 @@
     },
     {
       "field": "bill_to_name",
-      "region": "any-page",
-      "pattern": "(CITY OF DUBLIN)"
+      "region": "near-anchor",
+      "anchor": "Name",
+      "pattern": "text"
     },
     {
       "field": "prior_balance",
@@ -82,7 +77,8 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "resolve_vendor_alias"
+        "resolve_vendor_alias",
+        "resolve_bill_to_alias"
       ]
     },
     {
@@ -101,9 +97,10 @@
     },
     {
       "field": "remit_payee",
-      "region": "any-page",
-      "pattern": "payable to (Level 3 Communications, LLC)",
-      "required": false
+      "region": "near-anchor",
+      "pattern": "([A-Z][A-Za-z0-9 ,&'-]{2,45})",
+      "required": false,
+      "anchor": "payable to"
     },
     {
       "field": "vendor_address",

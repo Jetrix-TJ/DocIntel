@@ -65,29 +65,29 @@ ANCHOR_IN_VALUE_DEBT = frozenset({
 
 # (persona, field) where the pattern spells out the answer.
 #
-# `bill_to_name` and `bill_to_attention` are the dangerous ones. Digital Direction
-# is a telecom expense manager whose bills are addressed to several managed
-# clients, so the bill-to VARIES - a new client's invoice returns None. The
-# `vendor_name` / `remit_payee` entries are less severe, because a persona is
-# already keyed to one sender, but they still cannot survive a rebrand.
-LITERAL_PATTERN_DEBT = frozenset({
-    ("centracom", "vendor_name"),
-    ("comcast", "bill_to_attention"),
-    ("comcast", "bill_to_name"),
-    ("comcast", "return_address"),
-    ("comcast", "vendor_name"),
-    ("complete_beverage", "bill_to_attention"),
-    ("edco", "bill_to_attention"),
-    ("edco", "bill_to_name"),
-    ("edco", "remit_payee"),
-    ("lumen", "bill_to_name"),
-    ("upak", "bill_to_name"),
-    ("upak", "remit_payee"),
-    ("veritiv", "bill_to_name"),
-    ("veritiv", "remit_payee"),
-    ("windstream", "bill_to_name"),
-    ("windstream", "remit_payee"),
-})
+# **EMPTY, and it stays that way.** All sixteen entries were cleared, and the rule
+# is now enforced at write time by grammar V14 (`_check_literal_capture`) rather
+# than only here: a persona whose pattern captures fixed text on a whole-page
+# region with no anchor is rejected by the validator, so it cannot reach the repo
+# to be counted by this test. This list therefore has nothing left to tolerate,
+# and `test_the_debt_lists_only_shrink` keeps it at nothing.
+#
+# How the sixteen were cleared, because the answer differed by field:
+#
+#   a printed label existed      anchor on it - `Make checks payable to`,
+#                                `payable to`, `Name`, `cheque payable to`
+#   a shape described the field  `(ATTN[ :][A-Z0-9 .,&'-]{2,40})` reads any
+#                                attention line; a PO-box shape reads any stub
+#   the print was unreadable     the pack's table supplies it: `DISPLAY_NAMES`
+#                                for a logo that is an image, and the new
+#                                `bill_to_roster` for the two telecom templates
+#                                that print their bill-to with no label at all
+#   neither applied              the selector was DELETED and the field is left
+#                                empty for `core.coverage` to report -
+#                                `edco/bill_to_attention` and
+#                                `complete_beverage/bill_to_attention`, whose
+#                                assertions were retired rather than faked
+LITERAL_PATTERN_DEBT: frozenset[tuple[str, str]] = frozenset()
 
 
 def _gold_by_persona() -> dict[str, dict[str, str]]:

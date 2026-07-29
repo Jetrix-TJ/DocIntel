@@ -67,7 +67,38 @@ BASE_ADJUST_OPS: frozenset[str] = frozenset({
     # 4.4 inference
     "infer_currency",
     "resolve_vendor_alias",
+    # GRAMMAR EXTENSION, section 10. The bill-to counterpart of
+    # `resolve_vendor_alias`, added for the same reason the vendor one exists: two
+    # of the four telecom templates print their bill-to with no label anywhere
+    # near it, so no anchor exists and no selector can read it. Those personas
+    # therefore carried the client's name as their *pattern*, which returns
+    # nothing for a client onboarded last week - and since extraction completeness
+    # now escalates a missing required field, that meant every one of a new
+    # client's invoices going to manual review. The pack's roster replaces 9
+    # per-document literals across both packs with one table per pack.
+    "resolve_bill_to_alias",
 })
+
+# Fields an adjust op can supply with no selector, so V13 counts them as covered.
+#
+# V13 asks that a required field be *covered*, not that it be selected, and it
+# already exempted the derived-only fields on exactly these grounds: demanding a
+# selector for `amount_payable` while V10 forbids one makes the two rules jointly
+# unsatisfiable. A field read from a pack table is the same situation reached from
+# the other direction - the value is real and on every record, and no selector can
+# produce it.
+#
+# The derivation ops are deliberately absent: their outputs are all in
+# `core.models.DERIVED_ONLY`, which V13 exempts already, and listing them twice
+# would leave two places to keep in step.
+OP_SUPPLIED_FIELDS: dict[str, frozenset[str]] = {
+    # Reads the bill-to party from the pack's roster when the page prints no label
+    # to anchor on - the case two of the four telecom templates present.
+    "resolve_bill_to_alias": frozenset({"bill_to_name"}),
+    # Supplies `vendor_name` from the pack's display table when the letterhead is
+    # an image (Lumen) or the text layer breaks the brand mid-word (Windstream).
+    "resolve_vendor_alias": frozenset({"vendor_name"}),
+}
 
 # Fields a scanline may corroborate (section 1.3). Binding `amount_payable` here
 # would cement the F1 bug: Centracom's scanline encodes the misleading headline

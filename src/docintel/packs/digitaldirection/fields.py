@@ -98,7 +98,21 @@ FIELDS: frozenset[str] = _IDENTITY | _AMOUNTS | _ALLOCATION | _DATES | _TABLE
 # `account_number` rather than `invoice_number`: three of the four carriers print
 # no invoice number (F6), and the field spec measures the carrier account number
 # present on 100% of readable invoices.
-REQUIRED: frozenset[str] = frozenset({"account_number"})
+#
+# `bill_to_name` is required even though this pack does not GUARD on it. The two
+# are different questions: `claims()` asks "is this document ours", and the answer
+# there is the carrier, because the bill-to varies (see `packs/registry.py`). This
+# asks "can we use the record", and a telecom bill whose managed client cannot be
+# identified is unusable - the charge has nobody to allocate to.
+#
+# It is load-bearing rather than tidy. Three of these four personas used to carry
+# the client's name as a literal pattern; the pack roster replaced them, which also
+# removed the per-selector `required: true` that made an empty bill-to visible to
+# `core.coverage`. Naming it here restores that: an unrostered client yields an
+# empty required field and routes to `review` instead of auto-approving. V13 does
+# not demand a selector for it, because `resolve_bill_to_alias` supplies it
+# (`schema.OP_SUPPLIED_FIELDS`).
+REQUIRED: frozenset[str] = frozenset({"account_number", "bill_to_name"})
 
 # What a flat set cannot say. Each group needs one covered member.
 #

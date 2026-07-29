@@ -28,6 +28,7 @@ notice.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -37,6 +38,7 @@ from docintel.grammar import regions
 from docintel.grammar.patterns import NAMED, compile_restricted
 from docintel.grammar.schema import (
     BASE_ADJUST_OPS,
+    OP_SUPPLIED_FIELDS,
     SCANLINE_AS_FORMS,
     SCANLINE_ASSERTABLE,
     SCANLINE_REGIONS,
@@ -160,6 +162,134 @@ def _check_bare_digits(pattern: str, region: str, scoped: bool, where: str) -> N
         "narrowing region and no column_headers scope (V6). Unscoped it also matches "
         "phone numbers and zip+4 (F11)"
     )
+
+
+def _capture_body(pattern: str) -> str:
+    """The text inside the one capturing group, or the whole pattern if there is none.
+
+    What a selector *returns* is the capture group, so that is the only part whose
+    generality matters. `Circuit:\\s?([0-9]{10})` is a good rule with a literal in
+    it: the literal is doing an anchor's job and the capture describes a shape.
+    `payable to (Comcast)` is the same construction inverted, and only looking
+    inside the group tells them apart.
+
+    Section 3.2 caps capture groups at one, so the first capturing paren is the
+    only one. `(?:...)` and `(?=...)` are skipped: they group without capturing.
+    """
+    depth = 0
+    start: int | None = None
+    open_depth = 0
+    i = 0
+    while i < len(pattern):
+        char = pattern[i]
+        if char == "\\":
+            i += 2  # an escaped char is literal, including an escaped paren
+            continue
+        if char == "(":
+            depth += 1
+            if start is None and not pattern.startswith("(?", i):
+                start, open_depth = i + 1, depth
+        elif char == ")":
+            if start is not None and depth == open_depth:
+                return pattern[start:i]
+            depth -= 1
+        i += 1
+    return pattern
+
+
+# Regex constructs that make a capture match more than one string. Checked before
+# escapes are neutralised, because `\d` is variability spelled as an escape while
+# `\.` and `\(` are literals spelled the same way.
+_SHORTHAND_CLASS = re.compile(r"\\[dDwWsSbB]")
+_VARIABLE_META = re.compile(r"[\[\]{}*+?|.]")
+
+
+def _is_literal_capture(pattern: str) -> bool:
+    """True when the pattern can only ever capture one exact string.
+
+    A named pattern never is: `text` and `text_block` capture whatever is printed,
+    which is the opposite of a content assertion.
+    """
+    if pattern in NAMED:
+        return False
+    body = _capture_body(pattern)
+    if _SHORTHAND_CLASS.search(body):
+        return False
+    # Escaped characters stand for themselves, so neutralise them before looking
+    # for metacharacters - otherwise `\(1989\)` reads as a group.
+    return not _VARIABLE_META.search(re.sub(r"\\.", "x", body))
+
+
+def _check_literal_capture(pattern: str, region: str, anchor: Any, where: str) -> None:
+    """V14: a literal capture must be placed, not merely asserted.
+
+    The converse of V6. V6 forbids a pattern with no literal text on a whole-page
+    region because it matches too much; V14 forbids a pattern with nothing BUT
+    literal text there because it says nothing about where the value is - it
+    restates one document's answer, so it returns nothing on the next document
+    where that answer differs.
+
+    Either an `anchor` or a narrowing region satisfies it, because either one is a
+    claim about location. With one present the literal is confirming what should be
+    found in a known place, which is a legitimate rule: a vendor's own name on its
+    own letterhead does not change between its invoices.
+    """
+    if not _is_literal_capture(pattern):
+        return
+    if anchor or region not in regions.NON_NARROWING:
+        return
+    raise ValidationError(
+        f"{where} captures the fixed text {_capture_body(pattern)!r} on region "
+        f"{region!r} with no anchor (V14). This states what the answer was on one "
+        "document rather than where to read it, so it returns nothing on any "
+        "document where the value differs - name the printed label in `anchor`, or "
+        "narrow the region, or capture a shape instead"
+    )
+
+
+def _check_anchors_are_not_values(selectors: Sequence[Any]) -> None:
+    """V14, second half: an anchor may not restate a value the persona captures.
+
+    An anchor is a literal string by nature, so `Account Name:` and
+    `CLYDE COMPANIES` are indistinguishable here - with one exception. If the same
+    persona also captures that exact string as a field value, the persona has
+    itself declared the string to be a value, and anchoring on it keys the rule to
+    one document exactly as a literal pattern would.
+
+    This is the only part of the anchor problem decidable at write time. An anchor
+    keyed to a value the persona does NOT also capture still passes, and no static
+    rule can catch it; that limit is real and is recorded in
+    `docs/architecture/selector-grammar.md`.
+    """
+    captured: dict[str, str] = {}
+    for sel in selectors:
+        if not isinstance(sel, Mapping) or "field" not in sel:
+            continue
+        pattern = sel.get("pattern")
+        if isinstance(pattern, str) and _is_literal_capture(pattern):
+            body = re.sub(r"\\(.)", r"\1", _capture_body(pattern))
+            captured[_norm_anchor(body)] = str(sel.get("field"))
+
+    for index, sel in enumerate(selectors):
+        if not isinstance(sel, Mapping):
+            continue
+        for key in ("anchor", "table_anchor"):
+            anchor = sel.get(key)
+            if not isinstance(anchor, str):
+                continue
+            owner = captured.get(_norm_anchor(anchor))
+            if owner is not None:
+                raise ValidationError(
+                    f"selector[{index}] anchors on {anchor!r}, which this persona "
+                    f"also captures as the value of {owner!r} (V14). A field value "
+                    "cannot double as a label: both move together on the next "
+                    "document, so the anchor fails exactly when the value changes"
+                )
+
+
+def _norm_anchor(text: str) -> str:
+    """Case- and whitespace-insensitive, colon-agnostic; matches executor._norm."""
+    return " ".join(text.split()).upper().rstrip(":")
 
 
 def _check_anchor_present(region: str, anchor: Any, where: str) -> None:
@@ -318,14 +448,46 @@ def _check_few_shot(persona: Mapping[str, Any]) -> None:
             )
 
 
+def _op_supplied(persona: Mapping[str, Any]) -> frozenset[str]:
+    """Fields the ops this persona actually declares will supply.
+
+    Read off the persona rather than assumed, so naming the op is what buys the
+    exemption. A persona that drops `resolve_bill_to_alias` loses the coverage it
+    granted and V13 speaks up again.
+    """
+    supplied: set[str] = set()
+    selectors = persona.get("field_selectors", ())
+    if isinstance(selectors, Mapping) or not isinstance(selectors, Sequence):
+        return frozenset()
+    for sel in selectors:
+        if not isinstance(sel, Mapping):
+            continue
+        adjust = sel.get("adjust") or ()
+        names = (adjust,) if isinstance(adjust, str) else adjust
+        if isinstance(names, Mapping) or not isinstance(names, Sequence):
+            continue
+        for name in names:
+            supplied |= OP_SUPPLIED_FIELDS.get(str(name), frozenset())
+    return frozenset(supplied)
+
+
 def _check_required_coverage(
     persona: Mapping[str, Any], pack: Pack, covered: set[str], doc_type: str
 ) -> None:
-    """V13: every required field has a selector, unless the write stays `draft`.
+    """V13: every required field is COVERED, unless the write stays `draft`.
 
-    Derived-only required fields are exempt: `amount_payable` is both required
-    and forbidden to select, so demanding a selector for it would make V10 and
-    V13 jointly unsatisfiable.
+    Covered, not selected - and the difference is the whole of the two exemptions:
+
+    * **Derived-only fields.** `amount_payable` is both required and forbidden to
+      select, so demanding a selector for it would make V10 and V13 jointly
+      unsatisfiable.
+    * **Fields an `adjust` op supplies** (`schema.OP_SUPPLIED_FIELDS`). The same
+      situation from the other direction: two of the four telecom templates print
+      their bill-to with no label anywhere near it, so `resolve_bill_to_alias`
+      reads it from the pack's roster and no selector can produce it. Requiring one
+      is what pushed those personas into hardcoding the client's name as a pattern,
+      which V14 now rejects - so without this exemption V13 and V14 would be
+      jointly unsatisfiable exactly where the document is least helpful.
 
     Two shapes of requirement. A flat name in `required_fields` must be covered.
     An any-of group in `required_any_of` needs one covered member - which is how
@@ -334,7 +496,11 @@ def _check_required_coverage(
     """
     if persona.get("status") == "draft":
         return
-    exempt = DERIVED_ONLY | pack.derived_only_fields(doc_type)
+    exempt = (
+        DERIVED_ONLY
+        | pack.derived_only_fields(doc_type)
+        | _op_supplied(persona)
+    )
     missing = sorted(pack.required_fields(doc_type) - covered - exempt)
     if missing:
         raise ValidationError(
@@ -448,6 +614,7 @@ def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> No
         region = _check_region(sel.get("region"), where)
         _check_pattern(sel.get("pattern"), where)
         _check_bare_digits(str(sel["pattern"]), region, scoped=False, where=where)
+        _check_literal_capture(str(sel["pattern"]), region, sel.get("anchor"), where)
         _check_anchor_present(region, sel.get("anchor"), where)
         _check_adjust(sel.get("adjust"), pack, where)
 
@@ -457,6 +624,10 @@ def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> No
                 f"{pack.name!r} (V1)"
             )
         covered.add(str(field))
+
+    # Persona-wide, so it runs after every selector has been seen: the anchor and
+    # the value that collide may be declared in either order.
+    _check_anchors_are_not_values(selectors)
 
     if pack is not None:
         _check_required_coverage(persona, pack, covered, doc_type)

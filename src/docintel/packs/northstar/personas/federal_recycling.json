@@ -34,7 +34,10 @@
       "field": "total_printed",
       "anchor": "Total Amt.",
       "region": "same-row",
-      "pattern": "currency"
+      "pattern": "currency",
+      "adjust": [
+        "resolve_bill_to_alias"
+      ]
     },
     {
       "field": "payment_terms",

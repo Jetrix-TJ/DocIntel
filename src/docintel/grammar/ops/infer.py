@@ -203,6 +203,80 @@ def resolve_vendor_alias(ctx: JobContext) -> JobContext:
     return ctx
 
 
+def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
+    """Read the bill-to party off the page using the pack's roster of known parties.
+
+    Two rungs, and `bill_to_basis` records which answered:
+
+    1. a selector already extracted `bill_to_name` -> `printed`
+    2. a name on the pack's roster appears on a primary page -> `roster_page_text`
+
+    **Why a roster rather than a selector.** Two of the four telecom templates
+    print their bill-to with no label anywhere near it - no `Bill To:`, no
+    `Account Name:`, nothing - so there is no anchor for a selector to hang on.
+    That absence is why those personas carried the client's name as their pattern,
+    which meant an unseen client returned nothing. The roster moves the string out
+    of the per-document rule into the pack's business registry: one entry serves
+    every carrier and every billing period, and adding a client is a config change
+    rather than four rule rewrites.
+
+    **It returns the name AS PRINTED.** Each vendor renders the same party its own
+    way - `Northstar Recycling`, `Northstar Recycling Company LLC` and `NorthStar
+    Recycling Company, LLC` are one AP department - and every gold label asserts
+    the rendering on its own document. Canonicalising here would be a second,
+    quieter kind of hardcoding.
+
+    **An unknown party stays empty.** `core.coverage` escalates a missing required
+    field to review, which is the right answer for a newly onboarded client:
+    somebody has to add them. Guessing would put a wrong party on a payment.
+    """
+    printed = _clean(ctx.extracted.get("bill_to_name"))
+    if printed is not None:
+        ctx.derived.set("bill_to_basis", "printed")
+        return ctx
+
+    match = _roster_match(ctx, _pack_bill_to_roster(ctx))
+    if match is None:
+        return ctx
+
+    ctx.derived.set("bill_to_name", match)
+    ctx.derived.set("bill_to_basis", "roster_page_text")
+    ctx.log(f"s6: bill_to_name {match!r} from the pack roster (the page prints no label)")
+    return ctx
+
+
+def _pack_bill_to_roster(ctx: JobContext) -> tuple[str, ...]:
+    pack = ctx.pack if ctx.pack is not None else getattr(ctx.persona, "pack", None)
+    roster = getattr(pack, "bill_to_roster", None)
+    if isinstance(roster, str) or not isinstance(roster, (list, tuple)):
+        return ()
+    return tuple(str(name) for name in roster)
+
+
+def _roster_match(ctx: JobContext, roster: tuple[str, ...]) -> str | None:
+    """The longest roster name printed on a primary page, exactly as printed.
+
+    Longest first because `Northstar Recycling` is a prefix of `Northstar
+    Recycling Company, LLC`; taking the shorter one would truncate the party on
+    every vendor printing the full legal name.
+
+    Whitespace between tokens is matched loosely (`\\s+`) because a PDF text layer
+    breaks lines wherever the layout does, and everything else is escaped - a
+    roster entry is a company name, not a pattern the pack author gets to write.
+    """
+    if not roster:
+        return None
+    text = _primary_text(ctx)
+    for name in sorted(roster, key=len, reverse=True):
+        tokens = [re.escape(token) for token in name.split()]
+        if not tokens:
+            continue
+        found = re.search(r"\s+".join(tokens), text, re.IGNORECASE)
+        if found is not None:
+            return " ".join(found.group(0).split())
+    return None
+
+
 def _canonical_from_page(ctx: JobContext, table: dict[str, str]) -> str | None:
     """The canonical key implied by anything printed on a primary page.
 

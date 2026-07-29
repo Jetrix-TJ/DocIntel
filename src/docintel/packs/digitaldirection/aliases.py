@@ -133,3 +133,40 @@ def count_printed_names(text: str) -> int:
         if phrase in normalized:
             seen.add(phrase)
     return len(seen)
+
+
+# The managed clients this pack bills FOR, as each carrier prints them.
+#
+# Digital Direction is a telecom expense manager: its bills are addressed to
+# several managed clients, so the bill-to is a per-DOCUMENT fact rather than a
+# per-vendor one. That is exactly why three of the four personas used to carry the
+# client's name as a selector *pattern* - and why an unseen client returned an
+# empty field. Since extraction completeness now escalates a missing required
+# field, that literal meant every invoice for a newly onboarded client went to
+# manual review.
+#
+# A roster here instead of a literal there. Two things change:
+#
+#   * one table serves all four carriers and every billing period, so a client
+#     billed by a fifth carrier needs no new rule at all;
+#   * onboarding a client is a one-line config change, reviewed as business data,
+#     rather than an edit to four extraction rules.
+#
+# Two renderings of the Clyde entity because two carriers print it two ways -
+# Comcast truncates to `Clyde Administration Servi` in a fixed-width field, and
+# Centracom prints the parent `CLYDE COMPANIES`. Both are the same client, and
+# `resolve_bill_to_alias` returns whichever the document actually shows, because
+# each gold label asserts its own document's rendering.
+#
+# Order does not matter: the resolver tries the longest entry first, so
+# `CLYDE COMPANIES` cannot shadow a longer name containing it.
+#
+# **A client not listed here yields an empty bill_to_name, on purpose.** It is
+# escalated to review by `core.coverage` rather than guessed, because putting the
+# wrong party on a telecom invoice misroutes a chargeback to a real customer.
+MANAGED_CLIENTS: tuple[str, ...] = (
+    "Clyde Administration Servi",
+    "Clyde Companies",
+    "City of Dublin",
+    "Choctaw Travel Mart",
+)

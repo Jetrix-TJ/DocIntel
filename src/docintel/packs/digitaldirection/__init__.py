@@ -73,6 +73,17 @@ class DigitalDirectionPack:
         """canonical key -> the name to report. See `aliases.DISPLAY_NAMES`."""
         return dict(aliases.DISPLAY_NAMES)
 
+    @property
+    def bill_to_roster(self) -> tuple[str, ...]:
+        """The managed clients, for `resolve_bill_to_alias`.
+
+        A client roster is business data, which is why it lives in the pack rather
+        than in the personas that used to hardcode it: one table serves all four
+        carriers, and onboarding a client is a config change instead of four rule
+        rewrites. See `aliases.MANAGED_CLIENTS`.
+        """
+        return aliases.MANAGED_CLIENTS
+
     def fields_for(self, doc_type: str) -> frozenset[str]:
         return fields.fields_for(doc_type)
 

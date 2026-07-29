@@ -7,7 +7,11 @@ at all, so `currency_basis` / `vendor_basis` are asserted alongside every value.
 from __future__ import annotations
 
 from docintel.core.models import PageMeta, PageText, Word, new_context
-from docintel.grammar.ops.infer import infer_currency, resolve_vendor_alias
+from docintel.grammar.ops.infer import (
+    infer_currency,
+    resolve_bill_to_alias,
+    resolve_vendor_alias,
+)
 
 
 def _page(number: int, *texts: str, y: float = 100.0) -> PageText:
@@ -278,3 +282,112 @@ def test_no_pack_and_no_names_records_nothing() -> None:
     ctx = _ctx(_page(1, "x"))
     ctx = resolve_vendor_alias(ctx)
     assert ctx.derived.get("vendor_canonical") is None
+
+
+# --------------------------------------------------------------------------
+# resolve_bill_to_alias - the bill-to party, when the page prints no label
+# --------------------------------------------------------------------------
+#
+# The same shape as resolve_vendor_alias and for the same reason. Two of the four
+# telecom templates print their bill-to with no label at all, so no anchor exists
+# to hang a selector on - which is exactly why those personas had the client's name
+# hardcoded as the pattern. A pack-level roster moves that string out of the
+# per-document rule and into the pack's business registry, where one entry serves
+# every carrier and every billing period.
+#
+# The op returns the name AS PRINTED rather than a canonical display form, because
+# each vendor renders the same party differently - `Northstar Recycling`,
+# `Northstar Recycling Company LLC` and `NorthStar Recycling Company, LLC` are all
+# the same AP department, and each gold label asserts its own document's rendering.
+
+
+class _RosterPack:
+    default_currency = "USD"
+    bill_to_roster = (
+        "Northstar Recycling Company, LLC",
+        "Northstar Recycling",
+        "Choctaw Travel Mart",
+    )
+
+
+def test_the_roster_reads_the_bill_to_off_the_page() -> None:
+    ctx = _ctx(_page(1, "Choctaw", "Travel", "Mart", "PO", "BOX", "1550"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Choctaw Travel Mart"
+    assert ctx.derived.get("bill_to_basis") == "roster_page_text"
+
+
+def test_the_printed_rendering_is_preserved_not_the_roster_spelling() -> None:
+    """Each vendor prints the same party its own way and every gold label asserts
+    the rendering on its own document, so canonicalising here would break them."""
+    ctx = _ctx(_page(1, "NORTHSTAR", "RECYCLING", "invoice"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "NORTHSTAR RECYCLING"
+
+
+def test_the_longest_roster_match_wins() -> None:
+    """`Northstar Recycling` is a prefix of `Northstar Recycling Company, LLC`.
+    Taking the shorter match would silently truncate the party on every vendor
+    that prints the full legal name."""
+    ctx = _ctx(_page(1, "Northstar", "Recycling", "Company,", "LLC"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Northstar Recycling Company, LLC"
+
+
+def test_a_printed_selector_value_outranks_the_roster() -> None:
+    """F5's principle: printed evidence wins where it exists. A persona that can
+    anchor on a real label must not have its answer replaced by a table."""
+    ctx = _ctx(_page(1, "Northstar", "Recycling"), bill_to_name="City of Dublin")
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.extracted.get("bill_to_name") == "City of Dublin"
+    assert ctx.derived.get("bill_to_name") is None
+    assert ctx.derived.get("bill_to_basis") == "printed"
+
+
+def test_an_unknown_party_is_left_empty_rather_than_guessed() -> None:
+    """The onboarding case. An empty required field is escalated by
+    `core.coverage`, which is the correct outcome - somebody has to add the new
+    client. Inventing a value here would put a wrong party on a payment."""
+    ctx = _ctx(_page(1, "Ridgeline", "Freight", "Holdings"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") is None
+    assert ctx.derived.get("bill_to_basis") is None
+
+
+def test_a_supporting_page_cannot_supply_the_bill_to() -> None:
+    """Section 7. A Bill of Lading naming the AP department says nothing about who
+    this invoice is addressed to."""
+    ctx = _ctx(
+        _page(1, "no", "party", "here"),
+        _page(2, "Northstar", "Recycling"),
+        roles=("primary", "supporting"),
+    )
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") is None
+
+
+def test_a_pack_with_no_roster_is_unaffected() -> None:
+    ctx = _ctx(_page(1, "Northstar", "Recycling"))
+    ctx.pack = _Pack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") is None

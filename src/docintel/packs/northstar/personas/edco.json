@@ -11,11 +11,6 @@
       "pattern": "text"
     },
     {
-      "field": "bill_to_name",
-      "region": "any-page",
-      "pattern": "(NORTHSTAR RECYCLING)"
-    },
-    {
       "field": "vendor_account_number",
       "anchor": "FOR BILLING INQUIRIES OR SERVICE,",
       "region": "any-page",
@@ -48,7 +43,8 @@
       "region": "header-block",
       "pattern": "currency",
       "adjust": [
-        "resolve_vendor_alias"
+        "resolve_vendor_alias",
+        "resolve_bill_to_alias"
       ]
     },
     {
@@ -83,8 +79,8 @@
     },
     {
       "field": "remit_payee",
-      "region": "any-page",
-      "pattern": "(EDCO WASTE & RECYCLING SERVICE)",
+      "region": "top-left",
+      "pattern": "text",
       "required": false
     },
     {
@@ -95,12 +91,6 @@
       "adjust": [
         "join_lines_comma"
       ],
-      "required": false
-    },
-    {
-      "field": "bill_to_attention",
-      "region": "any-page",
-      "pattern": "(HUNTER INDUST)",
       "required": false
     }
   ],

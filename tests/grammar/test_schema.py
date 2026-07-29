@@ -55,8 +55,11 @@ def test_base_adjust_ops_are_the_closed_enum_from_section_4() -> None:
         "crosscheck_duplicate_anchor", "crosscheck_filename",
         # 4.4 inference
         "infer_currency", "resolve_vendor_alias",
+        # Section 10 extension. The bill-to counterpart of the vendor resolver,
+        # for the templates that print their bill-to with no label to anchor on.
+        "resolve_bill_to_alias",
     })
-    assert len(BASE_ADJUST_OPS) == 24
+    assert len(BASE_ADJUST_OPS) == 25
 
 
 # --------------------------------------------------------------------------

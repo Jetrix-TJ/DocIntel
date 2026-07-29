@@ -38,11 +38,6 @@
       "required": false
     },
     {
-      "field": "bill_to_name",
-      "region": "any-page",
-      "pattern": "(CHOCTAW TRAVEL MART)"
-    },
-    {
       "field": "prior_balance",
       "anchor": "Previous Bill",
       "region": "near-anchor",
@@ -75,13 +70,16 @@
       "field": "total_printed",
       "anchor": "Total Amount Due",
       "region": "near-anchor",
-      "pattern": "currency"
+      "pattern": "currency",
+      "adjust": [
+        "resolve_bill_to_alias"
+      ]
     },
     {
       "field": "remit_payee",
       "anchor": "check payable to",
       "region": "near-anchor",
-      "pattern": "(OKLAHOMA WINDSTREAM, LLC)",
+      "pattern": "([A-Z][A-Za-z0-9 ,&'-]{2,45})",
       "required": false,
       "adjust": [
         "resolve_vendor_alias"

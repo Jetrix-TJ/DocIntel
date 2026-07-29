@@ -27,11 +27,6 @@
       ]
     },
     {
-      "field": "bill_to_name",
-      "region": "any-page",
-      "pattern": "(NORTHSTAR RECYCLING COMPANY)"
-    },
-    {
       "field": "vendor_account_number",
       "anchor": "Account No.",
       "region": "same-row",
@@ -50,7 +45,8 @@
       "region": "totals-block",
       "pattern": "currency",
       "adjust": [
-        "resolve_vendor_alias"
+        "resolve_vendor_alias",
+        "resolve_bill_to_alias"
       ]
     },
     {
@@ -87,9 +83,10 @@
     },
     {
       "field": "remit_payee",
-      "region": "any-page",
-      "pattern": "(U-Pak Disposals \\(1989\\) Ltd)",
-      "required": false
+      "region": "near-anchor",
+      "pattern": "([A-Z][A-Za-z0-9 .,&'()-]{2,30} Ltd)",
+      "required": false,
+      "anchor": "cheque payable to"
     },
     {
       "field": "vendor_address",

@@ -138,3 +138,31 @@ def canonical_from_domain(sender_email: str | None) -> str | None:
         return None
     domain = sender_email.strip().rsplit("@", 1)[1].lower().rstrip(".")
     return DOMAIN_ALIASES.get(domain)
+
+
+# The AP department this pack buys FOR, as its vendors print it.
+#
+# Unlike Digital Direction's roster, this is a single party - Northstar is the AP
+# department, and every invoice it handles is billed to Northstar. What varies is
+# how each VENDOR renders the name, and the corpus alone shows five renderings:
+# `Northstar Recycling`, `Northstar Recycling Company LLC`,
+# `NorthStar Recycling Company, LLC` and a site-specific
+# `Northstar-Bimbo-Market Street`.
+#
+# That variation is why six personas each carried their vendor's own rendering as
+# a literal pattern. One table replaces all six, and a seventh vendor printing any
+# rendering already listed needs no new rule.
+#
+# **This is the pack's guard, and the roster preserves it.** `bill_to_name` is
+# required for Northstar precisely so a vendor invoice that arrived in the wrong
+# inbox is not silently processed as though it belonged here (see
+# `packs/registry.py`). A page mentioning none of these renderings still yields an
+# empty required field, which `core.coverage` escalates - the guard now lives in
+# one place instead of being copy-pasted per vendor.
+BILL_TO_RENDERINGS: tuple[str, ...] = (
+    "NorthStar Recycling Company, LLC",
+    "Northstar Recycling Company, LLC",
+    "Northstar Recycling Company LLC",
+    "Northstar Recycling",
+    "Northstar-Bimbo-Market Street",
+)

@@ -6,11 +6,6 @@
   "notes": "THE RISKIEST DOCUMENT IN THE CORPUS. Total Amount Due 33,876.40 is the biggest figure on the page AND what the scanline encodes; the payable is 13,752.60. Every corroboration signal points at the trap. The only evidence for the right answer is the composition 20,123.80 + 13,752.60.",
   "field_selectors": [
     {
-      "field": "vendor_name",
-      "region": "top-left",
-      "pattern": "(CENTRACOM)"
-    },
-    {
       "field": "account_number",
       "anchor": "Account Number:",
       "region": "near-anchor",
@@ -87,7 +82,8 @@
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
-        "resolve_vendor_alias"
+        "resolve_vendor_alias",
+        "resolve_bill_to_alias"
       ]
     },
     {
@@ -143,13 +139,14 @@
     },
     {
       "field": "bill_to_address",
-      "anchor": "CLYDE COMPANIES",
+      "anchor": "Account Number:",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
         "join_lines_comma"
       ],
-      "required": false
+      "required": false,
+      "anchor_occurrence": "last"
     },
     {
       "field": "vendor_address",
