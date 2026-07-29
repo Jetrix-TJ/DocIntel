@@ -275,8 +275,8 @@ Zero cost on the corpus: all ten are billed to their pack's roster."
 > Attempted, proven impossible under this task's own constraints, reverted. Execute
 > **after Task 8**, when `LABEL_BLOCK_GAP_FACTOR` and `LABEL_BLOCK_GAP_FLOOR` are in
 > play and a full 263-assertion re-baseline is already budgeted. The abandoned patch is
-> at `.superpowers/sdd/2026-07-29-weakness-remediation/task-2-abandoned.patch` and the
-> full hand-traced diagnosis is in `task-2-report.md`.
+> at `docs/superpowers/execution/task-w1-2-abandoned.patch` and the
+> full hand-traced diagnosis is in `docs/superpowers/execution/task-w1-2-report.md`.
 >
 > **What the attempt proved, measured against the real PDFs:**
 >
@@ -775,9 +775,33 @@ credit_memo and disconnect_notice had no corpus document and no fixture."
 
 ---
 
+## Wave 1 outcome, and what Wave 2 inherits
+
+**Wave 1 executed 2026-07-29/30, commits `fcf47f3..0d9107a`. 202/263 → 203/263, 1/10 green,
+suite 1476 → 1508.** Five of six tasks landed; Task 2 was deferred here by ruling. Full
+account in `docs/superpowers/execution/ledger.md`, per-task reports at
+`docs/superpowers/execution/task-w1-*-report.md`.
+
+Six items are now registered for Wave 2, four of them discovered *by* Wave 1:
+
+| # | Item | Why it is here and not there |
+|---|---|---|
+| **2** | The `_label_block` break rule | Needs `FACTOR`/`FLOOR` unfrozen and a re-baseline. May legitimately land at 200/263 — two of the 202 pass only via accidental floor-clamping |
+| **8c** | An nth-occurrence primitive for the grammar | `anchor_occurrence` was built for the payee-printed-3× case, shipped unused, and its first real user (`edco`) does not fit it. `veritiv`/`windstream` work only because `_norm` strips a trailing colon but not a comma |
+| **N1** | `_roster_match` must require a head-of-line match | **The Critical.** `bill_to_mismatch` is unreachable on the 5 of 10 personas with no `bill_to_name` selector, and rung 2 fabricates the bill-to from a mention anywhere on the page. The fix changes which rendering is returned on five corpus documents, so it needs the re-baseline. `_block_under` and `_candidate_lines` already compute what it needs |
+| **N2** | Recalibrate `NATIVE_CHAR_THRESHOLD` per page | 50 was calibrated as a document *average*. Comcast p2 clears it by 8 characters, Centracom p10 by 10, both monthly-recurring templates |
+| **N3** | The gate's ordering of forced review versus confidence collapse | `s7_gate` ranks `_collapsed` and `lane == "low"` above `forced` and returns before logging the forced reason, so a wrong-inbox document on a foreign template reports "regenerate the persona" instead of "wrong inbox". `review_flag` is still `True`, so routing is not broken — it is a mis-signal, and `regen_flag` has no consumer yet |
+| **N4** | Capture `document_identity` once, after `beforeEmit` | The fix wave moved `peek` above the hook so hooks can observe `possible_duplicate_of`, but the `identity` local is captured before the hook and reused for `commit` after it, while `build_record` reads `ctx.derived` fresh. Inert today — no pack registers a `beforeEmit` hook — but a hook mutating identity would desynchronise the committed identity from the shipped record |
+
+**N1 and N3 both mean the wrong-inbox guard is not yet what §A2 of the register claims.**
+What shipped is the mechanism and the forced-review wiring, live on the five personas that
+declare a `bill_to_name` selector. Do not describe A2 as closed until N1 lands.
+
 ## Wave 2 — make the geometry survive an unseen sender
 
-Three tasks now, in this order: **7, then 8, then 2.** Each changes measurements every
+Four tasks now, in this order: **7, then 8, then 2, then 8c/N1/N2 together** — 8c, N1 and
+N2 all change what a selector reads or which document is OCR-sourced, so they share one
+re-baseline rather than paying for three. Each changes measurements every
 selector depends on, so each needs a full re-baseline. Do not interleave them with Wave 3.
 
 **Task 2 was moved here from Wave 1** by human ruling after its Wave 1 attempt proved it
