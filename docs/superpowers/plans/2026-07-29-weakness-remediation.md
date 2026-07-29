@@ -271,6 +271,45 @@ Zero cost on the corpus: all ten are billed to their pack's roster."
 
 ### Task 2: One tight line must not redefine a block's rhythm
 
+> **DEFERRED TO WAVE 2 by human ruling, 2026-07-29 — do not execute in Wave 1.**
+> Attempted, proven impossible under this task's own constraints, reverted. Execute
+> **after Task 8**, when `LABEL_BLOCK_GAP_FACTOR` and `LABEL_BLOCK_GAP_FLOOR` are in
+> play and a full 263-assertion re-baseline is already budgeted. The abandoned patch is
+> at `.superpowers/sdd/2026-07-29-weakness-remediation/task-2-abandoned.patch` and the
+> full hand-traced diagnosis is in `task-2-report.md`.
+>
+> **What the attempt proved, measured against the real PDFs:**
+>
+> 1. **The fix works and the corpus rejects it.** Median pitch fixes the truncation
+>    direction (synthetic test RED → GREEN) and moves the scorecard **202 → 200**,
+>    turning DTSS — the only fully-correct document — red.
+> 2. **Two of the 202 currently pass because of the bug.** `min`'s collapse pins the
+>    break threshold near `LABEL_BLOCK_GAP_FLOOR` (24.0), and *that* is what correctly
+>    ends two real blocks: DTSS's `vendor_address` at a 48.14pt section gap and
+>    Centracom's `charges` ladder at 24.33pt. A genuinely more accurate pitch raises the
+>    threshold and both real section breaks stop breaking. This belongs in the
+>    "defensible figure" accounting — those two passes are not evidence of correctness.
+> 3. **The first gap is not a pitch sample.** On DTSS the label-to-first-content gap is
+>    36.0pt against a body pitch of 14.16pt, dragging a two-sample median to 25.08.
+>    Excluding it is principled and independent of min-vs-median — but it fixes DTSS
+>    only, leaving Centracom regressed at 201/263, so it is not a solution alone.
+> 4. **Centracom has no outlier to reject.** Its gaps are 9.92 / 14.0 / 14.0 then 24.33.
+>    14.0 *is* the representative pitch, and representative pitch at `FACTOR = 2.0` is
+>    simply too permissive to reject a 24.33pt section break. No pitch estimator fixes
+>    this. Only a `FACTOR`/`FLOOR` change, or a break signal that is not pitch-based.
+>
+> Two mitigations were tried and correctly reverted: a minimum-sample gate (structural
+> conflict — Centracom needs the gate closed at exactly the sample count the synthetic
+> test needs it open) and excluding blank-crossing gaps from the median pool (no effect
+> on either regression, and it dropped U-PAK from 12/25 to 11/25).
+>
+> **Also corrected: this task's own fixture was wrong.** The y-values below (gaps
+> 14, 4, 14, 14) cannot reproduce the bug at all — a collapsed pitch of 4 gives
+> `max(24, 8) = 24`, and a 14pt gap never exceeds it. A fixture that shows the bug needs
+> two ordinary gaps before the outlier so the median has a majority, then a gap above the
+> floor but below the uncollapsed threshold: gaps `14, 14, 4, 26, 14`. Use the verified
+> version from `task-2-abandoned.patch`, not the snippet below.
+
 **Files:**
 - Modify: `src/docintel/grammar/regions.py:476-481`
 - Test: `tests/grammar/test_regions.py`
@@ -738,7 +777,18 @@ credit_memo and disconnect_notice had no corpus document and no fixture."
 
 ## Wave 2 — make the geometry survive an unseen sender
 
-Both tasks change measurements every selector depends on, so each needs a full re-baseline. Do not interleave them with Wave 3.
+Three tasks now, in this order: **7, then 8, then 2.** Each changes measurements every
+selector depends on, so each needs a full re-baseline. Do not interleave them with Wave 3.
+
+**Task 2 was moved here from Wave 1** by human ruling after its Wave 1 attempt proved it
+cannot be done with `LABEL_BLOCK_GAP_FACTOR` and `LABEL_BLOCK_GAP_FLOOR` frozen. It runs
+**last**, because Task 7 changes which words share a line and Task 8 rescales the very
+constants Task 2 needs — so its gap arithmetic must be measured against the post-7-and-8
+geometry, not today's. Read Task 2's deferral banner above before starting it: it carries
+four measured findings, and one of them (two corpus assertions passing only because of
+accidental floor-clamping) means **Task 2 may legitimately end at 200/263 with a written
+justification rather than at 202.** That is a decision for whoever runs Wave 2, and it is
+the one place in this plan where a lower number can be the right answer.
 
 ### Task 7: Derive the line tolerance from the page, and define it once
 
