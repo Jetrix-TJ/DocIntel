@@ -430,6 +430,47 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_a_header_wrapped_onto_the_line_above_still_binds_its_column() -> None:
+    """Veritiv prints `Extended Price` as two lines: `Extended` 8.26pt above the
+    row the `Product No.` anchor sits on. `page.lines()` splits at
+    `_LINE_TOLERANCE = 3.0`, so `_column_bounds` never saw the amount header at
+    all - and because `bounds` came back non-empty (item_code alone) the declared-
+    header authoring error did not fire either. It silently proceeded one-column
+    and matched no amounts.
+    """
+    words: list[tuple[str, float, float]] = [
+        ("Extended", 500.0, 92.0),                     # wrapped header, 8pt above
+        ("Product", 50.0, 100.0), ("No.", 95.0, 100.0), ("Price", 505.0, 100.0),
+    ]
+    for i, y in enumerate((120.0, 140.0)):
+        words += [(f"Item{i}", 50.0, y), ("4608.45", 510.0, y)]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "Product No.",
+        "columns": {"item_code": "text", "amount": "currency"},
+        "column_headers": {"item_code": "Product No.", "amount": "Extended"},
+    })
+    rows = ctx.row_groups["line_items"]
+    assert [r.get("amount") for r in rows] == [Decimal("4608.45"), Decimal("4608.45")]
+
+
+def test_the_header_band_reaches_up_but_never_down_into_the_first_row() -> None:
+    """The band is deliberately one-directional. Reaching DOWN would let a first
+    data row printed tight under the header be absorbed into the header itself,
+    which would both lose the row and corrupt the column boundaries."""
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Item0", 50.0, 108.0), ("1.00", 400.0, 108.0),   # 8pt below the header
+        ("Item1", 50.0, 128.0), ("2.00", 400.0, 128.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+    })
+    assert [r.get("amount") for r in ctx.row_groups["line_items"]] == [
+        Decimal("1.00"), Decimal("2.00"),
+    ]
+
+
 def test_one_tight_line_does_not_collapse_the_established_row_pitch() -> None:
     """A wrapped description line sits close under its own row. With `pitch =
     min(pitch, gap)` that single 4pt gap became the established pitch for the rest

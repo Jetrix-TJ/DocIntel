@@ -72,6 +72,21 @@ QUALITY_REGION_ONLY = 0.90
 TABLE_BREAK_FACTOR = 2.5   # multiples of the established row pitch
 TABLE_BREAK_FLOOR = 24.0   # points; keeps a tight-leaded table from breaking early
 
+# How far ABOVE the anchor's line a wrapped column header may sit.
+#
+# Veritiv prints `Extended Price` as two lines, with `Extended` 8.26pt above the
+# row carrying the `Product No.` anchor. `page.lines()` splits at
+# `_LINE_TOLERANCE = 3.0`, so `_column_bounds` never saw the amount header, bound
+# only `item_code`, and matched no amounts at all. Worse, it did so SILENTLY: the
+# declared-header authoring error below only fires when `bounds` is empty, and one
+# surviving column is not empty.
+#
+# Deliberately one-directional. Reaching DOWN as well would let a first data row
+# printed tight under the header be absorbed into the header row, which loses the
+# row AND corrupts every column boundary derived from it - a worse failure than the
+# one being fixed, and `allow_empty_cells` tables would not even reveal it.
+HEADER_BAND = 12.0
+
 # Patterns that make a column the AMOUNT in a header-less row group.
 MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
 
@@ -141,6 +156,21 @@ def _cells(words: Sequence[Word]) -> list[list[Word]]:
         else:
             out.append([w])
     return out
+
+
+def _header_band(page: PageText, base: list[Word]) -> list[Word]:
+    """`base` plus any wrapped header words sitting just above it, in x order.
+
+    Sorted by x0 because `_cells` walks the sequence and compares each word's `x0`
+    against the previous word's `x1` - it splits on horizontal whitespace and has
+    no opinion about y, so an unsorted merge would invent cell boundaries.
+    """
+    top = base[0].y0
+    merged = list(base)
+    for line in page.lines():
+        if top - HEADER_BAND <= line[0].y0 < top:
+            merged.extend(line)
+    return sorted(merged, key=lambda w: w.x0)
 
 
 class Executor:
@@ -447,9 +477,10 @@ class Executor:
         if page is None:
             return
 
-        header_line = next(
+        anchor_line = next(
             (line for line in page.lines() if header.words[0] in line), list(header.words)
         )
+        header_line = _header_band(page, anchor_line)
         headers = dict(selector.column_headers) or {name: name for name in selector.columns}
         bounds = self._column_bounds(header_line, headers, page.width)
 
