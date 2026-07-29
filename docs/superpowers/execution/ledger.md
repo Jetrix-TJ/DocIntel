@@ -1530,3 +1530,144 @@ METHODOLOGY NOTE, learned the expensive way during the re-review: this repo has
   an older commit silently runs HEAD's code. A baseline measurement needs
   PYTHONPATH forced at the checkout, or its numbers are HEAD's wearing a
   baseline's label. One re-review's first pass was invalid for exactly this.
+
+## Generalisation pass — making the rules survive documents nobody has seen (2026-07-29)
+
+Prompted by an explicit constraint from the business: the ten-document corpus is a
+sample, the deliverable is **thousands of documents from many senders**, and no
+shortcuts. That reframes what a good change is. Several entries below bought no
+assertion on purpose, and one of the most useful findings was that a diagnosis I
+had already written down was wrong.
+
+193/263 → **201/263**, 1,426 → 1,446 tests, 11 commits + this doc pass.
+
+### G1 — GUARDRAIL 7 had a second path, through `confidence` rather than `irregularities`
+
+`test_vision_policy.py` proves `VISION_OBSERVABLE ∩ FORCING_MODIFIERS == ∅`, so no
+vision *irregularity* can route a lane. Confidence was never covered:
+
+    policy._clean_confidence  ->  min(_CEILING, max(0.0, value))    upper bound only
+    s7_gate._confidence_lane  ->  share under VERY_LOW_FLOOR >= 0.60  -> "low"
+    s7_gate.run               ->  "low" -> regen_flag = True
+
+A model reporting 0.01 on the fields it returned therefore had lane-routing power
+**and** rule-lifecycle power — a request to regenerate the vendor's persona — from a
+number it chose. Exactly what rule 2 spends `VISION_OBSERVABLE` to deny, arriving
+through a different field. Unreachable today only because all ten documents get a
+persona hit and Stage 5b never runs; **any escalation policy arms it**, which is why
+it was fixed before that work rather than during it. Now floored at `VISION_FLOOR`,
+which costs the model nothing it should have: the floor sits below every pack
+threshold, so a floored field still falls short and still reaches a human.
+
+### G2 — GUARDRAIL 9, and the two times I had to fix the guardrail itself
+
+`tests/packs/test_no_hardcoded_values.py`. Two authoring habits score 100% on this
+corpus and return `None` on the next invoice: the anchor *is* the value, or the
+pattern *is* the value. Standing rule 2 verbatim — corpus-only tests confirm
+corpus-fit and cannot detect corpus-overfit — so the rule is now mechanical, with
+debt lists that can only shrink.
+
+Baseline: **21 instances** — 5 anchor-in-value, 16 literal-pattern. Measured cost:
+**13 of the 201 passing assertions (6.5%) are asserted rather than extracted.**
+
+Two corrections to my own work, both worth keeping:
+
+1. The first detector stripped punctuation from the PATTERN and not from the gold
+   value, so every literal containing a comma — most printed addresses and company
+   names — escaped while the test passed green. Both sides now normalise through
+   `_alnum`. That undercount is why the debt is 21 and not the 17 my first audit
+   reported.
+2. I only found it because I injected one violation of each kind into `dtss.json`
+   and watched which check failed. The anchor check caught its injection; the
+   pattern check did not. **A guardrail nobody has watched fail is a guardrail
+   reporting coverage it does not have** — standing rule 7, applied to a test I
+   wrote in the same session.
+
+### G3 — the 16 literal patterns are NOT fixable from one invoice per sender
+
+The dangerous class is `bill_to_name` / `bill_to_attention` on Digital Direction. It
+is a telecom expense manager billing several managed clients, so the bill-to **varies
+per document** and is hardcoded on all four carriers; a new client's invoice returns
+`None`.
+
+I probed all four for something stable to anchor on. **There is no `Bill To` label on
+any of them** — the name is simply the first line of a recipient address block,
+located only by position:
+
+    comcast     'Clyde Administration Servi'   x=35.0   y=84.0
+    lumen       'CITY OF DUBLIN'               x=44.4   y=115.0
+    windstream  'CHOCTAW TRAVEL MART'          x=327.6  y=127.1   (right column)
+    centracom   'CLYDE COMPANIES'              inside a mail-sort line at y=9.3
+
+Replacing a literal with a positional selector fitted to one invoice is fitting
+*position* to one sample instead of *text* to one sample — the same overfit, and
+unverifiable from a single document. **What this needs is a second invoice per
+sender**, so a candidate selector can be validated against a document that did not
+induce it. Production has that; this corpus does not. Left as registered debt rather
+than replaced with an unverifiable guess.
+
+### G4 — three geometry fixes, and where each one stopped
+
+- **`pitch = min(pitch, gap)` → median** (row groups). One tight line permanently
+  redefined a table's rhythm as that outlier — CB 18.00 → 3.60, FR 19.98 → 4.68 —
+  collapsing the break threshold to its floor so the next *ordinary* gap truncated
+  the table. Fixes no assertion alone; the corpus contains the swallowing direction,
+  not the truncating one, so two synthetic tests were required.
+  **Still unfixed in `regions.py::_label_block`.**
+- **`column_cut`** replaces `LABEL_BLOCK_RIGHT = 300.0` with the first ≥24pt gutter
+  measured across the block's own rows. The projection *must* be over those rows:
+  measured over y 40-320 Centracom shows **zero** gutters, because the union of many
+  differently-indented rows occupies everything; over its address rows the 224pt
+  gutter is unmissable.
+  Applied in the executor for `text_block` only. I put it in `_label_block` first and
+  it broke four tests and cost two assertions — that region also serves label/amount
+  ladders, where the wide gap before a right-aligned amount *is* the layout. A region
+  resolver never sees the pattern, so it cannot tell those apart; `_candidates` can.
+- **`HEADER_BAND` made relative** — `max(12.0, median_pitch × 1.5)`. The absolute
+  12.0 was fitted to Veritiv's measured 8.26pt offset, i.e. the same overfit habit
+  GUARDRAIL 9 exists to catch, expressed in geometry instead of text.
+
+### G5 — `anchor_occurrence` shipped unused, with the measurement that says why
+
+`_resolve_anchor` returns `hits[0]`, and four addresses are anchored on a payee name
+printed 2–3× per page, so the correct occurrence exists and is unreachable. The
+feature works. The diagnosis that it would fix them did not survive contact:
+
+    veritiv    last -> 'P.O. BOX 409884 Remit Payment / ATLANTA, GA. 30384-9884 To This Address'
+    edco       last -> '224 S LAS POSAS RD, SAN MARCOS, CA 92078'   (vendor, not remit)
+    windstream last -> 'COMMUNICATIONS 1-833-241-0100, Local carrier is*...'
+    centracom  last -> '435-427-3331'
+
+Veritiv is the informative one: `last` reaches exactly the right block and the
+x-window then wrecks it. Committed as a documented prerequisite rather than dropped,
+because it is correct and tested — recorded explicitly so it does not later read as
+accidental dead code, which is what `allow_empty_cells` looks like (parsed by the
+schema, set by every persona, read by nothing).
+
+### G6 — the constants split cleanly, and one is 0.6pt from failing
+
+Relative to something measured, so they scale: `HEADER_FRACTION 0.25`,
+`TOP_FRACTION 1/3`, `REMITTANCE_FRACTION 0.70`, `TOTALS_FALLBACK 0.60`,
+`TABLE_BREAK_FACTOR 2.5`, `LABEL_BLOCK_GAP_FACTOR 2.0`, `HEADER_BAND_PITCHES 1.5`.
+
+Absolute points, so font-size dependent: `_LINE_TOLERANCE 3.0`,
+`NEAR_ANCHOR_BELOW 40.0`, `TOTALS_BAND 80.0`, `LABEL_BLOCK_MAX 140.0`,
+`CELL_GAP 12.0`, and `LABEL_BLOCK_RIGHT` / `NEAR_ANCHOR_RIGHT 300.0`.
+
+**`_LINE_TOLERANCE = 3.0` is the one to fix next.** Complete Beverage's tightest
+inter-line gap measures **3.60pt** — 0.6pt of margin. A slightly tighter document
+merges two logical lines into one, and every row and column boundary derived from
+that grouping is then wrong. It is the highest-leverage remaining change for a
+thousands-of-documents target, and it fixes no assertion on this corpus.
+
+### G7 — two stale claims in RESUME.md, corrected
+
+Both were load-bearing and wrong. `.loop/scorecard.json` was labelled "current
+machine-readable scorecard" while recording 274/339, the pre-narrowing figures, last
+written at `32b01f3` and regenerated by nothing in the shipped code. And the claim
+that Lumen's logo vendor name and Windstream's `Windstre am` "cannot be captured by
+any pattern — they are vision's job" is false: **both `fields.vendor_name` assertions
+pass today** via pattern selectors. Left standing, that sentence justifies turning on
+a paid model path for work already done. Vision is currently needed for **zero**
+failing assertions; OCR, by contrast, is load-bearing for the two documents with
+0-character text layers and is not optional.
