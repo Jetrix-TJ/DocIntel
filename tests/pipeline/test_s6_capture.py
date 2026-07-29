@@ -270,3 +270,53 @@ def test_a_refused_payable_gets_no_confidence_entry() -> None:
     assert ctx.derived.get("amount_payable") is None
     assert "amount_payable" not in ctx.confidence
     assert ctx.review_flag is True
+
+
+# --------------------------------------------------------------------------
+# A modifier scoped to a field that produced nothing
+# --------------------------------------------------------------------------
+
+
+def test_a_modifier_on_a_field_that_produced_nothing_still_penalises_the_document() -> None:
+    """A field-scoped modifier had nothing to multiply, so it multiplied nothing.
+
+    `add_field_modifier` appends to BOTH `field_modifiers` and `modifiers`, and
+    `_score` treats every name that appears in `field_modifiers` as claimed by that
+    field - so it is excluded from `document_wide`. When the field also has no
+    `match_quality` row, which is exactly the case for `pattern_timeout` (the
+    executor discards its partial values and returns), the modifier applied to
+    nothing at all: it appeared on the record and changed no number.
+
+    A blown pattern budget is evidence about the DOCUMENT - the page is pathological
+    enough to exhaust a 50ms budget - so with no field left to carry it, it belongs
+    to the document.
+    """
+    ctx = _ctx(_persona(
+        {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+         "pattern": "currency"},
+    ), total_printed=Decimal("100.00"))
+    # The timed-out field never reached `extracted.set`, so it has no match_quality.
+    ctx.add_field_modifier("invoice_number", "pattern_timeout")
+
+    CaptureFields().run(ctx)
+
+    assert ctx.confidence["total_printed"] == 0.50, (
+        "pattern_timeout was recorded on the record but penalised no field"
+    )
+
+
+def test_a_modifier_scoped_to_a_field_that_DID_produce_stays_scoped() -> None:
+    """The distinction the orphan rule must not break: a modifier belonging to one
+    field that has a value still applies to that field alone."""
+    ctx = _ctx(_persona(
+        {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+         "pattern": "currency"},
+    ), total_printed=Decimal("100.00"), invoice_number="A-1")
+    ctx.add_field_modifier("invoice_number", "pattern_timeout")
+
+    CaptureFields().run(ctx)
+
+    assert ctx.confidence["invoice_number"] == 0.50
+    assert ctx.confidence["total_printed"] == 0.99, (
+        "a field-scoped modifier leaked onto a field it does not belong to"
+    )

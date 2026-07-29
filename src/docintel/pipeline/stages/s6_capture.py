@@ -136,9 +136,27 @@ class CaptureFields:
     # -- 5. confidence -----------------------------------------------------
 
     def _score(self, ctx: JobContext) -> None:
-        # Document-wide modifiers are everything not claimed by a single field.
-        # See JobContext.field_modifiers for why the distinction is load-bearing.
-        scoped = {m for names in ctx.field_modifiers.values() for m in names}
+        # Document-wide modifiers are everything not claimed by a single field
+        # THAT HAS A VALUE. See JobContext.field_modifiers for why the field/document
+        # distinction is load-bearing.
+        #
+        # The "has a value" half is not a refinement, it closes a silent failure. A
+        # modifier scoped to a field with no `match_quality` row multiplied nothing:
+        # `field_modifiers` excluded it from `document_wide`, and the field it was
+        # scoped to had no score to lower. `pattern_timeout` is exactly that case by
+        # construction - the executor discards whatever it found and returns - so a
+        # blown 50ms budget appeared on the record and changed no number.
+        #
+        # Falling back to document scope rather than dropping it: a field that could
+        # not be read is still evidence about the document, and a page pathological
+        # enough to exhaust the budget is not a page to be confident about.
+        priced = set(ctx.extracted.match_quality)
+        scoped = {
+            m
+            for name, names in ctx.field_modifiers.items()
+            if name in priced
+            for m in names
+        }
         document_wide = [m for m in ctx.modifiers if m not in scoped]
 
         for name, quality in ctx.extracted.match_quality.items():
