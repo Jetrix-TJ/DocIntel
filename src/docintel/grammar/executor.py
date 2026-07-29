@@ -103,7 +103,6 @@ HEADER_BAND_MIN = 12.0
 # printed tight under the header be absorbed into the header row, which loses the
 # row AND corrupts every column boundary derived from it - a worse failure than the
 # one being fixed, and `allow_empty_cells` tables would not even reveal it.
-HEADER_BAND = 12.0
 
 # Patterns that make a column the AMOUNT in a header-less row group.
 MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
