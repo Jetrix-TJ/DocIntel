@@ -25,11 +25,21 @@ than waiting for someone to declare which pack it belongs to.
 from __future__ import annotations
 
 import importlib
-import re
 from typing import Any, Protocol, runtime_checkable
 
 from docintel.core.models import JobContext
+from docintel.core.senders import normalize_name as normalize_name
 from docintel.pipeline.hooks import HookRegistry
+
+# `normalize_name` is re-exported (not re-defined) for existing callers
+# (`digitaldirection.__init__`, `.aliases`, `northstar.__init__`, `.aliases`)
+# that import it from this module. The implementation lives in `core.senders`
+# now - `core` is the lower layer and packs already depend on it, so this is
+# the direction that cannot cycle. `core.senders` used to import FROM here,
+# which only avoided an `ImportError` at interpreter start because pack
+# modules are loaded lazily inside `load_packs()`; one module-level pack
+# import in this file, or `pipeline/hooks.py` ever importing `core.senders`,
+# would have turned that into a real cycle.
 
 # Packs are named rather than discovered by directory scan. A pack is a
 # deliberate business decision with a spec in docs/packs/, so it should not
@@ -190,13 +200,3 @@ def primary_text(ctx: JobContext) -> str:
 def all_text(ctx: JobContext) -> str:
     """Every page. For reference patterns, which legitimately run everywhere."""
     return "\n".join(page.text for page in ctx.pages)
-
-
-def normalize_name(value: str) -> str:
-    """Collapse a printed company name to a comparable form.
-
-    Punctuation is dropped rather than kept, because the corpus prints the same
-    company as `D.T.S.S. Inc.`, `D T S S INC` and `DTSS` - and an alias table
-    keyed on punctuation would need an entry per rendering.
-    """
-    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()

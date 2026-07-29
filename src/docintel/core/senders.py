@@ -12,7 +12,7 @@ exists to avoid.
 
 from __future__ import annotations
 
-from docintel.packs.registry import normalize_name
+import re
 
 # Deliberately short, because a false entry costs a vendor name on every document
 # from that sender. Nothing here is corpus-backed - no corpus document arrives
@@ -45,6 +45,21 @@ def is_aggregator(sender_email: str) -> bool:
         domain == known or domain.endswith(f".{known}")
         for known in AGGREGATOR_DOMAINS
     )
+
+
+def normalize_name(value: str) -> str:
+    """Collapse a printed company name to a comparable form.
+
+    Punctuation is dropped rather than kept, because the corpus prints the same
+    company as `D.T.S.S. Inc.`, `D T S S INC` and `DTSS` - and an alias table
+    keyed on punctuation would need an entry per rendering.
+
+    Lives here rather than in `packs.registry` (which re-exports it for
+    existing callers) because `core` must not depend on `packs`: this
+    function is needed by `bill_to_matches_roster` below, and `core` is the
+    lower layer both pack modules already import from.
+    """
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
 def bill_to_matches_roster(printed: str | None, roster: tuple[str, ...]) -> bool:
