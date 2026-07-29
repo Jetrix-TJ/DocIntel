@@ -217,6 +217,52 @@ def test_a_record_that_fails_validation_degrades_instead_of_raising():
     assert r.stats == {"intaken": 1, "emitted": 1}
 
 
+def test_an_identity_seen_before_a_build_failure_does_not_claim_the_slot():
+    """Task 4 review finding: `_emit` used to commit a sighting to the
+    identity index via a single mutating `see()` call before
+    `build_record`/`validate_record` ran. If those then raised, this
+    document's own record was rebuilt from a fresh, empty context by
+    `_minimal_dead_letter` - carrying no trace of the identity or the
+    `possible_duplicate_of` claim - while the index had already, irrevocably,
+    handed this document the identity slot. A later document with the same
+    identity would then be told "duplicate of d1", pointing a reviewer at a
+    bare dead letter with nothing to corroborate the claim.
+
+    Pinned here: a document whose emit fails must not claim the slot, and the
+    NEXT document with that identity must be free to become "first" instead.
+    """
+    class FlakyIdentity:
+        name = "flaky_identity"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, ctx: JobContext) -> JobContext:
+            self.calls += 1
+            ctx = _classified(ctx)
+            ctx.derived.set("document_identity", "shared-identity")
+            ctx.derived.set("identity_basis", "invoice_number")
+            if self.calls == 1:
+                ctx.confidence["x"] = 99.0  # illegal: forces validate_record to raise
+            return ctx
+
+    r = _runner([FlakyIdentity()])
+
+    first = r.process("d1", "/tmp/a.pdf")
+    validate_record(first)
+    assert first["disposition"] == "dead_letter"
+    assert "document_identity" not in first["derived"]
+    assert first["possible_duplicate_of"] is None
+
+    second = r.process("d2", "/tmp/b.pdf")
+    validate_record(second)
+    assert second["disposition"] == "processed"
+    assert second["possible_duplicate_of"] is None, (
+        "d1's identity claim never reached a corroborable record, so d2 must "
+        "be free to claim the slot instead of being told it duplicates d1"
+    )
+
+
 def test_a_stage_that_returns_none_is_a_programming_error_not_silent_data_loss():
     class Bad:
         name = "bad"

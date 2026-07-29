@@ -15,16 +15,53 @@ from __future__ import annotations
 
 
 class IdentityIndex:
+    """`peek` and `commit` are split apart so a caller can decide `see`'s
+    answer before deciding whether the sighting should stick.
+
+    That split exists because of a review finding on this module's first
+    version: `Runner._emit` used to call a single mutating `see()` before
+    `build_record`/`validate_record` ran. If those then raised, the document's
+    own record was rebuilt from a fresh, empty context
+    (`Runner._minimal_dead_letter`) that carries no trace of the identity or
+    the claim just made - but the mutation had already happened, so a LATER
+    document could still be told "duplicate of that one" and point a reviewer
+    at a record with no corroborating evidence at all. `peek` lets `_emit`
+    read the answer to put in the candidate record; `commit` is called only
+    once that record is proven buildable and valid, so a document can never
+    irrevocably claim an identity slot its own shipped record does not back.
+    """
+
     def __init__(self) -> None:
         self._first: dict[str, str] = {}
+
+    def peek(self, identity: str | None) -> str | None:
+        """The document_id already on record as first-seen with `identity`.
+
+        Never mutates. None for an unidentifiable document: two documents
+        nothing could identify are not evidence of one document twice.
+        """
+        if identity is None:
+            return None
+        return self._first.get(identity)
+
+    def commit(self, document_id: str, identity: str | None) -> None:
+        """Register `document_id` as the first sighting of `identity`.
+
+        A no-op for an unidentifiable document, and a no-op if some other
+        document already holds this identity's slot - the FIRST sighting
+        wins, permanently.
+        """
+        if identity is None:
+            return
+        self._first.setdefault(identity, document_id)
 
     def see(self, document_id: str, identity: str | None) -> str | None:
         """The document_id first seen with `identity`, or None.
 
-        None for an unidentifiable document: two documents nothing could
-        identify are not evidence of one document twice.
+        Equivalent to `peek` immediately followed by `commit` - kept for
+        callers that have no reason to split reading the answer from making
+        it permanent.
         """
-        if identity is None:
-            return None
-        first = self._first.setdefault(identity, document_id)
-        return None if first == document_id else first
+        first = self.peek(identity)
+        self.commit(document_id, identity)
+        return None if first is None or first == document_id else first

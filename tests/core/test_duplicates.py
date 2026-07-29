@@ -27,3 +27,30 @@ def test_the_same_document_id_twice_is_a_replay_not_a_duplicate() -> None:
     idx = IdentityIndex()
     idx.see("doc-1", "x")
     assert idx.see("doc-1", "x") is None
+
+
+def test_peek_reports_the_first_sighting_without_mutating() -> None:
+    """`_emit` needs to read the answer before deciding whether it should
+    stick (see the module docstring) - `peek` alone must never register a
+    document, however many times it is called."""
+    idx = IdentityIndex()
+    idx.commit("doc-1", "x")
+    assert idx.peek("x") == "doc-1"
+    assert idx.peek("x") == "doc-1"
+    assert idx.peek("y") is None
+
+
+def test_commit_is_a_no_op_for_an_unidentifiable_document() -> None:
+    idx = IdentityIndex()
+    idx.commit("doc-1", None)
+    assert idx.peek("x") is None
+
+
+def test_a_peeked_but_never_committed_identity_is_still_unclaimed() -> None:
+    """The exact bug the peek/commit split exists to prevent: reading the
+    answer must not, by itself, reserve the slot for a document whose own
+    record never ends up carrying that identity."""
+    idx = IdentityIndex()
+    assert idx.peek("x") is None  # doc-1 looks up the slot...
+    # ...but doc-1's emit fails downstream and is never committed.
+    assert idx.see("doc-2", "x") is None, "doc-2 must be free to claim it"

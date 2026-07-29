@@ -99,19 +99,25 @@ class Runner:
         """
         try:
             ctx = self.hooks.run("beforeEmit", ctx)
-            # Duplicate detection is a sighting, not a guarantee: it runs for
-            # every record this method can still build, dead-lettered ones
-            # included, because a document that reached this far did have its
-            # identity computed (or genuinely couldn't - `see` treats identity
-            # `None` as unidentifiable, never as a match). It cannot raise:
-            # `see` is a plain dict lookup over two already-typed values, so it
-            # cannot turn a record this method would otherwise emit into the
-            # `_minimal_dead_letter` fallback.
-            ctx.possible_duplicate_of = self._identity_index.see(
-                ctx.document_id, ctx.derived.get("document_identity")
-            )
+            identity = ctx.derived.get("document_identity")
+            # Looked up, not yet committed: `peek` is a plain dict `.get` over
+            # an already-typed key, so - like the old single-call `see` this
+            # replaced - it cannot raise. That protects the invariant, but it
+            # is not by itself a correctness guarantee; the answer only
+            # becomes permanent below, once it is proven to belong to a
+            # record that actually ships.
+            ctx.possible_duplicate_of = self._identity_index.peek(identity)
             record = build_record(ctx)
             validate_record(record)
+            # Committed only now that `record` is proven buildable and valid.
+            # Committing at lookup time would let a document that goes on to
+            # dead-letter HERE still claim the identity slot forever, even
+            # though `_minimal_dead_letter` rebuilds its record from a fresh,
+            # empty context that carries no trace of that identity - a later
+            # document told "duplicate of this one" would then point at a
+            # record with no corroborating evidence at all (review finding on
+            # this module's first version).
+            self._identity_index.commit(ctx.document_id, identity)
             return record
         except Exception as exc:  # noqa: BLE001 - deliberate catch-all
             ctx.log(f"emit failed, degrading: {exc}")
