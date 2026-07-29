@@ -225,11 +225,18 @@ Lookup key: `company × sender_fingerprint × doc_type`
 
 | Lane | Condition | Action |
 |---|---|---|
-| **✓ High** | All fields clear their thresholds. | Emit as-is — plus a random N% **audit sample** into review: the only defense against rules that are confidently wrong. |
+| **✓ High** | All fields clear their thresholds **and** every required field was found. | Emit as-is — plus a random N% **audit sample** into review: the only defense against rules that are confidently wrong. |
 | **⚑ Medium / Low** | Specific fields fall short. | Emit + **review flag**. A human corrects it — and that correction becomes training data. |
-| **⚠ Very Low** | Systemic failure — most fields uncertain. | Emit + **regen flag**: the fix is "the rules are wrong," not "read this one document." |
+| **⚑ Review** | A required field produced **nothing**, or the document itself mandates a human (flattened annotations). | Emit + **review flag**. |
+| **⚠ Very Low** | Systemic failure — most fields uncertain, **or** most declared selectors produced nothing. | Emit + **regen flag**: the fix is "the rules are wrong," not "read this one document." |
 
 > 📌 **Rule: Never withhold output.** Every document is emitted, whatever its confidence.
+
+> 📌 **Rule: Completeness is scored separately from confidence.** Confidence exists only
+> where a value exists, so it can never speak about a field that extracted nothing. The gate
+> therefore routes on two dimensions, and `core.coverage` supplies the second — otherwise a
+> document that lost four-fifths of its fields reads as clean, because the few that survived
+> scored well. See `docs/architecture/selector-grammar.md` and `core/coverage.py`.
 
 ---
 
@@ -243,6 +250,12 @@ This JSON is the **only** interface downstream systems see:
   "sender_fingerprint": "acmehauling.com|acme hauling",
   "fields": { … },                    // every captured field
   "confidence": { … },                // score per field, not per doc
+  "extraction_coverage": {            // what was PROMISED vs what was found
+    "declared": 16,                   //   selectors the persona declares
+    "populated": 14,                  //   selectors that produced a value
+    "missing_required": [ … ],        //   required fields that produced nothing
+    "complete": false                 //   never true on an unassessed document
+  },
   "reference_list": [ … ],            // ALL candidate match keys
   "extraction_rule_version": "v14",   // ← the audit trail
   "confidence_modifiers": [ … ],      // named dampeners applied

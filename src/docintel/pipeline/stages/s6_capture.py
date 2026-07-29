@@ -12,7 +12,10 @@ Order inside `run` is the whole design of this stage:
 4. **`derive_document_identity`**, unconditionally. It is not an `adjust` op a
    persona may reference: `validate_record` requires the identity on every
    processed record, and a persona must not be able to opt out by omitting a name.
-5. **Confidence**, last, so it prices the values the ops actually left behind.
+5. **Confidence**, so it prices the values the ops actually left behind.
+6. **Coverage** (`core.coverage`), last of all: what the persona declared against
+   what survived. Confidence can only speak about fields that produced a value, so
+   something else has to speak about the ones that did not.
 
 Confidence is `match_quality` from the executor, multiplied by every applicable
 modifier, then raised by any corroboration boosts - in that order, because a
@@ -22,6 +25,7 @@ lift an OCR'd field back to the confidence of a native-text one.
 
 from __future__ import annotations
 
+from docintel.core import coverage
 from docintel.core.confidence import apply_boosts, apply_modifiers
 from docintel.core.models import JobContext
 from docintel.grammar import ops
@@ -46,6 +50,9 @@ class CaptureFields:
         self._apply_document_ops(ctx, selectors)
         derive.derive_document_identity(ctx)
         self._score(ctx)
+        # Last, and after `_score`, because coverage asks about the values the ops
+        # left behind - a field a derive op filled is present, however it got there.
+        ctx.coverage = coverage.assess(ctx)
         return ctx
 
     # -- inputs ------------------------------------------------------------

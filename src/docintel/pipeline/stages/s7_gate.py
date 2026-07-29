@@ -82,6 +82,16 @@ FORCING_MODIFIERS: frozenset[str] = frozenset({
     "flattened_annotations", "arith_balance_mismatch",
 })
 
+# Share of a persona's declared selectors that must produce nothing before this is
+# a rules problem rather than a document problem.
+#
+# Deliberately the same 0.60 as VERY_LOW_SHARE, and for the same reason: `low`
+# triggers a rule rewrite, so it has to mean "this persona no longer describes this
+# template", not "one field moved". Below the share, a missing required field still
+# forces `review` - the difference is whether someone re-keys one value or
+# regenerates the rule set.
+INCOMPLETE_COLLAPSE_SHARE = 0.60
+
 LANES = ("high", "medium", "review", "low")
 
 
@@ -114,6 +124,30 @@ class ConfidenceGate:
         for modifier in sorted(set(ctx.modifiers) & FORCING_MODIFIERS):
             reasons.append(f"modifier:{modifier}")
         return reasons
+
+    # -- completeness ------------------------------------------------------
+
+    def _incomplete_reasons(self, ctx: JobContext) -> list[str]:
+        """Required fields that produced nothing.
+
+        Kept OUT of `_forced_reasons` on purpose. That method answers "is there
+        something about this document a human must see", and its answer is allowed
+        to outrank an empty confidence map because it is true whether or not
+        extraction ever ran. This one answers "did extraction finish", which is
+        exactly the opposite kind of fact - so it must not win in the
+        nothing-was-scored branch, where the honest verdict is already `low`.
+        """
+        if ctx.coverage is None:
+            return []
+        return [f"missing:{name}" for name in ctx.coverage.missing_required]
+
+    def _collapsed(self, ctx: JobContext) -> bool:
+        """Most of what the persona declared came back empty."""
+        return (
+            ctx.coverage is not None
+            and ctx.coverage.assessed
+            and ctx.coverage.miss_share >= INCOMPLETE_COLLAPSE_SHARE
+        )
 
     # -- confidence --------------------------------------------------------
 
@@ -151,6 +185,8 @@ class ConfidenceGate:
     def run(self, ctx: JobContext) -> JobContext:
         ctx.log("s7: confidence_gate")
         forced = self._forced_reasons(ctx)
+        incomplete = self._incomplete_reasons(ctx)
+        collapsed = self._collapsed(ctx)
 
         if not ctx.confidence:
             # Nothing was scored, which must never read as "nothing fell short".
@@ -168,10 +204,32 @@ class ConfidenceGate:
                 ctx.log(f"s7: review forced by {', '.join(forced)}, nothing scored")
             else:
                 ctx.lane = "low"
-                ctx.log("s7: no field confidence at all; routing to the low lane")
+                # Regen only when a persona actually ran and its rules came back
+                # empty - that is a rule set that no longer matches its template.
+                # With no persona at all there is nothing to regenerate, which is
+                # the distinction this branch drew before coverage existed and
+                # could not act on.
+                if collapsed:
+                    ctx.regen_flag = True
+                    ctx.log("s7: every declared selector came back empty; regen")
+                else:
+                    ctx.log("s7: no field confidence at all; routing to the low lane")
             return ctx
 
         lane = self._confidence_lane(ctx)
+
+        if collapsed:
+            # Ranked with the confidence collapse below, and above forced review,
+            # for the same reason: `low` carries the actionable signal (rewrite the
+            # rules) and review_flag is set either way, so nothing is lost.
+            ctx.lane = "low"
+            ctx.regen_flag = True
+            ctx.review_flag = True
+            ctx.log(
+                f"s7: {ctx.coverage.populated}/{ctx.coverage.declared} declared "
+                f"selectors produced a value; the rules no longer fit this document"
+            )
+            return ctx
 
         if lane == "low":
             # A systemic collapse outranks a forced review. Both are true, but
@@ -182,10 +240,15 @@ class ConfidenceGate:
             ctx.review_flag = True
             return ctx
 
-        if forced:
+        if forced or incomplete:
+            # An incomplete extraction routes here rather than to `medium`, because
+            # `medium` means "the numbers are shaky" and sits behind a confidence
+            # threshold a well-scoring survivor set would clear. What is wrong here
+            # is not a value but the absence of one, so it belongs in the queue for
+            # documents a human must look at regardless of confidence.
             ctx.lane = "review"
             ctx.review_flag = True
-            ctx.log(f"s7: review forced by {', '.join(forced)}")
+            ctx.log(f"s7: review forced by {', '.join([*forced, *incomplete])}")
             return ctx
 
         if lane == "medium":

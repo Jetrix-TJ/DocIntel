@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any
 
+from docintel.core.coverage import Coverage
 from docintel.core.errors import ContractError
 from docintel.core.models import JobContext
 
@@ -27,6 +28,11 @@ REQUIRED_KEYS = frozenset({
     # capture) and F19 (row groups) - it could have reached "10/10 green" while
     # extracting no line items at all.
     "line_items", "charges", "sub_account", "scanline",
+    # What the persona declared against what was found. Required rather than
+    # optional: a consumer that has to check whether the key exists before it can
+    # ask whether extraction finished will read its absence as "fine", which is
+    # the exact failure mode `core.coverage` was written to end.
+    "extraction_coverage",
 })
 
 # Row groups that get their own top-level contract key. A row group the persona
@@ -81,6 +87,14 @@ def build_record(ctx: JobContext) -> dict[str, Any]:
         "derived": _serialize(ctx.derived.values),
         "confidence": dict(ctx.confidence),
         "confidence_modifiers": list(ctx.modifiers),
+        # Completeness, beside confidence rather than inside it. A document that
+        # never reached Stage 6 has no Coverage object, and the zero value says
+        # `complete: false` - "nothing was assessed" must not serialize as "nothing
+        # was wrong".
+        "extraction_coverage": (
+            ctx.coverage.as_record() if ctx.coverage is not None
+            else Coverage().as_record()
+        ),
         "reference_list": [
             {"value": r.value, "source_field": r.source_field,
              "page": r.page, "pattern_id": r.pattern_id}
@@ -237,6 +251,64 @@ def validate_record(rec: dict[str, Any]) -> None:
                         "group is one level deep, and sub_group values are flattened "
                         "onto their row (grammar V8)"
                     )
+
+    # Completeness. Type-checked as strictly as the flags above, because a
+    # consumer's auto-approval decision reads `complete` directly: a truthy string
+    # or a 0/1 int would each silently invert the meaning of `complete: false`.
+    coverage = rec["extraction_coverage"]
+    if not isinstance(coverage, dict):
+        raise ContractError(
+            f"extraction_coverage must be a mapping, got {type(coverage).__name__}"
+        )
+    expected = {"declared", "populated", "missing_required", "complete"}
+    if set(coverage) != expected:
+        raise ContractError(
+            f"extraction_coverage has wrong shape: {sorted(coverage)}, "
+            f"expected {sorted(expected)}"
+        )
+    if not isinstance(coverage["complete"], bool):
+        raise ContractError(
+            f"extraction_coverage.complete must be bool, got "
+            f"{type(coverage['complete']).__name__}"
+        )
+    for count in ("declared", "populated"):
+        value = coverage[count]
+        if type(value) is not int or isinstance(value, bool):
+            raise ContractError(
+                f"extraction_coverage.{count} must be int (not bool), got "
+                f"{type(value).__name__}"
+            )
+        if value < 0:
+            raise ContractError(
+                f"extraction_coverage.{count} must be >= 0, got {value}"
+            )
+    if coverage["populated"] > coverage["declared"]:
+        raise ContractError(
+            f"extraction_coverage.populated ({coverage['populated']}) exceeds "
+            f"declared ({coverage['declared']})"
+        )
+    if not isinstance(coverage["missing_required"], list):
+        raise ContractError(
+            "extraction_coverage.missing_required must be a list, got "
+            f"{type(coverage['missing_required']).__name__}"
+        )
+    for name in coverage["missing_required"]:
+        if not isinstance(name, str):
+            raise ContractError(
+                "extraction_coverage.missing_required entries must be str, got "
+                f"{type(name).__name__}"
+            )
+    # `complete` is derived, so a record whose flag disagrees with its own counts
+    # was assembled by something other than Coverage.as_record() and cannot be
+    # trusted by a consumer routing on it.
+    if coverage["complete"] and (
+        coverage["missing_required"] or coverage["populated"] != coverage["declared"]
+    ):
+        raise ContractError(
+            f"extraction_coverage claims complete but reports "
+            f"{coverage['populated']}/{coverage['declared']} populated and "
+            f"missing {coverage['missing_required']}"
+        )
 
     # The scan line is a raw digit run or absent. Never a number: it is a
     # transcription, and its leading zeros carry meaning to a lockbox scanner.

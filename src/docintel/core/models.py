@@ -212,6 +212,14 @@ class JobContext:
     # pack-default document at 0.90 against a 0.95 total threshold, so no
     # document could ever reach the `high` lane.
     field_modifiers: dict[str, list[str]] = field(default_factory=dict)
+    # What the persona declared, against what was actually found (s6). Held as
+    # `Any` for the same reason `pack` and `persona` are: `core.models` is the
+    # bottom of the dependency graph and `core.coverage` imports it.
+    #
+    # A separate attribute rather than more keys in `confidence`, because a field
+    # that produced nothing has no confidence to report - that conflation is the
+    # bug `core.coverage` documents.
+    coverage: Any | None = None
     lane: str | None = None
     review_flag: bool = False
     regen_flag: bool = False
