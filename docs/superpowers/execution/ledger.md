@@ -1671,3 +1671,74 @@ pass today** via pattern selectors. Left standing, that sentence justifies turni
 a paid model path for work already done. Vision is currently needed for **zero**
 failing assertions; OCR, by contrast, is load-bearing for the two documents with
 0-character text layers and is not optional.
+
+---
+
+## Wave 1 of the weakness-remediation plan (2026-07-29/30)
+
+Plan: `docs/superpowers/plans/2026-07-29-weakness-remediation.md`. Commits
+`fcf47f3..0d9107a`, 15 of them. Per-task reports are `task-w1-*-report.md`; the
+controller's full ledger is `task-w1-controller-ledger.md`.
+
+**202/263 -> 203/263 assertions, 1/10 documents green. Suite 1476 -> 1508 passing.**
+
+Five of six tasks landed: the bill-to roster guard, per-page OCR routing, within-run
+duplicate detection, two re-anchored `remit_address` selectors, and coverage for four
+classification branches that had none. **Only one moved the scorecard, and that ratio is
+the point** — the other four close paths where the pipeline failed *silently*, which no
+gold assertion exercises.
+
+**Three findings worth more than the assertion they cost.**
+
+1. **Two of the 202 baseline assertions were passing because of a bug.** Task 2 (median
+   line pitch in `_label_block`) is a correct fix that regresses the corpus 202 -> 200 and
+   turns the only green document red. `min`'s collapse-to-smallest pins the block-break
+   threshold near `LABEL_BLOCK_GAP_FLOOR` (24.0), and that floor-clamping is what
+   correctly ends DTSS's address block at a 48.14pt section gap and Centracom's charge
+   ladder at 24.33pt. Centracom has no outlier to reject: 14.0pt is its honest pitch and
+   is simply too permissive at `FACTOR = 2.0`. This belongs in the defensible-figure
+   accounting beside the 15 vacuous passes. Deferred to Wave 2 by ruling, to run after the
+   constants are rescaled and a re-baseline is budgeted. Abandoned patch:
+   `task-w1-2-abandoned.patch`.
+
+2. **A guarantee can be asserted on a code path nothing runs.** Task 4's second fix round:
+   splitting `IdentityIndex.see` into `peek` + `commit` left the self-replay guard only
+   inside `see`, which the runner no longer called — so a document reprocessed under its
+   own id was reported as a duplicate of itself while the unit test asserting otherwise
+   stayed green. Fixed by giving `peek` the `document_id` and defining `see` as
+   `peek`+`commit`, so one copy of the logic exists. A sharper form of standing rule 10:
+   coverage that was genuine yesterday becomes decorative the moment the caller moves,
+   and nothing flags the drift.
+
+3. **The wave reintroduced the class of fragility it set out to remove.**
+   `NATIVE_CHAR_THRESHOLD = 50` was calibrated by F2 as a document *average*; Task 3
+   reused it as a per-page predicate without recalibration. Comcast p2 has 58 characters
+   — an 8-character margin on a bill regenerated monthly from one template; Centracom p10
+   has 60. Raising the threshold to 70 flips both documents to `ocr`, applies the
+   `ocr_source` penalty, drops them `high` -> `medium` with review raised, and turns two
+   gold assertions red. The measurement in the plan that justified reusing 50 ("every
+   document is 0 or 500+ chars/page, never mixed") is **false at the page level** — the
+   bimodality is a property of averages. Corrected in `normalize.py`; recalibration is
+   Wave 2.
+
+**The Critical that five task-scoped reviews could not see.** `bill_to_mismatch` is
+reachable only from `resolve_bill_to_alias`'s *printed* rung, which needs a persona to
+declare a `bill_to_name` selector. **Five of ten declare none** (`comcast`, `windstream`,
+`edco`, `upak`, `veritiv`), so those always reach `_roster_match` — a whole-page
+`re.search` with no head-of-line rule, unlike `_candidate_lines`, which states the very
+doctrine it violates. A Veritiv-template invoice billed to `Contoso Manufacturing Inc`
+that merely mentions `Northstar Recycling` in a shipping line yields
+`derived.bill_to_name = "Northstar Recycling"`, no mismatch tag, `coverage` satisfied, and
+routes `high`. Weakness A2 verbatim, on the majority path — and Task 1 shipped a test
+whose docstring certified it as correct ("Rung 2 read the name OFF the roster, so it
+cannot disagree with it"), which is a tautology: rung 2 manufactures the agreement it then
+cannot contradict. Docstring corrected to document the limitation; the code fix moves
+corpus behaviour on five documents and is Wave 2.
+
+**Wave 2 inherits, all registered in the plan:** Task 2's block-break rule (after the
+constants are rescaled), an nth-occurrence primitive for the grammar — `anchor_occurrence`
+was built for exactly the payee-printed-3x case, shipped unused, and its first real user
+(`edco`) does not fit it, while `veritiv`/`windstream` work only because `_norm` strips a
+trailing colon but not a comma — the rung-2 mention gap, the per-page threshold
+recalibration, the gate's ordering of forced review versus confidence collapse, and the
+identity-capture point relative to `beforeEmit`.

@@ -1,0 +1,83 @@
+diff --git a/src/docintel/grammar/regions.py b/src/docintel/grammar/regions.py
+index 2d74aa3..4d320d1 100644
+--- a/src/docintel/grammar/regions.py
++++ b/src/docintel/grammar/regions.py
+@@ -27,6 +27,7 @@ a reference.
+ from __future__ import annotations
+ 
+ import re
++import statistics
+ from collections.abc import Callable
+ from dataclasses import dataclass
+ 
+@@ -455,6 +456,7 @@ def _label_block(
+     bands: list[list[Word]] = []
+     prev_y: float | None = None
+     pitch: float | None = None
++    gaps: list[float] = []
+     blanks = 0
+ 
+     for line in page.lines():
+@@ -472,12 +474,17 @@ def _label_block(
+         blanks = 0
+         if prev_y is not None:
+             gap = y - prev_y
++            gaps.append(gap)
+             if pitch is None:
+                 pitch = gap
+             elif gap > max(LABEL_BLOCK_GAP_FLOOR, pitch * LABEL_BLOCK_GAP_FACTOR):
+                 break
+             else:
+-                pitch = min(pitch, gap)
++                # Median, not min: `min` let one tight line permanently redefine
++                # the block's rhythm, after which the next ORDINARY gap read as a
++                # block break. Fixed for row groups in 26a485d; this is the same
++                # bug in the other caller.
++                pitch = statistics.median(gaps)
+         bands.append(band)
+         prev_y = y
+ 
+diff --git a/tests/grammar/test_regions.py b/tests/grammar/test_regions.py
+index 9f5d971..eac29da 100644
+--- a/tests/grammar/test_regions.py
++++ b/tests/grammar/test_regions.py
+@@ -555,6 +555,39 @@ def test_a_large_vertical_gap_ends_the_block() -> None:
+     assert "UNRELATED" not in span.text
+ 
+ 
++def test_one_tight_line_does_not_truncate_the_block() -> None:
++    """A label block with an established 14pt rhythm and one 4pt continuation
++    line, followed by an ordinary-but-wider 26pt gap.
++
++    With `pitch = min(pitch, gap)` the 4pt line permanently collapses the
++    rhythm to 4pt, so the break threshold bottoms out at
++    `LABEL_BLOCK_GAP_FLOOR` (24pt) for the rest of the block - after which the
++    very next gap over 24pt reads as a block break, even though 26pt is well
++    inside `2 * the block's real 14pt pitch` (28pt) and is not structural at
++    all. Centracom's `vendor_address` is this bug's live instance: a tight
++    continuation line under the vendor name collapses the pitch the same way.
++
++    Two ordinary 14pt gaps precede the tight line (not one) so that the
++    correct median has a majority to hold onto - with only one, a two-sample
++    median splits the difference and the floor still swallows the next gap
++    regardless of whether `min` or `median` is used. This was checked by
++    hand and by running the fixture against both the buggy and fixed code
++    before trusting it (standing rule 7).
++    """
++    p = _page(
++        1,
++        ("Remit", 30.0, 100.0), ("To", 70.0, 100.0),
++        ("CENTRACOM", 30.0, 114.0),                                     # gap 14
++        ("Attn", 30.0, 128.0), ("Billing", 60.0, 128.0), ("Department", 110.0, 128.0),  # gap 14
++        ("a", 30.0, 132.0), ("continuation", 40.0, 132.0), ("line", 120.0, 132.0),
++        ("printed", 150.0, 132.0), ("tight", 200.0, 132.0),              # gap 4
++        ("PO", 30.0, 158.0), ("Box", 55.0, 158.0), ("7", 90.0, 158.0),   # gap 26
++        ("Fairview", 30.0, 172.0), ("UT", 90.0, 172.0), ("84629", 120.0, 172.0),  # gap 14
++    )
++    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Remit To", 30.0, 100.0))
++    assert "84629" in span.text, f"the block was truncated: {span.text!r}"
++
++
+ def test_label_block_is_capped_so_it_never_becomes_the_page() -> None:
+     words = [("Bill", 30.0, 100.0), ("To", 60.0, 100.0)]
+     for i in range(40):
