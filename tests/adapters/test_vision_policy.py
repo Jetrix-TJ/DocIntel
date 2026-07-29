@@ -14,7 +14,8 @@ from docintel.adapters.vision.policy import VISION_OBSERVABLE, sanitize
 from docintel.adapters.vision.port import VisionResult
 from docintel.core.confidence import CEILING, MODIFIERS
 from docintel.core.models import DERIVED_ONLY
-from docintel.pipeline.stages.s7_gate import FORCING_MODIFIERS
+from docintel.adapters.vision.policy import VISION_FLOOR
+from docintel.pipeline.stages.s7_gate import FORCING_MODIFIERS, VERY_LOW_FLOOR
 
 
 def test_no_vision_observable_modifier_can_force_review_on_its_own():
@@ -79,9 +80,35 @@ def test_confidence_is_clamped_to_the_global_ceiling():
     assert sanitize(result, ["a"]).confidence["a"] == pytest.approx(float(CEILING))
 
 
-def test_negative_confidence_is_clamped_to_zero():
+def test_confidence_is_floored_so_a_model_cannot_demand_regeneration():
+    """GUARDRAIL 7, second path - the one the irregularity tests above do not cover.
+
+    `s7_gate._confidence_lane` routes to the `low` lane when a majority share of
+    fields score below `VERY_LOW_FLOOR`, and the `low` lane sets `regen_flag` -
+    a request to regenerate the vendor's persona. Without a lower clamp, a model
+    reporting 0.01 on the fields it returned would reach that path, which is
+    lane-routing power AND rule-lifecycle power granted by a number the model
+    chose.
+
+    Flooring does not silence the model: `VISION_FLOOR` sits below every pack
+    threshold, so a floored field still falls short and still routes the document
+    to a human. What it cannot do is claim the RULES are broken - the model saw an
+    illegible image, which is not evidence about the persona.
+    """
+    result = VisionResult(fields={"a": "1"}, confidence={"a": 0.01})
+    assert sanitize(result, ["a"]).confidence["a"] >= VERY_LOW_FLOOR
+
+
+def test_the_vision_floor_stays_at_or_above_the_gate_s_collapse_floor():
+    """The two constants live in different modules on purpose - `policy` must not
+    import a pipeline stage. This test is the link: lower `VISION_FLOOR` below the
+    gate's floor and the guardrail above silently stops holding."""
+    assert VISION_FLOOR >= VERY_LOW_FLOOR
+
+
+def test_negative_confidence_is_clamped_into_the_allowed_band():
     result = VisionResult(fields={"a": "1"}, confidence={"a": -3.0})
-    assert sanitize(result, ["a"]).confidence["a"] == 0.0
+    assert sanitize(result, ["a"]).confidence["a"] == pytest.approx(VISION_FLOOR)
 
 
 def test_a_field_with_no_confidence_gets_the_default():

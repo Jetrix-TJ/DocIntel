@@ -60,6 +60,26 @@ VISION_OBSERVABLE: frozenset[str] = frozenset({
 # strong one.
 DEFAULT_CONFIDENCE = 0.50
 
+# The LOWER clamp, and the other half of rule 3.
+#
+# `s7_gate` routes a document to the `low` lane when a majority share of its
+# fields score under `VERY_LOW_FLOOR`, and the `low` lane sets `regen_flag` - a
+# request to regenerate this vendor's persona. A model reporting 0.01 on the
+# fields it returned would therefore reach both the lane and the rule lifecycle,
+# which is exactly the power rule 2 spends `VISION_OBSERVABLE` to deny.
+#
+# Kept numerically equal to the gate's floor, not lower. Deliberately NOT imported
+# from `s7_gate`: an adapter must not depend on a pipeline stage. The link is
+# pinned by a test instead (`test_vision_policy.py`), the same way rule 2's names
+# are pinned against `MODIFIERS`.
+#
+# This floor costs the model nothing it should have. `VISION_FLOOR` is below every
+# threshold either pack sets (0.75-0.95), so a floored field still falls short of
+# its threshold and still sends the document to a human. What the model loses is
+# only the claim that the PERSONA is broken - and an illegible image is not
+# evidence about a selector.
+VISION_FLOOR = 0.50
+
 _CEILING = float(CEILING)
 
 
@@ -74,7 +94,7 @@ def _clean_value(value: object) -> str | None:
 def _clean_confidence(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return min(_CEILING, max(0.0, float(value)))
+    return min(_CEILING, max(VISION_FLOOR, float(value)))
 
 
 def sanitize(result: VisionResult, field_names: list[str]) -> VisionResult:
