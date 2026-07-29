@@ -111,7 +111,8 @@
     },
     {
       "field": "remit_address",
-      "anchor": "PO BOX 9001908",
+      "anchor": "WINDSTREAM",
+      "anchor_occurrence": "last",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [

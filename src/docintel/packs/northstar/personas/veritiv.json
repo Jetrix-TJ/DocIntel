@@ -88,7 +88,8 @@
     },
     {
       "field": "remit_address",
-      "anchor": "P.O. BOX 409884",
+      "anchor": "VERITIV OPERATING COMPANY",
+      "anchor_occurrence": "last",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [

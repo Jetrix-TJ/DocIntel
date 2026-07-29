@@ -59,8 +59,6 @@ ANCHOR_IN_VALUE_DEBT = frozenset({
     ("edco", "remit_address"),
     ("federal_recycling", "vendor_address"),
     ("upak", "vendor_name"),
-    ("veritiv", "remit_address"),
-    ("windstream", "remit_address"),
 })
 
 # (persona, field) where the pattern spells out the answer.
