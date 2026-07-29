@@ -67,6 +67,19 @@ CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
 LABEL_BLOCK_LEFT = 12.0     # same left tolerance as near-anchor
 LABEL_BLOCK_RIGHT = 300.0   # same column width as near-anchor
 LABEL_BLOCK_MAX = 140.0     # hard ceiling, ~10 lines: a block, not a page
+# Whitespace that means "a different column", used to replace the fixed
+# LABEL_BLOCK_RIGHT with the real column edge.
+#
+# `LABEL_BLOCK_RIGHT = 300.0` is a guess, and on Centracom it guesses through
+# 224pt of empty space into the next column: `vendor_address` came back as
+# `Balance, PO BOX 7, Payments, FAIRVIEW UT 84629, Previous, Please, ...`.
+#
+# 24.0 is twice `CELL_GAP` - this file already calls 12pt "a column's worth" of
+# horizontal whitespace when splitting a line into cells - and it sits below the
+# narrowest genuine inter-column gutter measured on the corpus (25pt on Veritiv,
+# 26pt on U-PAK), while staying far above the few points that separate words
+# inside one address line.
+LABEL_BLOCK_GUTTER = 24.0
 LABEL_BLOCK_GAP_FACTOR = 2.0  # multiples of the block's own line pitch that end it
 LABEL_BLOCK_GAP_FLOOR = 24.0  # keeps a tight-leaded block from breaking early
 # How many rows that are empty IN THIS COLUMN may sit inside a block.
@@ -439,8 +452,7 @@ def _label_block(
     x1 = a.word.x0 + LABEL_BLOCK_RIGHT
     top = a.word.y0 - _LINE_TOLERANCE
 
-    kept: list[Word] = []
-    bottom = a.word.y1
+    bands: list[list[Word]] = []
     prev_y: float | None = None
     pitch: float | None = None
     blanks = 0
@@ -466,11 +478,44 @@ def _label_block(
                 break
             else:
                 pitch = min(pitch, gap)
-        kept.extend(band)
-        bottom = max(bottom, max(w.y1 for w in band))
+        bands.append(band)
         prev_y = y
 
+    # NOTE: the column gutter is deliberately NOT applied here. This region also
+    # serves label/amount ladders, where the wide gap between a label and its
+    # right-aligned amount is the layout, not contamination - narrowing here cut
+    # the amount off and regressed Centracom and Comcast. The executor applies
+    # `column_cut` only for `text_block`, because it is the only caller that knows
+    # the pattern; a region resolver is pattern-blind on purpose.
+    kept = [w for band in bands for w in band]
+    bottom = max([a.word.y1, *(w.y1 for w in kept)])
     return (_span(page, tuple(kept), (x0, top, x1, bottom)),)
+
+
+def column_cut(bands: list[list[Word]], anchor_x0: float, limit: float) -> float:
+    """The near edge of the first column gutter at or right of the anchor.
+
+    `limit` when there is none, so a single-column block keeps today's boundary.
+
+    The gutter is only unambiguous across a block's OWN rows: projected over a wide
+    band the union of many differently-indented rows occupies everything and no
+    gutter survives. Measured - Centracom shows 0 gutters over y 40-320 and a clean
+    224pt one over its address rows.
+    """
+    occupied: set[int] = set()
+    for band in bands:
+        for w in band:
+            occupied.update(range(int(w.x0), int(w.x1) + 1))
+    run: int | None = None
+    for x in range(int(anchor_x0), int(limit) + 1):
+        if x not in occupied:
+            if run is None:
+                run = x
+        else:
+            if run is not None and x - run >= LABEL_BLOCK_GUTTER:
+                return float(run)
+            run = None
+    return limit
 
 
 def _same_cell(

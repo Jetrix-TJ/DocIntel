@@ -272,8 +272,17 @@ class Executor:
         located by instead of the address next to it.
         """
         if pattern == "text_block":
+            bands = [[w for w in line if w not in skip] for line in span.lines()]
+            # Stop at the real column edge rather than the region's nominal right
+            # bound. Only `text_block` does this: it is the pattern that captures a
+            # multi-line block, so a neighbouring column is contamination. A
+            # label/amount ladder on the same region needs the opposite - the wide
+            # gap before its right-aligned amount IS the layout - and `regions.py`
+            # cannot tell the two apart because a resolver never sees the pattern.
+            left = min((w.x0 for w in skip), default=span.bbox[0])
+            cut = regions.column_cut(bands, left, span.bbox[2])
             lines = [
-                " ".join(w.text for w in line if w not in skip) for line in span.lines()
+                " ".join(w.text for w in band if w.x0 < cut) for band in bands
             ]
             block = "\n".join(line for line in lines if line.strip())
             if block.strip():

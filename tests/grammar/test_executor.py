@@ -430,6 +430,52 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_a_label_block_stops_at_the_column_gutter() -> None:
+    """`LABEL_BLOCK_RIGHT = 300.0` is a constant, and every telecom bill here is a
+    two-column layout flattened into one interleaved line stream - so on Centracom
+    the window reached straight through 224pt of whitespace into the next column and
+    `vendor_address` came back as
+    'Balance, PO BOX 7, Payments, FAIRVIEW UT 84629, Previous, Please, ...'.
+
+    The block's own rows are where the gutter is unambiguous: projecting word
+    occupancy across just those lines leaves one wide empty run, and that is the
+    real column edge.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0),
+        ("PO", 50.0, 112.0), ("BOX", 70.0, 112.0), ("7", 95.0, 112.0),
+        ("Balance", 300.0, 112.0),                    # other column, inside 300pt
+        ("FAIRVIEW", 50.0, 124.0), ("Payments", 300.0, 124.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "vendor_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block",
+    })
+    # `adjust` ops run at Stage 6, so the executor's own output is newline-joined.
+    assert ctx.extracted.get("vendor_address") == "PO BOX 7\nFAIRVIEW"
+
+
+def test_a_wide_single_column_block_is_not_narrowed() -> None:
+    """The guard. Gutter detection may only ever NARROW the window, and it must not
+    fire on ordinary word spacing inside one column - an address line's internal
+    gaps are a few points, well under a column's worth."""
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0),
+        ("ATTN:", 50.0, 112.0), ("Support", 85.0, 112.0), ("Services", 140.0, 112.0),
+        ("131", 50.0, 124.0), ("W", 70.0, 124.0), ("Matthews", 85.0, 124.0),
+        ("St", 140.0, 124.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "return_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block",
+    })
+    assert ctx.extracted.get("return_address") == (
+        "ATTN: Support Services\n131 W Matthews St"
+    )
+
+
 def test_an_anchor_can_target_its_last_occurrence() -> None:
     """`_resolve_anchor` returns `hits[0]`, so a label printed more than once always
     resolves to the first one in reading order. Four remit addresses fail purely for

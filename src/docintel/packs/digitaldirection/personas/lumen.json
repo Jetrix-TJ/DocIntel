@@ -108,7 +108,7 @@
     {
       "field": "vendor_address",
       "region": "top-left",
-      "pattern": "(1025 Eldorado Blvd., Broomfield, CO 80021)",
+      "pattern": "([0-9]{1,6} .{3,60}, [A-Z]{2} [0-9]{5})",
       "required": false
     }
   ],
