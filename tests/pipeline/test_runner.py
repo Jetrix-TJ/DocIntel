@@ -263,6 +263,44 @@ def test_an_identity_seen_before_a_build_failure_does_not_claim_the_slot():
     )
 
 
+def test_reprocessing_one_document_id_is_a_replay_not_a_duplicate_of_itself():
+    """Round-2 review regression, at the layer that actually runs.
+
+    `_emit` calls `IdentityIndex.peek`, never `see`. An earlier version of
+    `peek` took only `identity`, so it could not tell "the document on file
+    is THIS document" from "a different document with the same identity" -
+    a document reprocessed under its own `document_id` on the same `Runner`
+    was told it duplicated itself. The unit tests on `see()` alone (in
+    `tests/core/test_duplicates.py`) still passed while this shipped, because
+    nothing in the pipeline calls `see()` - only `peek` and `commit`. This
+    test exercises the actual runner path with one `document_id` reused, so
+    it fails against that regression regardless of what `see()` asserts.
+    """
+    class Identified:
+        name = "identified"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            ctx = _classified(ctx)
+            ctx.derived.set("document_identity", "shared-identity")
+            ctx.derived.set("identity_basis", "invoice_number")
+            return ctx
+
+    r = _runner([Identified()])
+
+    first = r.process("d1", "/tmp/a.pdf")
+    validate_record(first)
+    assert first["disposition"] == "processed"
+    assert first["possible_duplicate_of"] is None
+
+    second = r.process("d1", "/tmp/a.pdf")  # same document_id, reprocessed
+    validate_record(second)
+    assert second["disposition"] == "processed"
+    assert second["possible_duplicate_of"] is None, (
+        "d1 replayed under its own document_id must never be told it "
+        "duplicates itself"
+    )
+
+
 def test_a_stage_that_returns_none_is_a_programming_error_not_silent_data_loss():
     class Bad:
         name = "bad"

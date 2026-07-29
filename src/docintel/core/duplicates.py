@@ -29,20 +29,33 @@ class IdentityIndex:
     read the answer to put in the candidate record; `commit` is called only
     once that record is proven buildable and valid, so a document can never
     irrevocably claim an identity slot its own shipped record does not back.
+
+    `peek` takes `document_id` for the same reason `commit` does: a replay of
+    one document under its own id must never read as a duplicate of itself.
+    An earlier version gave `peek` only `identity`, which could not tell "the
+    document on file is THIS one" from "a different document with the same
+    identity" - `_emit`, which calls `peek` and never `see`, told a replayed
+    document it duplicated itself. `see` is defined in terms of `peek` and
+    `commit` precisely so it cannot drift from what `_emit` actually gets.
     """
 
     def __init__(self) -> None:
         self._first: dict[str, str] = {}
 
-    def peek(self, identity: str | None) -> str | None:
-        """The document_id already on record as first-seen with `identity`.
+    def peek(self, document_id: str, identity: str | None) -> str | None:
+        """The document_id first seen with `identity`, or None.
 
-        Never mutates. None for an unidentifiable document: two documents
-        nothing could identify are not evidence of one document twice.
+        Never mutates. None for an unidentifiable document (two documents
+        nothing could identify are not evidence of one document twice) and
+        None when `document_id` itself is the first sighting on record (a
+        replay is not a duplicate of itself).
         """
         if identity is None:
             return None
-        return self._first.get(identity)
+        first = self._first.get(identity)
+        if first is None or first == document_id:
+            return None
+        return first
 
     def commit(self, document_id: str, identity: str | None) -> None:
         """Register `document_id` as the first sighting of `identity`.
@@ -62,6 +75,6 @@ class IdentityIndex:
         callers that have no reason to split reading the answer from making
         it permanent.
         """
-        first = self.peek(identity)
+        first = self.peek(document_id, identity)
         self.commit(document_id, identity)
-        return None if first is None or first == document_id else first
+        return first

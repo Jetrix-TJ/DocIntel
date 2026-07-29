@@ -101,12 +101,14 @@ class Runner:
             ctx = self.hooks.run("beforeEmit", ctx)
             identity = ctx.derived.get("document_identity")
             # Looked up, not yet committed: `peek` is a plain dict `.get` over
-            # an already-typed key, so - like the old single-call `see` this
+            # already-typed keys, so - like the old single-call `see` this
             # replaced - it cannot raise. That protects the invariant, but it
             # is not by itself a correctness guarantee; the answer only
             # becomes permanent below, once it is proven to belong to a
-            # record that actually ships.
-            ctx.possible_duplicate_of = self._identity_index.peek(identity)
+            # record that actually ships. `document_id` is passed through so
+            # a replay of this same document is never read as a duplicate of
+            # itself (see `IdentityIndex.peek`).
+            ctx.possible_duplicate_of = self._identity_index.peek(ctx.document_id, identity)
             record = build_record(ctx)
             validate_record(record)
             # Committed only now that `record` is proven buildable and valid.
