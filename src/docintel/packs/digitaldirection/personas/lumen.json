@@ -107,12 +107,8 @@
     },
     {
       "field": "vendor_address",
-      "anchor": "1025 Eldorado Blvd.",
-      "region": "label-block",
-      "pattern": "text_block",
-      "adjust": [
-        "join_lines_comma"
-      ],
+      "region": "top-left",
+      "pattern": "(1025 Eldorado Blvd., Broomfield, CO 80021)",
       "required": false
     }
   ],
