@@ -62,7 +62,7 @@ from __future__ import annotations
 import functools
 import os
 
-from docintel.core.errors import TransientError
+from docintel.core.errors import PermanentError
 from docintel.core.models import PageMeta, PageText
 from docintel.extract import ocr, ocr_cache, pdf
 
@@ -148,18 +148,52 @@ def _load_document_uncached(path: str) -> tuple[tuple[PageText, ...], tuple[Page
     if not starved:
         return pdf.read_pages(path), meta, "native"
     if len(starved) == len(meta):
-        return ocr.ocr_pages(path, starved), meta, "ocr"
+        # All-scanned still goes through the same completeness check as the
+        # mixed branch below - "one `PageText` per `PageMeta`" is the
+        # invariant, and it does not stop applying just because every page on
+        # the document happened to be starved.
+        ocred = _ocr_and_check_complete(path, starved)
+        return tuple(ocred[m.page_number] for m in meta), meta, "ocr"
 
     native = {p.page_number: p for p in pdf.read_pages(path)}
-    ocred = {p.page_number: p for p in ocr.ocr_pages(path, starved)}
-    # ENG REVIEW: without this, a short OCR result falls back to the WORDLESS
-    # native page - silent data loss on exactly the page this change exists to
-    # rescue. A raise here becomes a dead_letter with a reason, which is visible.
-    missing = [n for n in starved if n not in ocred]
+    ocred = _ocr_and_check_complete(path, starved)
+    pages = tuple(
+        ocred[m.page_number] if m.page_number in ocred else native[m.page_number]
+        for m in meta
+    )
+    return pages, meta, "ocr"
+
+
+def _ocr_and_check_complete(path: str, page_numbers: list[int]) -> dict[int, PageText]:
+    """OCR the given pages and confirm every one came back, keyed by page number.
+
+    Without this, a short OCR result would let a caller fall back to the
+    WORDLESS native page - silent data loss on exactly the page OCR exists to
+    rescue. A raise here becomes a dead_letter with a reason, which is
+    visible, on both callers (the all-scanned branch and the mixed branch).
+
+    Raises `PermanentError`, not `TransientError`. The one reachable trigger
+    is `pdf.read_meta` naming a page that `pdfplumber.pages` does not - a
+    deterministic, structural mismatch, not a flaky one: retrying re-issues
+    the identical OCR call and gets the identical answer, so `_run_one`
+    retrying this `max_retries` times (`pipeline/runner.py`) buys nothing.
+
+    It is worse than merely useless, too: `ocr.ocr_pages` writes whatever it
+    returns to the on-disk OCR cache (`ocr_cache.py`, via `ocr.py:51`) BEFORE
+    this check runs, so the short result is cached first. Every retry - within
+    this process or a fresh one, hours later - reads the same incomplete
+    result back from cache rather than re-OCRing, so nothing about calling
+    this "transient" ever becomes true. `PermanentError` dead-letters on the
+    first attempt (`_run_one` only retries `TransientError`), which is the
+    right number of attempts for a failure that cannot resolve itself; the
+    document still emits, via `Runner`'s dead-letter path, satisfying
+    `count(intaken) == count(emitted)` same as before.
+    """
+    ocred = {p.page_number: p for p in ocr.ocr_pages(path, page_numbers)}
+    missing = [n for n in page_numbers if n not in ocred]
     if missing:
-        raise TransientError(
+        raise PermanentError(
             f"OCR returned no page for {missing} of {path!r}; "
             "refusing to fall back to a page with no text layer"
         )
-    pages = tuple(ocred.get(m.page_number) or native[m.page_number] for m in meta)
-    return pages, meta, "ocr"
+    return ocred

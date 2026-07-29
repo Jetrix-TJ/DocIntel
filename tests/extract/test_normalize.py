@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from docintel.core.errors import TransientError
+from docintel.core.errors import PermanentError
 from docintel.extract import ocr
 from docintel.extract.normalize import load_document
 
@@ -281,17 +281,38 @@ def test_only_the_starved_pages_are_sent_to_tesseract(tmp_path, monkeypatch) -> 
     assert seen == [[2, 3, 4]]
 
 
-def test_ocr_returning_a_short_result_raises_transient_not_silently_falls_back(
+def test_ocr_returning_a_short_result_raises_permanent_not_silently_falls_back(
     tmp_path, monkeypatch
 ) -> None:
     """Step 3's critical-gap check: if OCR comes back missing a requested page,
-    `ocred.get(n) or native[n]` would silently fall back to the wordless
-    native page - no error, no tag, no visibility. A `TransientError` turns
-    that into a dead letter instead: retried a few times by
-    `runner._run_one`, then routed to the DLQ with the reason on the record.
+    falling back to the native page for it would silently return the wordless
+    native page - no error, no tag, no visibility. Raising instead turns that
+    into a dead letter, with the reason on the record.
+
+    `PermanentError`, not `TransientError`: the one reachable trigger is a
+    deterministic mismatch between `pdf.read_meta` and `pdfplumber.pages`, so
+    a retry gets the identical answer - worse, `ocr.ocr_pages` has already
+    written the short result to its on-disk cache by the time this is raised,
+    so a retry (or a later run) reads the same incomplete result back from
+    cache rather than re-OCRing. `_run_one` only retries `TransientError`, so
+    this dead-letters on the first attempt rather than wasting `max_retries`
+    on a failure retrying cannot fix.
     """
     path = _pdf_with_page_char_counts(tmp_path, [2343, 0, 0, 0])
     real = ocr.ocr_pages
     monkeypatch.setattr(ocr, "ocr_pages", lambda p, n: real(p, n)[:1])
-    with pytest.raises(TransientError):
+    with pytest.raises(PermanentError):
+        load_document(str(path))
+
+
+def test_the_all_scanned_branch_also_enforces_completeness(tmp_path, monkeypatch) -> None:
+    """The invariant - one `PageText` per `PageMeta` - holds on the all-scanned
+    branch too, not only on the mixed branch. Not reachable via any corpus
+    document today (all ten either OCR nothing or OCR everything cleanly),
+    but the same completeness check now runs on both `ocr`-returning paths.
+    """
+    path = _pdf_with_page_char_counts(tmp_path, [0, 0, 0])
+    real = ocr.ocr_pages
+    monkeypatch.setattr(ocr, "ocr_pages", lambda p, n: real(p, n)[:1])
+    with pytest.raises(PermanentError):
         load_document(str(path))
