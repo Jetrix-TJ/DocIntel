@@ -430,6 +430,60 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_a_line_matching_only_a_text_column_is_not_a_row() -> None:
+    """Wrapped descriptions and boilerplate match the text column and nothing else.
+    `if row:` counted them, so Veritiv's five terms-and-conditions lines became
+    five line items.
+
+    Opt-in, because F15's `BALANCE FORWARD` row is the same shape and IS a row -
+    see `test_empty_cells_are_omitted_when_allowed`, which pins the default.
+    """
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Real", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("wrapped", 50.0, 140.0),                       # description only - not a row
+        ("Also", 50.0, 160.0), ("20.00", 400.0, 160.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+        "require_amount": True,
+    })
+    assert [r.get("description") for r in ctx.row_groups["line_items"]] == ["Real", "Also"]
+
+
+def test_the_same_table_without_the_flag_keeps_the_text_only_line() -> None:
+    """The default is F15's, not the new rule's. Flipping the default would silently
+    drop EDCO's three blank-charge rows the moment its `row_group` is authored."""
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Real", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("wrapped", 50.0, 140.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+    })
+    assert [r.get("description") for r in ctx.row_groups["line_items"]] == ["Real", "wrapped"]
+
+
+def test_require_amount_is_inert_on_a_group_with_no_money_column() -> None:
+    """U-PAK's `sub_account` group declares no money column. Setting the flag there
+    must not empty it."""
+    words: list[tuple[str, float, float]] = [
+        ("CODE", 50.0, 100.0), ("NAME", 300.0, 100.0),
+        ("A1", 50.0, 120.0), ("Acme", 300.0, 120.0),
+        ("B2", 50.0, 140.0),
+    ]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "accounts", "table_anchor": "CODE",
+        "columns": {"code": "text", "name": "text"},
+        "column_headers": {"code": "CODE", "name": "NAME"},
+        "require_amount": True,
+    })
+    assert len(ctx.row_groups["accounts"]) == 2
+
+
 def test_a_header_wrapped_onto_the_line_above_still_binds_its_column() -> None:
     """Veritiv prints `Extended Price` as two lines: `Extended` 8.26pt above the
     row the `Product No.` anchor sits on. `page.lines()` splits at

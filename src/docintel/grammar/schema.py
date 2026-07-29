@@ -175,6 +175,19 @@ class RowGroupSelector:
     sub_group: SubGroup | None = None
     row_count: tuple[int, int] | None = None
     allow_empty_cells: bool = True
+    # Opt in to dropping lines that match no money column. GRAMMAR EXTENSION,
+    # added deliberately (section 10 requires a reason, not an agent's say-so).
+    #
+    # The reason: Veritiv's table is followed by five terms-and-conditions lines
+    # that match its text column, and nothing in the page geometry distinguishes
+    # them from a row - the pitch is regular and the gap is not structural.
+    #
+    # Default False because the opposite case is ALSO real and already specified:
+    # F15 says a blank cell is a blank cell, and
+    # `test_empty_cells_are_omitted_when_allowed` pins `BALANCE FORWARD` with no
+    # amount as a legitimate row. EDCO's gold agrees. So this cannot be the
+    # default without contradicting a decision the corpus already encodes.
+    require_amount: bool = False
 
 
 @dataclass(frozen=True)
@@ -304,6 +317,7 @@ def _parse_row_group(raw: Mapping[str, Any]) -> RowGroupSelector:
         sub_group=_parse_sub_group(raw.get("sub_group")),
         row_count=_parse_range(raw.get("row_count"), "row_count"),
         allow_empty_cells=bool(raw.get("allow_empty_cells", True)),
+        require_amount=bool(raw.get("require_amount", False)),
     )
 
 

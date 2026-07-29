@@ -507,6 +507,26 @@ class Executor:
         matchers = {name: patterns.resolve(p) for name, p in selector.columns.items()}
         deadline = perf_counter() + self._budget_seconds
 
+        # A line of an invoice's item table that carries no money value is not a
+        # row: it is a wrapped description, a terms-and-conditions paragraph, or a
+        # footer. `if row:` alone counted all of them - five T&C lines on Veritiv,
+        # ten description wraps on Complete Beverage, one OCR fragment on Federal
+        # Recycling.
+        #
+        # OPT-IN, and it has to be. F15 says a blank cell is a blank cell, and
+        # `test_empty_cells_are_omitted_when_allowed` pins `BALANCE FORWARD` with no
+        # amount as a legitimate row - EDCO's gold treats three such rows the same
+        # way. Nothing in the geometry separates those from Veritiv's boilerplate,
+        # so the persona has to say which shape its table is.
+        #
+        # Also guarded on the group DECLARING money, so setting the flag on a ladder
+        # that has no money column is inert rather than emptying it.
+        money_columns = (
+            {n for n, p in selector.columns.items() if p in MONEY_PATTERNS}
+            if selector.require_amount
+            else set()
+        )
+
         # Vertical rhythm, seeded from the header-to-first-row gap.
         #
         # The pitch is the MEDIAN of the gaps seen so far, not the minimum. A
@@ -573,8 +593,9 @@ class Executor:
                     if value is not None:
                         row[column] = value
                 # A row that matched nothing is not a row - it is a page footer,
-                # a continuation note, or the blank space below the table.
-                if row:
+                # a continuation note, or the blank space below the table. Nor is a
+                # row that matched no money on a table that prints money.
+                if row and (not money_columns or not money_columns.isdisjoint(row)):
                     rows.append(row)
 
         # `row_count` is a stated expectation, not a filter. Truncating to `max`
