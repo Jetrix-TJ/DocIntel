@@ -6,9 +6,21 @@ a perfectly clean invoice, so `char_count == 0` and `char_count` too small to
 be real text both mean the same thing here — there is nothing to read.
 
 The routing decision is per page — a document-wide average was fitted to a
-corpus that is bimodal at the document level (every document averages 0
-chars/page or 500+, never mixed), so it never met a document with both native
-and scanned pages, and silently left the scanned ones wordless. `text_source`
+corpus whose per-DOCUMENT averages are bimodal, so it never met a document
+with both native and scanned pages, and silently left the scanned ones
+wordless. The bimodality is a property of the averages, not of individual
+pages: measured per-page counts at HEAD include three documents with a page
+in the 58-160 char range, well above zero but still below
+`NATIVE_CHAR_THRESHOLD`'s neighbourhood -
+
+    Comcast    p1 1320  p2   58  p3 1900  p4  144  p5  144  p6 144
+    Centracom  p1 1430 ... p9  675  p10   60
+    Windstream p1 2180  p2 4246  p3 3461  p4  160
+
+- so treating "0 or 500+, never mixed" as a per-PAGE fact would be wrong: the
+threshold is a per-page predicate sitting only 8 characters above Comcast's
+p2 (58) and 10 above Centracom's p10 (60), the two nearest pages measured.
+`text_source`
 stays a two-valued *document* summary, though: any starved page makes the
 whole document `"ocr"`, because a later confidence modifier and two Northstar
 ladder checks key off `text_source == "ocr"` exactly (see
@@ -54,7 +66,7 @@ from docintel.core.errors import TransientError
 from docintel.core.models import PageMeta, PageText
 from docintel.extract import ocr, ocr_cache, pdf
 
-NATIVE_CHAR_THRESHOLD = 50  # chars per page below which a document is OCR'd
+NATIVE_CHAR_THRESHOLD = 50  # chars per PAGE below which that page is OCR'd
 
 _MEMO_CACHE_SIZE = 64  # bounded: a long-running process over many documents
 # must not grow this without limit; 64 comfortably covers one pipeline run
@@ -115,10 +127,15 @@ def _load_document_cached(
 def _load_document_uncached(path: str) -> tuple[tuple[PageText, ...], tuple[PageMeta, ...], str]:
     meta = pdf.read_meta(path)
     # Per PAGE, not per document. The document-wide average was fitted to a
-    # bimodal corpus (every document is 0 chars/page or 500+); a native invoice
-    # with three scanned attachment pages averages ~586, took the native path,
-    # and left those pages wordless - and a wordless page is role `unknown`, so
-    # reference matching across attachments silently found nothing.
+    # corpus whose per-document averages are bimodal (0 chars/page or 500+);
+    # a native invoice with three scanned attachment pages averages ~586, took
+    # the native path, and left those pages wordless - and a wordless page is
+    # role `unknown`, so reference matching across attachments silently found
+    # nothing. The bimodality is a property of the averages, not of pages:
+    # measured per-page counts at HEAD put three corpus documents' pages in the
+    # 58-160 char range (Comcast p2, Centracom p10, Windstream p4) - well clear
+    # of zero but only 8-110 chars above `NATIVE_CHAR_THRESHOLD`, which is why
+    # this is a per-page predicate rather than a per-document one.
     #
     # `text_source` stays a two-valued document summary: ANY starved page makes
     # the document "ocr". Per-page provenance already travels on

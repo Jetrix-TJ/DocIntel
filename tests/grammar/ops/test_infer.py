@@ -493,7 +493,9 @@ def test_the_block_prefers_a_party_that_begins_its_own_line() -> None:
 # invoice billed to a different company that merely MENTIONS Northstar anywhere
 # is claimed, extracted in full, and would otherwise route `high`. Only the
 # PRINTED rung can disagree with the roster - rung 2 read the name off the
-# roster itself, so it can never contradict it.
+# roster itself, so it can never contradict it. See
+# `test_a_roster_supplied_name_is_never_tagged` below for what that means in
+# practice: it is a live gap in rung 2, not a guarantee that rung is safe.
 
 
 def _ctx_with_pack_roster(roster: tuple[str, ...]):
@@ -531,7 +533,33 @@ def test_a_roster_party_is_not_tagged() -> None:
 
 
 def test_a_roster_supplied_name_is_never_tagged() -> None:
-    """Rung 2 read the name OFF the roster, so it cannot disagree with it."""
+    """This pins a LIMITATION, not a guarantee: rung 2 cannot detect a wrong
+    inbox at all, because it derives `bill_to_name` from the very roster it
+    would need to check the name against - there is no printed value left to
+    disagree with the roster once rung 2 has answered.
+
+    `_roster_match` (infer.py:365-386) is a plain `re.search` over the WHOLE
+    primary page, with no head-of-line requirement - unlike `_candidate_lines`
+    (infer.py:285-307), which states the doctrine it violates: "a party name
+    printed mid-line is a mention; at the head of a line it is the top of a
+    block." A document billed to one company that merely MENTIONS a roster
+    name elsewhere (e.g. "Ship via Northstar Recycling") has that mention
+    read as the bill-to party, with no signal raised, because rung 2 never
+    runs the mention-vs-block check the printed rung gets for free.
+
+    This is not a corner case: five of the ten corpus personas (`comcast`,
+    `windstream`, `edco`, `upak`, `veritiv`) declare no `bill_to_name`
+    selector at all, so `printed` is always `None` on their documents and
+    every one of them always takes this rung. On any of those five, a
+    document billed to the wrong party is claimed, fully extracted, and
+    routes `high` with no `bill_to_mismatch` tag.
+
+    The fix - requiring `_roster_match` to land at the head of a line, or to
+    have an address block under it like `_block_under` - can change which
+    rendering is returned on corpus documents that rely on this rung, so it
+    needs a full re-baseline and is Wave 2 work, not this test. The assertion
+    below stays exactly as it was; only what it is understood to mean changes.
+    """
     ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
     ctx = resolve_bill_to_alias(ctx)          # nothing extracted
     assert "bill_to_mismatch" not in ctx.tags

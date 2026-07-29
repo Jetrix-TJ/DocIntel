@@ -179,11 +179,21 @@ class FieldSelector:
     # Which occurrence of `anchor` to resolve to. GRAMMAR EXTENSION, section 10.
     #
     # The reason: `_resolve_anchor` returns `hits[0]`, so a label printed more than
-    # once always resolves to the first in reading order. Four remit addresses fail
-    # purely because of that - EDCO prints its own name 3x, `VERITIV OPERATING
-    # COMPANY` and `Windstream` twice each, and the occurrence sitting above the
-    # remittance block is the LAST one. The correct anchor already exists on the
-    # page and is simply unreachable.
+    # once always resolves to the first in reading order. `veritiv` and
+    # `windstream` each print their own name exactly TWICE on the primary page,
+    # and the second (last) occurrence is the one sitting above the remittance
+    # block, so `anchor_occurrence: "last"` reaches it - both personas'
+    # `remit_address` selectors depend on this.
+    #
+    # That does NOT generalize to every repeated anchor. `edco` prints its payee
+    # name THREE times on its primary page (the letterhead, the remittance
+    # block, and the "FOR SERVICE AT:" service-location header); `last` lands on
+    # the third occurrence, not the remittance block. That is why `edco`'s
+    # `remit_address` still anchors on "P.O. BOX 5488" (a value-in-the-anchor
+    # workaround) rather than the payee name, and remains tracked in
+    # `ANCHOR_IN_VALUE_DEBT` (`tests/packs/test_no_hardcoded_values.py`) - not a
+    # trivial one-line fix, since the third occurrence is where the correct
+    # anchor is unreachable, not simply the last one.
     #
     # Default "first", pinned by a test: flipping it would silently move every
     # anchored selector in both packs.
