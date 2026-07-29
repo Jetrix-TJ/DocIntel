@@ -73,7 +73,24 @@ QUALITY_REGION_ONLY = 0.90
 TABLE_BREAK_FACTOR = 2.5   # multiples of the established row pitch
 TABLE_BREAK_FLOOR = 24.0   # points; keeps a tight-leaded table from breaking early
 
-# How far ABOVE the anchor's line a wrapped column header may sit.
+# How far ABOVE the anchor's line a wrapped column header may sit, as a multiple of
+# the page's OWN median line pitch, with an absolute floor.
+#
+# Relative because an absolute band assumes a font size. Measured median pitch
+# across this corpus is 5.8-12.4pt, so the original fixed 12.0 covered it - but a
+# document set in larger type, with 20pt leading, prints a wrapped header 20pt above
+# its anchor row and a 12pt band misses it silently. Over thousands of senders that
+# is a guaranteed failure class, not a hypothesis.
+#
+# 1.5 pitches, so the band reaches the immediately preceding line and not the one
+# before that. The floor keeps behaviour identical on tightly-leaded documents
+# (Complete Beverage's 5.8pt median would otherwise give an 8.7pt band, narrower
+# than today's).
+HEADER_BAND_PITCHES = 1.5
+HEADER_BAND_MIN = 12.0
+
+# Retained as the floor's value and as the documented default for a page whose
+# pitch cannot be measured (a single-line page has no gaps).
 #
 # Veritiv prints `Extended Price` as two lines, with `Extended` 8.26pt above the
 # row carrying the `Product No.` anchor. `page.lines()` splits at
@@ -159,6 +176,17 @@ def _cells(words: Sequence[Word]) -> list[list[Word]]:
     return out
 
 
+def _median_pitch(page: PageText) -> float | None:
+    """The page's median gap between consecutive line tops, or None.
+
+    Median rather than mean: every invoice here mixes body text with widely spaced
+    section headings, and a mean is dragged upward by the headings.
+    """
+    tops = [line[0].y0 for line in page.lines()]
+    gaps = [b - a for a, b in zip(tops, tops[1:]) if b > a]
+    return median(gaps) if gaps else None
+
+
 def _header_band(page: PageText, base: list[Word]) -> list[Word]:
     """`base` plus any wrapped header words sitting just above it, in x order.
 
@@ -166,10 +194,14 @@ def _header_band(page: PageText, base: list[Word]) -> list[Word]:
     against the previous word's `x1` - it splits on horizontal whitespace and has
     no opinion about y, so an unsorted merge would invent cell boundaries.
     """
+    pitch = _median_pitch(page)
+    band = HEADER_BAND_MIN if pitch is None else max(
+        HEADER_BAND_MIN, pitch * HEADER_BAND_PITCHES
+    )
     top = base[0].y0
     merged = list(base)
     for line in page.lines():
-        if top - HEADER_BAND <= line[0].y0 < top:
+        if top - band <= line[0].y0 < top:
             merged.extend(line)
     return sorted(merged, key=lambda w: w.x0)
 

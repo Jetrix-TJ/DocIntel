@@ -649,6 +649,31 @@ def test_a_header_wrapped_onto_the_line_above_still_binds_its_column() -> None:
     assert [r.get("amount") for r in rows] == [Decimal("4608.45"), Decimal("4608.45")]
 
 
+def test_the_header_band_scales_with_the_document_s_own_line_pitch() -> None:
+    """A fixed 12pt band assumes a font size. The corpus happens to sit at 5.8-12.4pt
+    median line pitch, so 12.0 covers it - but a document set in larger type, with
+    20pt leading, would print a wrapped header 20pt above its anchor row and the
+    band would silently miss it. Across thousands of senders that is a guaranteed
+    class of failure, not a hypothetical.
+
+    Here the page's own pitch is 20pt and the wrapped header sits 18pt up.
+    """
+    words: list[tuple[str, float, float]] = [
+        ("Extended", 500.0, 82.0),                    # wrapped header, 18pt above
+        ("Product", 50.0, 100.0), ("No.", 95.0, 100.0), ("Price", 505.0, 100.0),
+    ]
+    for i, y in enumerate((120.0, 140.0, 160.0)):     # 20pt pitch
+        words += [(f"Item{i}", 50.0, y), ("11.00", 510.0, y)]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "Product No.",
+        "columns": {"item_code": "text", "amount": "currency"},
+        "column_headers": {"item_code": "Product No.", "amount": "Extended"},
+    })
+    assert [r.get("amount") for r in ctx.row_groups["line_items"]] == [
+        Decimal("11.00"), Decimal("11.00"), Decimal("11.00"),
+    ]
+
+
 def test_the_header_band_reaches_up_but_never_down_into_the_first_row() -> None:
     """The band is deliberately one-directional. Reaching DOWN would let a first
     data row printed tight under the header be absorbed into the header itself,
