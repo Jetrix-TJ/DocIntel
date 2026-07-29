@@ -33,6 +33,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from statistics import median
 from time import perf_counter
 from typing import Any
 
@@ -476,8 +477,19 @@ class Executor:
         deadline = perf_counter() + self._budget_seconds
 
         # Vertical rhythm, seeded from the header-to-first-row gap.
+        #
+        # The pitch is the MEDIAN of the gaps seen so far, not the minimum. A
+        # minimum lets one tight line - a wrapped description, an OCR fragment -
+        # permanently redefine the table's rhythm as that outlier, which collapses
+        # the break threshold to `TABLE_BREAK_FLOOR` and makes the next ordinary
+        # gap look structural. Measured collapses on the corpus: Complete Beverage
+        # 18.00pt -> 3.60, Federal Recycling 19.98 -> 4.68.
+        #
+        # A median keeps the estimate honest in both directions: it ignores a lone
+        # outlier, and it still tracks a table that is genuinely tightly leaded,
+        # because then the tight gaps ARE the majority.
         prev_y: float | None = header_line[0].y0
-        pitch: float | None = None
+        gaps: list[float] = []
 
         for span in spans:
             for line in span.lines():
@@ -489,16 +501,17 @@ class Executor:
                 y = line[0].y0
                 if prev_y is not None and y > prev_y:
                     gap = y - prev_y
-                    if pitch is None:
-                        pitch = gap
-                    elif gap > max(TABLE_BREAK_FLOOR, pitch * TABLE_BREAK_FACTOR):
-                        ctx.log(
-                            f"s5a: row_group {selector.row_group!r} ended at a "
-                            f"{gap:.0f}pt gap (row pitch {pitch:.0f}pt)"
-                        )
-                        return
+                    if not gaps:
+                        gaps.append(gap)
                     else:
-                        pitch = min(pitch, gap)
+                        pitch = median(gaps)
+                        if gap > max(TABLE_BREAK_FLOOR, pitch * TABLE_BREAK_FACTOR):
+                            ctx.log(
+                                f"s5a: row_group {selector.row_group!r} ended at a "
+                                f"{gap:.0f}pt gap (row pitch {pitch:.0f}pt)"
+                            )
+                            return
+                        gaps.append(gap)
                 prev_y = y
 
                 if selector.sub_group is not None:

@@ -430,6 +430,46 @@ def test_a_tightly_leaded_table_survives_a_modest_gap() -> None:
     assert len(ctx.row_groups["line_items"]) == 4
 
 
+def test_one_tight_line_does_not_collapse_the_established_row_pitch() -> None:
+    """A wrapped description line sits close under its own row. With `pitch =
+    min(pitch, gap)` that single 4pt gap became the established pitch for the rest
+    of the table, dropping the break threshold to the floor - so the very next
+    ordinary gap read as structural and truncated the table early.
+
+    Synthetic on purpose (standing rule 2): the corpus contains the *swallowing*
+    direction of this bug, not the truncating direction, so no gold document can
+    detect it. Real measured collapses: Complete Beverage 18.00pt -> 3.60,
+    Federal Recycling 19.98 -> 4.68.
+    """
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+    ]
+    # Pitch 20pt, then one tight 4pt line, then an ordinary 30pt gap that is well
+    # inside 2.5x the real pitch and must NOT end the table.
+    for i, y in enumerate((120.0, 140.0, 160.0, 164.0, 194.0)):
+        words += [(f"Item{i}", 50.0, y), (f"{i + 1}.00", 400.0, y)]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+    })
+    assert len(ctx.row_groups["line_items"]) == 5
+
+
+def test_a_genuinely_loose_table_still_breaks_on_a_structural_gap() -> None:
+    """The mirror of the test above: a robust pitch must not make the break rule
+    unreachable. Pitch 20pt, then a 60pt gap - past 2.5x - still ends the table."""
+    words: list[tuple[str, float, float]] = [
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+    ]
+    for i, y in enumerate((120.0, 140.0, 160.0, 220.0)):
+        words += [(f"Item{i}", 50.0, y), (f"{i + 1}.00", 400.0, y)]
+    ctx = _run(_ctx(_page(1, *words)), {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+    })
+    assert len(ctx.row_groups["line_items"]) == 3
+
+
 def test_a_missing_table_anchor_yields_no_rows() -> None:
     ctx = _run(_ctx(_page(1, ("nothing", 10.0, 10.0))), {
         "row_group": "line_items", "table_anchor": "DESCRIPTION",
