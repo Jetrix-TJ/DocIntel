@@ -391,3 +391,95 @@ def test_a_pack_with_no_roster_is_unaffected() -> None:
     resolve_bill_to_alias(ctx)
 
     assert ctx.derived.get("bill_to_name") is None
+
+
+def _block_page(number: int, rows: list[list[tuple[str, float]]], top: float = 100.0):
+    """A page whose rows are (text, x0) pairs, one visual line per row."""
+    words = []
+    for r, row in enumerate(rows):
+        y = top + 12.0 * r
+        for text, x0 in row:
+            words.append(Word(text=text, x0=x0, y0=y, x1=x0 + 6.0 * len(text), y1=y + 9.0))
+    return PageText(
+        number, tuple(words), width=612.0, height=792.0, source="native"
+    )
+
+
+def test_the_roster_also_reads_the_address_block_under_the_party() -> None:
+    """`bill_to_address` is always the block beneath `bill_to_name`, and with the
+    party located by the roster no selector can anchor on it - so the op that
+    already knows where the name is takes the lines under it."""
+    page = _block_page(1, [
+        [("Northstar", 40.0), ("Recycling", 100.0), ("EDCO", 400.0), ("WASTE", 440.0)],
+        [("PO", 40.0), ("BOX", 60.0), ("188", 85.0), ("P.O.", 400.0), ("BOX", 430.0)],
+        # `MA` sits close to `LONGMEADOW`: a real address line has no gutter inside
+        # it, and a 24pt hole would legitimately read as the next column.
+        [("EAST", 40.0), ("LONGMEADOW", 75.0), ("MA", 140.0), ("BUENA", 400.0)],
+    ])
+    ctx = _ctx(page)
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Northstar Recycling"
+    assert ctx.derived.get("bill_to_address") == "PO BOX 188, EAST LONGMEADOW MA"
+
+
+def test_the_address_block_stops_at_the_column_gutter() -> None:
+    """The neighbouring column is contamination, not continuation. Both packs'
+    bill-to blocks sit beside the vendor's own remittance address."""
+    ctx = _ctx(_block_page(1, [
+        [("Choctaw", 40.0), ("Travel", 90.0), ("Mart", 130.0), ("VENDOR", 400.0)],
+        [("PO", 40.0), ("BOX", 60.0), ("1550", 85.0), ("OTHER", 400.0)],
+    ]))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_address") == "PO BOX 1550"
+
+
+def test_an_extracted_address_is_not_overwritten_by_the_block() -> None:
+    """Printed evidence wins, exactly as it does for the party name itself."""
+    ctx = _ctx(
+        _block_page(1, [[("Northstar", 40.0), ("Recycling", 100.0)],
+                        [("PO", 40.0), ("BOX", 60.0), ("188", 85.0)]]),
+        bill_to_address="94 Maple St, East Longmeadow, MA",
+    )
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_address") is None
+
+
+def test_no_address_block_is_invented_when_the_party_is_the_last_line() -> None:
+    ctx = _ctx(_block_page(1, [[("Northstar", 40.0), ("Recycling", 100.0)]]))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Northstar Recycling"
+    assert ctx.derived.get("bill_to_address") is None
+
+
+def test_the_block_prefers_a_party_that_begins_its_own_line() -> None:
+    """A party name printed mid-line is a mention, not the head of an address block.
+
+    Centracom prints `Account Name: CLYDE COMPANIES` in its summary table and the
+    same party again at the head of the remittance block. The first is a labelled
+    field whose neighbours are `Bill Date:` and `Due Date:`; only the second has an
+    address under it. Reading order alone picks the wrong one.
+    """
+    ctx = _ctx(_block_page(1, [
+        [("Account", 40.0), ("Name:", 90.0), ("Choctaw", 140.0), ("Travel", 190.0),
+         ("Mart", 230.0)],
+        [("Bill", 40.0), ("Date:", 70.0), ("January", 110.0)],
+        [("Choctaw", 40.0), ("Travel", 90.0), ("Mart", 130.0)],
+        [("PO", 40.0), ("BOX", 60.0), ("1550", 85.0)],
+    ]))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_address") == "PO BOX 1550"

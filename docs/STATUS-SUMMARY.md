@@ -2,11 +2,16 @@
 
 **As of 2026-07-29** · branch `dev` · all figures produced by running the code, not read from documentation
 
-> **Update, this revision:** the §4 risk (incomplete extraction was invisible to
-> routing) has been **fixed and re-verified by the experiment that found it**.
-> Accuracy is unchanged at 201/263 — see §4 for why that is the expected outcome
-> rather than a disappointing one. §5.1 also carries a factual correction: the
-> hardcoded bill-to affects three of four carriers, not all four.
+> **Update, this revision — two of the five challenges are closed.**
+>
+> * **§4**, incomplete extraction invisible to routing: **fixed**, and re-verified
+>   by the experiment that found it.
+> * **§5.1**, rules keyed to sample values: **fixed**. All 19 literal rules are
+>   gone and grammar rule **V14** now refuses them at write time.
+>
+> The headline barely moved (201 → 202 of 263) and that is the point: the work
+> replaced passes that only worked on our own samples with passes that read the
+> page. **The defensible figure rose from 63.5% to 71.1%** (§3).
 
 ---
 
@@ -32,13 +37,13 @@ file. **No AI model runs in the extraction path.**
 | PDF text extraction | Complete (pdfplumber, word-level coordinates) |
 | OCR fallback for scanned documents | Complete and automatic (Tesseract); 2 of 10 sample documents need it |
 | Document classification and vendor identification | Complete; 4 document types observed |
-| Per-vendor rule engine | Complete — 10 vendor rule sets, 130 selectors, validated by 13 static rules |
+| Per-vendor rule engine | Complete — 10 vendor rule sets, 119 selectors, validated by 14 static rules |
 | Table / line-item extraction | Complete; correct row counts on 4 of the 5 documents that have tables |
 | Confidence scoring and lane routing | Complete. Routes on two dimensions — per-field confidence and extraction completeness (§4) |
 | Output contract validation | Complete; 23 required keys, type- and range-checked |
 | Vision/LLM fallback | Built, but unreachable in practice and **not currently needed** |
 
-**Engineering quality:** 1,452 automated tests passing, 12 deliberately skipped
+**Engineering quality:** 1,476 automated tests passing, 12 deliberately skipped
 with recorded reasons. Linting clean. 10 "guardrail" test suites exist specifically
 to stop known classes of silent failure recurring.
 
@@ -54,7 +59,7 @@ Measured against 10 hand-labelled documents with 263 individual assertions.
 
 | Measure | Result |
 |---|---|
-| **Field-level accuracy** | **201 / 263 = 76.4%** |
+| **Field-level accuracy** | **202 / 263 = 76.8%** |
 | **Documents fully correct** | **1 / 10 = 10%** |
 
 **Both are true and they are not in conflict.** A document counts as "fully
@@ -62,26 +67,27 @@ correct" only if *every* assertion on it passes, so a document at 30/31 still re
 as a failure. Distance from fully-correct, per document: `0, 3, 4, 4, 4, 5, 7, 9,
 13, 13` — **six of ten are within five assertions.**
 
-### The number to quote internally: 63.5%
+### The number to quote internally: 71.1%
 
-Of the 201 passing assertions, 34 are not evidence that the system can read an
+Of the 202 passing assertions, 15 are not evidence that the system can read an
 unseen document:
 
-- **19** pass because the rule contains the answer rather than reading it — the
-  passing subset of the 24 sample-fitted rules in §5.1. They will keep passing on
-  this sample forever and return nothing on a new invoice where that value
-  differs.
 - **15** pass because the expected answer is "no review needed", which an empty
-  record also satisfies.
+  record also satisfies. `False` is both the gold expectation on most documents
+  and a `JobContext` default, so the assertion does not discriminate.
 
-**Excluding both: 167 / 263 = 63.5%.** That is the defensible figure. A stricter
-definition — counting only rules whose *pattern* spells out the answer, not those
-whose *anchor* does — gives 17 and 64.3%. The choice moves the figure by under a
-point and changes nothing that follows.
+**Excluding those: 187 / 263 = 71.1%.**
+
+**This is the figure that moved, and it is the one that matters.** It was 63.5%.
+The previous deduction of **19 assertions that passed because the rule contained
+the answer is now zero** — those rules no longer exist (§5.1), and V14 prevents
+their return. The headline barely changed (201 → 202) because the work traded
+sample-fitted passes for real ones almost one-for-one; the defensible figure rose
+7.6 points because the passes are now earned.
 
 Two further cautions:
 
-- **Do not compare 76.4% against earlier figures.** The measurement scope was
+- **Do not compare 76.8% against earlier figures.** The measurement scope was
   deliberately narrowed earlier in the project, so part of the rise came from
   measuring less. Compare it only to itself from here.
 - **The one fully-correct document is also the least-measured one** — 19
@@ -130,8 +136,8 @@ selector and there is nothing left to be required.
 Ordinary layout drift at a known vendor — a redesigned invoice template — produces
 exactly the shape this now catches.
 
-**Cost on the current corpus: zero.** No document changed lane and the scorecard is
-unchanged at 201/263. That is not a weak result, it is the expected one: the ten
+**Cost on the current corpus: zero.** No document changed lane and the scorecard was
+unchanged at 201/263 when this landed. That is not a weak result, it is the expected one: the ten
 personas were authored against these ten documents, so all ten are already complete.
 The defence is entirely for documents we have never seen — which is also why it
 cannot be credited as an accuracy gain.
@@ -146,21 +152,32 @@ one payable amount wrong by **$6,621.41**. Any auto-approval threshold set below
 
 ## 5. Challenges
 
-1. **Rules are keyed to sample values.** 19 of 118 field rules (16%) are a literal
-   restatement of the expected answer rather than a description of where to find it;
-   counting rules that hardcode only a vendor-specific *prefix* (`(715-[0-9]{8})`,
-   `(25-3A [0-9]{6})`) brings it to **24** (20%) — 25 if an enumerated payment term
-   counts, which is the only judgement call in the tally.
-   The worst cases are on a telecom-expense-management client
-   whose invoices are addressed to *different end customers* — a value that varies
-   per document. `bill_to_name` is hardcoded on **three of its four carriers**; the
-   fourth (Centracom) anchors correctly on `Account Name:` but then keys its
-   *address* anchor to the customer name, so all four are exposed.
+1. ~~**Rules are keyed to sample values.**~~ **Fixed.** 19 of 118 field rules were a
+   literal restatement of the expected answer (24 counting vendor-specific
+   *prefixes*). **All are gone, and the habit is now unrepresentable:** grammar
+   rule **V14** rejects a pattern that captures fixed text on a whole-page region
+   with no anchor, so such a rule can no longer reach the repo. The pre-existing
+   debt list that tracked them is empty and can only shrink.
 
-   **The silent half of this is now fixed** (§4): an unseen end customer still
-   yields an empty field, but it now routes to `review` with the field named on the
-   record instead of auto-approving. The rules themselves are still sample-fitted,
-   which only a second invoice per vendor can settle (§7).
+   How each was cleared, because the answer differed by field:
+
+   | Situation | Fix |
+   |---|---|
+   | a printed label existed | anchor on it — `Make checks payable to`, `payable to`, `Name` |
+   | a shape described the field | `(ATTN[ :][A-Z0-9 .,&'-]{2,40})` reads *any* attention line |
+   | the print was unreadable | the pack's table supplies it (two logos are images; one text layer breaks the brand mid-word) |
+   | none applied | the rule was **deleted** and the field left empty for §4 to report |
+
+   For the telecom client specifically, the client list moved out of the rules and
+   into the pack as a **roster**: one table serves all four carriers and every
+   billing period, onboarding a client is a config change rather than four rule
+   rewrites, and an unrostered client yields an empty required field that routes to
+   `review` instead of putting a wrong party on a payment. `bill_to_name` is now a
+   *required* field for that pack, which is what makes that escalation happen.
+
+   Still true, and only a second invoice per vendor can settle it (§7): a rule can
+   anchor on a label that exists on the one document we have. V14 removes the worst
+   form of sample-fitting, not all of it.
 
 2. ~~**No signal when extraction is incomplete.**~~ **Fixed** — see §4.
 

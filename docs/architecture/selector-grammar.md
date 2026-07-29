@@ -292,12 +292,36 @@ a persona is never half-migrated to a bad rule set.
 | V10 | No selector produces a field the pack marks `derived_only` (e.g. `amount_payable`) |
 | V11 | Total serialized persona size ≤ 64 KB |
 | V12 | `few_shot_examples` length ≤ 3, and none is drawn from a document tagged `flattened_annotations` (F3) |
-| V13 | Every field the pack marks `required` has a selector, or the write is `draft` only |
+| V13 | Every field the pack marks `required` is **covered** — by a selector, or by an op that supplies it (`OP_SUPPLIED_FIELDS`) — or the write is `draft` only |
+| V14 | A pattern that captures **fixed text** needs an `anchor` or a narrowing `region`; and no `anchor` may restate a value the same persona captures |
 
 **V10 is load-bearing.** `amount_payable` is *derived* from `total_printed`, `prior_balance` and
 `current_charges` — never extracted. Letting the agent write a selector straight onto `amount_payable`
 is the single easiest way to reintroduce the F1 bug, because on 7 of the 10 sample documents such a
 selector would look perfectly correct.
+
+**V14 is V6 inverted, and it exists because 19 of 118 shipped rules broke it.** V6 forbids a pattern
+with *no* literal text on a whole-page region, because a bare digit run also matches phone numbers.
+V14 forbids a pattern with *nothing but* literal text there, because a capture with no shape to it
+makes no claim about location — `(CITY OF DUBLIN)` states what the answer was on one document and
+returns nothing on the next one where it differs. An `anchor` or a narrowing `region` satisfies it:
+either is a positional claim, and confirming a vendor's own name in a known place is legitimate.
+
+Only the **capture group** is judged, so a literal doing an anchor's job is fine —
+`Circuit:\s?([0-9]{10})` passes, `payable to (Comcast)` does not. Put the label in `anchor`, where the
+grammar can see it.
+
+The second clause is the only part of the anchor problem decidable at write time. An anchor is a
+literal string by nature, so `Account Name:` and `CLYDE COMPANIES` are indistinguishable — unless the
+persona also captures that string as a field value, which is the persona declaring it to be a value.
+**An anchor keyed to a value the persona does not also capture still passes, and no static rule can
+catch it.** That limit is real; it is why the corpus needs a second invoice per sender.
+
+**V13's op exemption follows from V14.** Two of the four telecom templates print their bill-to with no
+label anywhere near it, so no anchor exists and no selector can read it — which is precisely why those
+personas hardcoded the client's name. `resolve_bill_to_alias` reads it from the pack's roster instead,
+and without the exemption V13 and V14 would be jointly unsatisfiable exactly where the document is
+least helpful.
 
 ---
 

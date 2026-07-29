@@ -43,6 +43,16 @@ _CA_POSTAL = re.compile(r"\b[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d\b")
 # the record has to say so.
 _WEAK_BASES = frozenset({BASIS_VENDOR_ADDRESS, BASIS_PACK_DEFAULT})
 
+# Bounds on the bill-to block read from under the party name. Mirrors the
+# `label-block` region's own limits rather than inventing new numbers: a postal
+# address is a handful of lines, and anything longer means the column cut missed.
+LABEL_BLOCK_MAX_LINES = 5
+LABEL_BLOCK_LINE_GAP = 24.0  # points; regions.LABEL_BLOCK_GAP_FLOOR
+# How far LEFT of the party's own left edge a continuation line may start. A
+# postal address is flush with the name above it; this only absorbs the ragged
+# couple of points a PDF text layer reports for a differently-hinted glyph.
+_COLUMN_SLACK = 4.0
+
 
 def _primary_text(ctx: JobContext) -> str:
     """Text of the pages field values may be read from.
@@ -233,16 +243,103 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
     printed = _clean(ctx.extracted.get("bill_to_name"))
     if printed is not None:
         ctx.derived.set("bill_to_basis", "printed")
+        party: str | None = printed
+    else:
+        party = _roster_match(ctx, _pack_bill_to_roster(ctx))
+        if party is not None:
+            ctx.derived.set("bill_to_name", party)
+            ctx.derived.set("bill_to_basis", "roster_page_text")
+            ctx.log(
+                f"s6: bill_to_name {party!r} from the pack roster "
+                "(the page prints no label)"
+            )
+    if party is None:
         return ctx
 
-    match = _roster_match(ctx, _pack_bill_to_roster(ctx))
-    if match is None:
-        return ctx
-
-    ctx.derived.set("bill_to_name", match)
-    ctx.derived.set("bill_to_basis", "roster_page_text")
-    ctx.log(f"s6: bill_to_name {match!r} from the pack roster (the page prints no label)")
+    # The address is the block under the party, and it is attempted however the
+    # party was found. A selector that could anchor on a printed `Name` label still
+    # has nothing to anchor the ADDRESS on - the block below the name carries no
+    # label of its own - so returning early when the name was extracted would leave
+    # the address unread on exactly the documents whose name was easiest to read.
+    if _clean(ctx.extracted.get("bill_to_address")) is None:
+        match = party
+        block = _block_under(ctx, match)
+        if block is not None:
+            ctx.derived.set("bill_to_address", block)
+            ctx.log(f"s6: bill_to_address {block!r} from the lines under the party")
     return ctx
+
+
+def _candidate_lines(
+    lines: list[list[Any]], needle: re.Pattern[str]
+) -> list[tuple[int, list[Any]]]:
+    """Lines carrying the party, the ones where it STARTS the line first.
+
+    A party name printed mid-line is a mention; at the head of a line it is the top
+    of a block. Centracom prints both - `Account Name: CLYDE COMPANIES` in the
+    summary table, whose neighbours below are `Bill Date:` and `Due Date:`, and the
+    same party again heading the remittance block, which is the one with an address
+    under it. Reading order alone picks the wrong one, every time.
+
+    Mid-line matches are still returned, after the others: a template that only ever
+    prints the party mid-line should not lose its address entirely.
+    """
+    heads: list[tuple[int, list[Any]]] = []
+    mentions: list[tuple[int, list[Any]]] = []
+    for index, line in enumerate(lines):
+        text = " ".join(w.text for w in line)
+        found = needle.search(text)
+        if found is None:
+            continue
+        (heads if found.start() == 0 else mentions).append((index, line))
+    return heads + mentions
+
+
+def _block_under(ctx: JobContext, party: str) -> str | None:
+    """The lines printed below `party`, in the party's own column, comma-joined.
+
+    Bounded on three sides, each for a reason the corpus demonstrates:
+
+    * **The column gutter**, via `regions.column_cut` - the same function the
+      `text_block` pattern uses, rather than a second implementation of it. Both
+      packs print the bill-to beside the vendor's own remittance address, so
+      without the cut every address reads as two addresses spliced together.
+    * **A vertical gap** wider than the block's own line pitch, so the next
+      unrelated line is not absorbed.
+    * **`LABEL_BLOCK_MAX_LINES`** as a backstop, because a block that runs on is a
+      sign the first two bounds failed rather than a very long address.
+    """
+    from docintel.grammar import regions
+
+    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
+    needle = re.compile(r"\s+".join(re.escape(t) for t in party.split()), re.IGNORECASE)
+
+    for page in ctx.pages:
+        if page.page_number not in primary:
+            continue
+        lines = page.lines()
+        for index, line in _candidate_lines(lines, needle):
+            left = min(w.x0 for w in line)
+            following = lines[index + 1 : index + 1 + LABEL_BLOCK_MAX_LINES]
+            if not following:
+                return None
+            pitch = line[0].y0
+            bands: list[list[Any]] = []
+            for below in following:
+                if below[0].y0 - pitch > LABEL_BLOCK_LINE_GAP:
+                    break
+                pitch = below[0].y0
+                bands.append([w for w in below if w.x0 >= left - _COLUMN_SLACK])
+            if not bands:
+                return None
+            cut = regions.column_cut(bands, left, page.width)
+            rows = [
+                " ".join(w.text for w in band if w.x0 < cut).strip()
+                for band in bands
+            ]
+            kept = [row for row in rows if row]
+            return ", ".join(kept) if kept else None
+    return None
 
 
 def _pack_bill_to_roster(ctx: JobContext) -> tuple[str, ...]:
