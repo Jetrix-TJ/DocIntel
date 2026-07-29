@@ -120,6 +120,26 @@ def test_being_the_bill_to_is_not_own_paperwork() -> None:
     assert doc_type_for(ctx)[0] != "own_paperwork"
 
 
+def test_a_statement_title_with_no_table_is_a_statement_of_account() -> None:
+    """`statement_of_account` has no corpus document and, until now, no test:
+    nothing would have noticed if the branch stopped firing."""
+    ctx = _ctx(_page(
+        "ABC Vendor Co|Statement of Account|Balance Forward 500.00|"
+        "Please remit payment"
+    ))
+    assert doc_type_for(ctx) == ("statement_of_account", "statement_title_no_table")
+
+
+def test_a_statement_title_with_a_table_is_not_a_statement_of_account() -> None:
+    """Both halves of the signal are required. A table - a line with three or
+    more money tokens - means there are line items to reconcile, not merely a
+    running balance, so the title alone must not be enough."""
+    ctx = _ctx(_page(
+        "ABC Vendor Co|Statement of Account|100.00 200.00 300.00 Total Due"
+    ))
+    assert doc_type_for(ctx) == ("standard_invoice", "default")
+
+
 # --------------------------------------------------------------------------
 # Tags
 # --------------------------------------------------------------------------

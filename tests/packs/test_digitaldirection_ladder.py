@@ -18,7 +18,7 @@ from decimal import Decimal
 import pytest
 
 from docintel.core.models import PageMeta, PageText, Word, new_context
-from docintel.packs.digitaldirection.ladder import retag_prior_balance, tags_for
+from docintel.packs.digitaldirection.ladder import doc_type_for, retag_prior_balance, tags_for
 
 
 def _page(text: str, number: int = 1) -> PageText:
@@ -167,3 +167,43 @@ def test_money_comparison_is_decimal_not_float() -> None:
     ctx.extracted.set("prior_balance", Decimal("0.1") + Decimal("0.2"), 1.0)
     ctx.extracted.set("payments_credits", Decimal("-0.3"), 1.0)
     assert _prior_tags(retag_prior_balance(ctx).tags) == ["prior_balance_cleared"]
+
+
+# --------------------------------------------------------------------------
+# The ladder itself - two branches with no corpus document and, until now,
+# no test at all: nothing would have noticed if either stopped firing.
+# --------------------------------------------------------------------------
+
+
+def test_a_credit_memo_title_wins_over_everything() -> None:
+    ctx = _ctx("COMCAST BUSINESS|Credit Memo|Billing Account Number 8495|"
+               "Current Charges 412.00")
+    assert doc_type_for(ctx) == ("credit_memo", "credit_memo_title")
+
+
+def test_suspension_language_without_current_charges_is_a_disconnect_notice() -> None:
+    ctx = _ctx("COMCAST BUSINESS|DISCONNECT NOTICE|Billing Account Number 8495|"
+               "Balance Due 1,204.00")
+    assert doc_type_for(ctx) == ("disconnect_notice", "suspension_without_current_charges")
+
+
+def test_a_bill_that_merely_warns_about_disconnection_is_still_a_bill() -> None:
+    """Both halves of the signal are required. A bill carrying suspension
+    language AND a current-charges block is a bill - misclassifying it would
+    run the wrong persona's rules, which on Centracom costs $20,123.80.
+    """
+    ctx = _ctx("COMCAST BUSINESS|Service will be disconnected if unpaid|"
+               "Current Charges 412.00|Billing Account Number 8495")
+    assert doc_type_for(ctx) == ("telecom_bill", "default")
+
+
+def test_an_account_summary_naming_statements_is_still_a_bill() -> None:
+    """Centracom's real shape: page 1 titled `Account Summary`, the word
+    "statement" printed twice. This pack has no `statement_of_account` type
+    at all, and that is intentional (see the module docstring) - a statement
+    signal ahead of the default would misclassify exactly this document and
+    run the wrong persona's rules, a $20,123.80 error on the corpus.
+    """
+    ctx = _ctx("CENTRACOM|Account Summary|Balance from last statement 1,204.00|"
+               "Current Charges 412.00|Billing Account Number 8495")
+    assert doc_type_for(ctx) == ("telecom_bill", "default")
