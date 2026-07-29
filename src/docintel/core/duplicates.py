@@ -15,8 +15,8 @@ from __future__ import annotations
 
 
 class IdentityIndex:
-    """`peek` and `commit` are split apart so a caller can decide `see`'s
-    answer before deciding whether the sighting should stick.
+    """`peek` and `commit` are split apart so a caller can decide the answer
+    before deciding whether the sighting should stick.
 
     That split exists because of a review finding on this module's first
     version: `Runner._emit` used to call a single mutating `see()` before
@@ -34,9 +34,29 @@ class IdentityIndex:
     one document under its own id must never read as a duplicate of itself.
     An earlier version gave `peek` only `identity`, which could not tell "the
     document on file is THIS one" from "a different document with the same
-    identity" - `_emit`, which calls `peek` and never `see`, told a replayed
-    document it duplicated itself. `see` is defined in terms of `peek` and
-    `commit` precisely so it cannot drift from what `_emit` actually gets.
+    identity" - `_emit`, which calls `peek` and never a fused call, told a
+    replayed document it duplicated itself.
+
+    There is no `see()` combining `peek` and `commit` in one call: `_emit` is
+    this class's only production caller and always needs them split, so a
+    fused convenience method would carry no caller and only invite a future
+    one to reintroduce the exact bug the split fixed. `tests/core/test_
+    duplicates.py` composes `peek` + `commit` directly (a private test-only
+    helper) where earlier versions called `see`.
+
+    `_first` grows by one entry per distinct `document_identity` seen and is
+    never evicted, for the run's lifetime (`_cmd_process` builds one `Runner`,
+    and so one `IdentityIndex`, per batch). That is deliberate, not an
+    oversight: evicting an entry to bound memory would mean a document late
+    in a large batch silently stops being checked against an identity seen
+    early in the same batch - missing a duplicate is the exact failure this
+    module exists to remove, so there is no size at which "cheaper" is worth
+    it. Contrast `extract.normalize`'s `_load_document_cached` memo, which
+    IS bounded (`_MEMO_CACHE_SIZE = 64`): a stale eviction there is merely a
+    cache miss - the next call just re-parses the PDF - so bounding it costs
+    nothing but a little repeated work. There is no equivalent "just redo it"
+    fallback for a dropped identity entry; the duplicate it would have caught
+    is gone.
     """
 
     def __init__(self) -> None:
@@ -67,14 +87,3 @@ class IdentityIndex:
         if identity is None:
             return
         self._first.setdefault(identity, document_id)
-
-    def see(self, document_id: str, identity: str | None) -> str | None:
-        """The document_id first seen with `identity`, or None.
-
-        Equivalent to `peek` immediately followed by `commit` - kept for
-        callers that have no reason to split reading the answer from making
-        it permanent.
-        """
-        first = self.peek(document_id, identity)
-        self.commit(document_id, identity)
-        return first
