@@ -163,3 +163,24 @@ def test_both_records_are_schema_valid(
 ) -> None:
     validate_record(northstar_record)  # must not raise
     validate_record(centracom_record)
+
+
+# Standing rule 10: a task that adds a pipeline capability finishes with one
+# whole-path test. `_run` above deliberately builds a FRESH runner per call -
+# the module docstring gives the exact reason duplicate detection needs the
+# opposite, so this test builds its own single runner and pushes the same real
+# PDF through it twice under two different document ids.
+VERITIV_GOLD = "northstar-veritiv-715-33905296"
+
+
+def test_the_same_invoice_processed_twice_reports_the_first_document() -> None:
+    with open(os.path.join(GOLD_DIR, f"{VERITIV_GOLD}.json")) as fh:
+        gold = json.load(fh)
+    source_path = os.path.join(DOCS_DIR, gold["source_file"])
+
+    runner = build_pipeline(FakeVision())
+    first = runner.process(document_id="first", source_path=source_path)
+    second = runner.process(document_id="second", source_path=source_path)
+
+    assert first["possible_duplicate_of"] is None
+    assert second["possible_duplicate_of"] == "first"

@@ -12,6 +12,7 @@ import datetime as _dt
 from typing import Any, Protocol
 
 from docintel.core.contract import build_record, validate_record
+from docintel.core.duplicates import IdentityIndex
 from docintel.core.errors import TransientError
 from docintel.core.models import JobContext, new_context
 from docintel.pipeline.hooks import HookRegistry
@@ -58,6 +59,9 @@ class Runner:
         self.max_retries = max_retries
         self._intaken = 0
         self._emitted = 0
+        # One index per Runner: duplicate detection is scoped to a single run
+        # (see core.duplicates for why cross-run is out of scope).
+        self._identity_index = IdentityIndex()
 
     @property
     def stats(self) -> dict[str, int]:
@@ -95,6 +99,17 @@ class Runner:
         """
         try:
             ctx = self.hooks.run("beforeEmit", ctx)
+            # Duplicate detection is a sighting, not a guarantee: it runs for
+            # every record this method can still build, dead-lettered ones
+            # included, because a document that reached this far did have its
+            # identity computed (or genuinely couldn't - `see` treats identity
+            # `None` as unidentifiable, never as a match). It cannot raise:
+            # `see` is a plain dict lookup over two already-typed values, so it
+            # cannot turn a record this method would otherwise emit into the
+            # `_minimal_dead_letter` fallback.
+            ctx.possible_duplicate_of = self._identity_index.see(
+                ctx.document_id, ctx.derived.get("document_identity")
+            )
             record = build_record(ctx)
             validate_record(record)
             return record
