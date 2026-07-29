@@ -483,3 +483,55 @@ def test_the_block_prefers_a_party_that_begins_its_own_line() -> None:
     resolve_bill_to_alias(ctx)
 
     assert ctx.derived.get("bill_to_address") == "PO BOX 1550"
+
+
+# --------------------------------------------------------------------------
+# resolve_bill_to_alias - the wrong-inbox guard (bill_to_mismatch)
+# --------------------------------------------------------------------------
+#
+# Northstar's `claims` is a substring search over the whole primary page, so an
+# invoice billed to a different company that merely MENTIONS Northstar anywhere
+# is claimed, extracted in full, and would otherwise route `high`. Only the
+# PRINTED rung can disagree with the roster - rung 2 read the name off the
+# roster itself, so it can never contradict it.
+
+
+def _ctx_with_pack_roster(roster: tuple[str, ...]):
+    """A bare context whose pack exposes only `bill_to_roster`.
+
+    No page text is needed: these tests exercise the PRINTED rung, which never
+    consults the page, so the roster's page-text rung is deliberately unreachable
+    here.
+    """
+
+    class _StubPack:
+        bill_to_roster = roster
+
+    ctx = new_context("d", "/x.pdf")
+    ctx.pack = _StubPack()
+    return ctx
+
+
+def test_a_printed_bill_to_off_the_roster_is_tagged() -> None:
+    """The wrong-inbox case. The pack claim is a whole-page substring match, so a
+    document that merely MENTIONS the client is claimed; this is what catches it.
+    """
+    ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
+    ctx.extracted.set("bill_to_name", "Contoso Manufacturing Inc", 1.0)
+    ctx = resolve_bill_to_alias(ctx)
+    assert "bill_to_mismatch" in ctx.tags
+    assert ctx.derived.get("bill_to_basis") == "printed"
+
+
+def test_a_roster_party_is_not_tagged() -> None:
+    ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
+    ctx.extracted.set("bill_to_name", "NORTHSTAR RECYCLING COMPANY LLC", 1.0)
+    ctx = resolve_bill_to_alias(ctx)
+    assert "bill_to_mismatch" not in ctx.tags
+
+
+def test_a_roster_supplied_name_is_never_tagged() -> None:
+    """Rung 2 read the name OFF the roster, so it cannot disagree with it."""
+    ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
+    ctx = resolve_bill_to_alias(ctx)          # nothing extracted
+    assert "bill_to_mismatch" not in ctx.tags

@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from docintel.core.models import JobContext
+from docintel.core.senders import bill_to_matches_roster
 
 ISO_CODES: frozenset[str] = frozenset({"USD", "CAD", "EUR", "GBP"})
 
@@ -244,6 +245,17 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
     if printed is not None:
         ctx.derived.set("bill_to_basis", "printed")
         party: str | None = printed
+        # The pack claim is a substring match over the whole primary page, so a
+        # document that merely MENTIONS the client is claimed. Comparing the
+        # printed party against the roster is what turns that into a signal
+        # instead of a silent auto-approval. Only the PRINTED rung can disagree;
+        # rung 2 read the name off the roster itself.
+        if not bill_to_matches_roster(printed, _pack_bill_to_roster(ctx)):
+            ctx.add_tag("bill_to_mismatch")
+            ctx.log(
+                f"s6: bill_to_name {printed!r} is not on the pack roster - "
+                "this document may have arrived in the wrong inbox"
+            )
     else:
         party = _roster_match(ctx, _pack_bill_to_roster(ctx))
         if party is not None:

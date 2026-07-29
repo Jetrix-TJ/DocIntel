@@ -63,7 +63,13 @@ VERY_LOW_FLOOR = 0.50
 # Tags that mandate human review whatever the confidence. Section 5 says
 # `flattened_annotations` forces review *unconditionally*, which makes it a
 # spec-mandated default rather than something a pack opts into. Packs may add.
-DEFAULT_FORCED_REVIEW_TAGS: frozenset[str] = frozenset({"has_flattened_annotations"})
+#
+# `bill_to_mismatch` joins it for the same reason: the printed bill-to disagrees
+# with the pack's roster, which means the pack's claim may be wrong - and a
+# confidence score computed under a wrong claim is not evidence of anything.
+DEFAULT_FORCED_REVIEW_TAGS: frozenset[str] = frozenset(
+    {"has_flattened_annotations", "bill_to_mismatch"}
+)
 
 # Modifiers that section 5 says raise review on their own:
 #   flattened_annotations   0.75  F3 -> "also forces review, unconditionally"

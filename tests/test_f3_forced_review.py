@@ -30,9 +30,11 @@ import os
 import pytest
 
 from docintel.adapters.vision.fake import FakeVision
+from docintel.core.models import JobContext, new_context
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_default_stages
+from docintel.pipeline.stages.s7_gate import ConfidenceGate
 
 GOLD_PATH = os.path.join(
     "docs", "corpus", "gold", "northstar-federal-recycling-1330123.json"
@@ -89,3 +91,23 @@ def test_a_regen_flag_is_not_raised(record: dict) -> None:
     """The rules are not wrong — the document is unusual. Raising regen here
     would send someone to rewrite a persona that is behaving correctly."""
     assert record["regen_flag"] is False
+
+
+def _high_confidence_ctx() -> JobContext:
+    """A bare context that clears every threshold - the gate's own `high` case,
+    unit-level rather than end-to-end (`test_all_fields_clear_thresholds_goes_high`
+    in `tests/pipeline/test_gate.py`)."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"total_printed": 0.99}
+    return ctx
+
+
+def test_a_bill_to_mismatch_forces_review_whatever_the_confidence() -> None:
+    """GUARDRAIL 4's sibling: a document billed to somebody else must reach a
+    human even when every field extracted at 0.99. Unconditional, like F3.
+    """
+    ctx = _high_confidence_ctx()
+    ctx.add_tag("bill_to_mismatch")
+    ctx = ConfidenceGate().run(ctx)
+    assert ctx.review_flag is True
+    assert any("bill_to_mismatch" in e for e in ctx.events)

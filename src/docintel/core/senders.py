@@ -12,6 +12,8 @@ exists to avoid.
 
 from __future__ import annotations
 
+from docintel.packs.registry import normalize_name
+
 # Deliberately short, because a false entry costs a vendor name on every document
 # from that sender. Nothing here is corpus-backed - no corpus document arrives
 # from an aggregator at all - so the bar is the architecture spec instead: the
@@ -42,4 +44,28 @@ def is_aggregator(sender_email: str) -> bool:
     return any(
         domain == known or domain.endswith(f".{known}")
         for known in AGGREGATOR_DOMAINS
+    )
+
+
+def bill_to_matches_roster(printed: str | None, roster: tuple[str, ...]) -> bool:
+    """Whether the printed bill-to is a rendering of a party on the pack's roster.
+
+    True when there is nothing to check: an absent bill-to is `core.coverage`'s
+    business (a missing required field), and conflating the two would report one
+    problem as the other. An empty roster is also True - a pack that declares no
+    parties has made no claim that this document violates.
+
+    Substring in both directions, on normalized names, because renderings differ
+    by more than punctuation: a vendor may print `Northstar Recycling` where the
+    roster says `Northstar Recycling Company, LLC`, and another may print the
+    longer form where the roster holds the short one.
+    """
+    if not printed or not roster:
+        return True
+    needle = normalize_name(printed)
+    if not needle:
+        return True
+    return any(
+        needle in normalize_name(entry) or normalize_name(entry) in needle
+        for entry in roster
     )
