@@ -98,7 +98,6 @@ class Runner:
         is itself a dead letter, not an exception.
         """
         try:
-            ctx = self.hooks.run("beforeEmit", ctx)
             identity = ctx.derived.get("document_identity")
             # Looked up, not yet committed: `peek` is a plain dict `.get` over
             # already-typed keys, so - like the old single-call `see` this
@@ -108,7 +107,14 @@ class Runner:
             # record that actually ships. `document_id` is passed through so
             # a replay of this same document is never read as a duplicate of
             # itself (see `IdentityIndex.peek`).
+            #
+            # Set BEFORE `beforeEmit` runs, not after: that hook is the only
+            # extension point that exists this close to emit (stage 7 has
+            # already returned), so a pack hook that wants to react to a
+            # possible duplicate - e.g. to raise `review_flag` - can only ever
+            # observe the field if it is on `ctx` before the hook fires.
             ctx.possible_duplicate_of = self._identity_index.peek(ctx.document_id, identity)
+            ctx = self.hooks.run("beforeEmit", ctx)
             record = build_record(ctx)
             validate_record(record)
             # Committed only now that `record` is proven buildable and valid.
