@@ -27,6 +27,7 @@ a reference.
 from __future__ import annotations
 
 import re
+import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -561,6 +562,7 @@ def _label_block(
     bands: list[list[Word]] = []
     prev_y: float | None = None
     pitch: float | None = None
+    gaps: list[float] = []
     blanks = 0
 
     for line in page.lines():
@@ -579,11 +581,26 @@ def _label_block(
         if prev_y is not None:
             gap = y - prev_y
             if pitch is None:
+                # The anchor's own line to the block's first content line is a
+                # LABEL's leading, not a body-pitch sample - DTSS prints it at
+                # 36pt against a 14.16pt body pitch. Seeding `pitch` from it
+                # (as the original `min` code always did) is fine for the
+                # very next gap's threshold check, but never admitting it
+                # into `gaps` keeps a two-sample median from being dragged
+                # up by a value it was never representative of (task-5
+                # finding 3; see task-5-report.md for the traced numbers).
                 pitch = gap
             elif gap > max(LABEL_BLOCK_GAP_FLOOR, pitch * LABEL_BLOCK_GAP_FACTOR):
                 break
             else:
-                pitch = min(pitch, gap)
+                # Median, not min: `min` let one tight line permanently
+                # redefine the block's rhythm, after which the next ORDINARY
+                # gap read as a block break. Fixed for row groups in
+                # 26a485d; this is the same bug in the other caller - but
+                # unlike row groups, the FIRST gap here is deliberately kept
+                # out of the sample pool (see above).
+                gaps.append(gap)
+                pitch = statistics.median(gaps)
         bands.append(band)
         prev_y = y
 

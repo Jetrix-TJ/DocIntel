@@ -560,6 +560,48 @@ def test_a_large_vertical_gap_ends_the_block() -> None:
     assert "UNRELATED" not in span.text
 
 
+def test_one_tight_line_does_not_truncate_the_block() -> None:
+    """A label block with an established 14pt rhythm and one 4pt continuation
+    line, followed by an ordinary-but-wider 26pt gap.
+
+    With `pitch = min(pitch, gap)` the 4pt line permanently collapses the
+    rhythm to 4pt, so the break threshold bottoms out at
+    `LABEL_BLOCK_GAP_FLOOR` (24pt) for the rest of the block - after which the
+    very next gap over 24pt reads as a block break, even though 26pt is well
+    inside `2 * the block's real 14pt pitch` (28pt) and is not structural at
+    all. Centracom's `vendor_address` is this bug's live instance: a tight
+    continuation line under the vendor name collapses the pitch the same way.
+
+    Three ordinary 14pt gaps precede the tight line, not two. `_label_block`
+    deliberately never admits the ANCHOR's own leading gap (`Remit To` ->
+    `CENTRACOM`) into the median's sample pool (task-5 finding 3 - DTSS's
+    real label-to-content gap is 36pt against its 14.16pt body pitch, not a
+    genuine pitch sample), so by the time the tight 4pt line arrives the pool
+    holds only the two gaps *after* that excluded one. A pool of two ordinary
+    gaps plus the tight one gives the median a real majority (14 is the
+    middle of `[14, 14, 4]`); a pool of only one ordinary gap plus the tight
+    one does not (`median([14, 4]) == 9`, which the very next 26pt gap still
+    exceeds after the floor is applied). Verified by hand and by running this
+    exact fixture against both the buggy and fixed source before trusting it
+    (standing rule 7) - see `task-5-report.md` for the full traced arithmetic
+    and why the brief's originally-suggested two-gap run-up does not exercise
+    this implementation.
+    """
+    p = _page(
+        1,
+        ("Remit", 30.0, 100.0), ("To", 70.0, 100.0),
+        ("CENTRACOM", 30.0, 114.0),  # gap 14 - the excluded anchor-leading gap
+        ("Attn", 30.0, 128.0), ("Billing", 60.0, 128.0), ("Department", 110.0, 128.0),  # gap 14
+        ("More", 30.0, 142.0), ("Info", 60.0, 142.0),  # gap 14
+        ("a", 30.0, 146.0), ("continuation", 40.0, 146.0), ("line", 120.0, 146.0),
+        ("printed", 150.0, 146.0), ("tight", 200.0, 146.0),  # gap 4
+        ("PO", 30.0, 172.0), ("Box", 55.0, 172.0), ("7", 90.0, 172.0),  # gap 26
+        ("Fairview", 30.0, 186.0), ("UT", 90.0, 186.0), ("84629", 120.0, 186.0),  # gap 14
+    )
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Remit To", 30.0, 100.0))
+    assert "84629" in span.text, f"the block was truncated: {span.text!r}"
+
+
 def test_label_block_is_capped_so_it_never_becomes_the_page() -> None:
     words = [("Bill", 30.0, 100.0), ("To", 60.0, 100.0)]
     for i in range(40):
