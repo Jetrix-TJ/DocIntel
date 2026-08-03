@@ -54,6 +54,11 @@ LABEL_BLOCK_LINE_GAP = 24.0  # points; regions.LABEL_BLOCK_GAP_FLOOR
 # couple of points a PDF text layer reports for a differently-hinted glyph.
 _COLUMN_SLACK = 4.0
 
+# One line a party name was found on: its index in `page.lines()`, its words, and
+# the match itself. The match travels with it so a caller that needs the text as
+# printed does not re-run the pattern to get it.
+_LineMatch = tuple[int, list[Any], "re.Match[str]"]
+
 
 def _primary_text(ctx: JobContext) -> str:
     """Text of the pages field values may be read from.
@@ -220,7 +225,9 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
     Two rungs, and `bill_to_basis` records which answered:
 
     1. a selector already extracted `bill_to_name` -> `printed`
-    2. a name on the pack's roster appears on a primary page -> `roster_page_text`
+    2. a name on the pack's roster HEADS a line on a primary page ->
+       `roster_page_text`. Heads a line, not merely appears on the page: see
+       `_roster_match` for why a mention is not a party.
 
     **Why a roster rather than a selector.** Two of the four telecom templates
     print their bill-to with no label anywhere near it - no `Bill To:`, no
@@ -282,10 +289,10 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
     return ctx
 
 
-def _candidate_lines(
+def _party_matches(
     lines: list[list[Any]], needle: re.Pattern[str]
-) -> list[tuple[int, list[Any]]]:
-    """Lines carrying the party, the ones where it STARTS the line first.
+) -> tuple[list[_LineMatch], list[_LineMatch]]:
+    """`(heads, mentions)`: the lines `needle` STARTS, and the ones it merely sits on.
 
     A party name printed mid-line is a mention; at the head of a line it is the top
     of a block. Centracom prints both - `Account Name: CLYDE COMPANIES` in the
@@ -293,18 +300,37 @@ def _candidate_lines(
     same party again heading the remittance block, which is the one with an address
     under it. Reading order alone picks the wrong one, every time.
 
-    Mid-line matches are still returned, after the others: a template that only ever
-    prints the party mid-line should not lose its address entirely.
+    **Two callers, two different decisions, one split.** `_candidate_lines` uses it
+    to choose which occurrence an address block hangs under; `_roster_match` uses it
+    to decide whether a roster name is the bill-to party *at all*. Computing the
+    same distinction twice would let the two drift, and they already disagreed once:
+    `_roster_match` searched the whole page flat, so it read a mention as the party
+    while `_block_under`, on the very same name, knew better.
     """
-    heads: list[tuple[int, list[Any]]] = []
-    mentions: list[tuple[int, list[Any]]] = []
+    heads: list[_LineMatch] = []
+    mentions: list[_LineMatch] = []
     for index, line in enumerate(lines):
         text = " ".join(w.text for w in line)
         found = needle.search(text)
         if found is None:
             continue
-        (heads if found.start() == 0 else mentions).append((index, line))
-    return heads + mentions
+        (heads if found.start() == 0 else mentions).append((index, line, found))
+    return heads, mentions
+
+
+def _candidate_lines(
+    lines: list[list[Any]], needle: re.Pattern[str]
+) -> list[tuple[int, list[Any]]]:
+    """Lines carrying the party, the ones where it STARTS the line first.
+
+    Mid-line matches are still returned, after the others: a template that only ever
+    prints the party mid-line should not lose its address entirely. That leniency is
+    right *here* - the name is already known, and the question is only which of its
+    occurrences an address hangs under - and wrong in `_roster_match`, where the
+    question is whether this document names the party at all.
+    """
+    heads, mentions = _party_matches(lines, needle)
+    return [(index, line) for index, line, _ in heads + mentions]
 
 
 def _block_under(ctx: JobContext, party: str) -> str | None:
@@ -363,26 +389,57 @@ def _pack_bill_to_roster(ctx: JobContext) -> tuple[str, ...]:
 
 
 def _roster_match(ctx: JobContext, roster: tuple[str, ...]) -> str | None:
-    """The longest roster name printed on a primary page, exactly as printed.
+    """The longest roster name that HEADS a line on a primary page, as printed.
 
     Longest first because `Northstar Recycling` is a prefix of `Northstar
     Recycling Company, LLC`; taking the shorter one would truncate the party on
-    every vendor printing the full legal name.
+    every vendor printing the full legal name. The head test is applied per
+    roster entry rather than once to a winner already chosen on length, or a long
+    entry seen only mid-line would still beat a short one heading its own block.
 
-    Whitespace between tokens is matched loosely (`\\s+`) because a PDF text layer
-    breaks lines wherever the layout does, and everything else is escaped - a
-    roster entry is a company name, not a pattern the pack author gets to write.
+    **Why the head requirement.** This rung answers with a name read OFF the
+    roster, so `bill_to_matches_roster` can never disagree with it - the printed
+    rung is the only one that can raise `bill_to_mismatch`. Five personas
+    (`comcast`, `windstream`, `edco`, `upak`, `veritiv`) declare no
+    `bill_to_name` selector, so every one of their documents takes this rung with
+    no wrong-inbox check behind it. A whole-page `re.search` therefore turned any
+    passing mention of a client into that client being billed: a Veritiv-template
+    invoice addressed elsewhere prints `SHEARER'S BREWSTER O NORTHSTAR RECYCLING
+    COMPANY LLC` as a routing line, and a Windstream batch billed to a different
+    company routed `high` with the roster name on the record and no signal
+    raised. Requiring the name to start a line makes the rung read block headers
+    - which is what a bill-to party is - instead of prose.
+
+    An unmatched document returns `None`, which leaves `bill_to_name` empty and
+    lets `core.coverage` escalate it. That is the intended outcome for a genuinely
+    unrecognized party, and it is strictly better than naming the wrong one.
+
+    Matching is per LINE, not over flat page text, which is what makes "starts a
+    line" expressible at all - and it costs the one thing flat text bought: a
+    party name wrapped across two printed lines is no longer matched in full. In
+    practice a shorter roster rendering heading the first line answers instead
+    (U-PAK prints `NORTHSTAR RECYCLING COMPANY` / `LLC` across a two-column
+    interleave and already resolved that way). `\\s+` between tokens is kept
+    because a line's own words may be joined by more than one space; everything
+    else is escaped - a roster entry is a company name, not a pattern the pack
+    author gets to write.
     """
     if not roster:
         return None
-    text = _primary_text(ctx)
+    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
+    pages = [p for p in ctx.pages if p.page_number in primary]
     for name in sorted(roster, key=len, reverse=True):
         tokens = [re.escape(token) for token in name.split()]
         if not tokens:
             continue
-        found = re.search(r"\s+".join(tokens), text, re.IGNORECASE)
-        if found is not None:
-            return " ".join(found.group(0).split())
+        needle = re.compile(r"\s+".join(tokens), re.IGNORECASE)
+        for page in pages:
+            heads, _ = _party_matches(page.lines(), needle)
+            if heads:
+                # The first head in reading order, matching what flat-text search
+                # returned before: `_block_under` re-derives its own occurrence
+                # from the name, so nothing downstream depends on which one this was.
+                return " ".join(heads[0][2].group(0).split())
     return None
 
 

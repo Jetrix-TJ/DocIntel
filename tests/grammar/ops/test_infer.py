@@ -393,6 +393,84 @@ def test_a_pack_with_no_roster_is_unaffected() -> None:
     assert ctx.derived.get("bill_to_name") is None
 
 
+# --------------------------------------------------------------------------
+# resolve_bill_to_alias - the roster rung only reads a HEAD-of-line match
+# --------------------------------------------------------------------------
+#
+# Reproduced on real data (2026-08-03 generalization findings, Finding 4): a
+# batch of Windstream samples billed to a different company never raised
+# `bill_to_mismatch`, because `windstream.json` has no `bill_to_name` selector
+# and the roster rung answered instead - and the roster rung cannot disagree
+# with the roster by construction. A Veritiv-template invoice billed elsewhere
+# behaves the same way: its primary page carries `SHEARER'S BREWSTER O
+# NORTHSTAR RECYCLING COMPANY LLC` as a routing line, which a whole-page
+# `re.search` reads as the bill-to party.
+#
+# The head-of-line requirement is the same doctrine `_candidate_lines` already
+# applied for the address block, now applied one stage earlier to finding the
+# name at all.
+
+
+def test_a_mid_line_roster_mention_is_not_the_bill_to_party() -> None:
+    """The Finding 4 case. A roster name inside a routing/shipping line is a
+    mention of the party, not the party this invoice is addressed to.
+
+    Leaving the field empty is the correct outcome: `core.coverage` escalates a
+    missing required field to review, whereas reading the mention would put a
+    party on the record that the document never actually billed - and, because
+    the name came off the roster, would trivially satisfy the roster check that
+    exists to catch exactly this.
+    """
+    ctx = _ctx(_page(1, "SHEARER'S", "BREWSTER", "O", "Northstar", "Recycling"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") is None
+    assert ctx.derived.get("bill_to_basis") is None
+    # And no address is invented from the lines under a mention either.
+    assert ctx.derived.get("bill_to_address") is None
+
+
+def test_a_roster_name_heading_a_line_is_still_the_bill_to_party() -> None:
+    """The regression guard for the five personas that rely on this rung.
+
+    `comcast`, `windstream`, `edco`, `upak` and `veritiv` declare no
+    `bill_to_name` selector, so every one of their documents takes this rung -
+    and on all five the party genuinely heads its own line (measured against the
+    gold corpus). Narrowing the rung must not cost them their party.
+    """
+    ctx = _ctx(_page(1, "Choctaw", "Travel", "Mart", "PO", "BOX", "1550"))
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Choctaw Travel Mart"
+    assert ctx.derived.get("bill_to_basis") == "roster_page_text"
+
+
+def test_a_head_match_beats_a_longer_roster_name_seen_only_mid_line() -> None:
+    """Longest-first still applies, but only among names that head a line.
+
+    This is Comcast's shape with the lengths swapped: the page prints one roster
+    party at the head of its own line and merely mentions a second, longer
+    roster entry inside an `ATTN` line. Before the head requirement, the longer
+    mid-line mention won on length alone and the real bill-to party was
+    discarded. The head requirement is therefore applied per roster entry, not
+    once globally after a winner has been chosen.
+    """
+    ctx = _ctx(
+        _page(1, "Northstar", "Recycling", y=100.0),
+        _page(2, "ATTN", "Northstar", "Recycling", "Company,", "LLC"),
+        roles=("primary", "primary"),
+    )
+    ctx.pack = _RosterPack()
+
+    resolve_bill_to_alias(ctx)
+
+    assert ctx.derived.get("bill_to_name") == "Northstar Recycling"
+
+
 def _block_page(number: int, rows: list[list[tuple[str, float]]], top: float = 100.0):
     """A page whose rows are (text, x0) pairs, one visual line per row."""
     words = []
@@ -538,27 +616,20 @@ def test_a_roster_supplied_name_is_never_tagged() -> None:
     would need to check the name against - there is no printed value left to
     disagree with the roster once rung 2 has answered.
 
-    `_roster_match` (infer.py:365-386) is a plain `re.search` over the WHOLE
-    primary page, with no head-of-line requirement - unlike `_candidate_lines`
-    (infer.py:285-307), which states the doctrine it violates: "a party name
-    printed mid-line is a mention; at the head of a line it is the top of a
-    block." A document billed to one company that merely MENTIONS a roster
-    name elsewhere (e.g. "Ship via Northstar Recycling") has that mention
-    read as the bill-to party, with no signal raised, because rung 2 never
-    runs the mention-vs-block check the printed rung gets for free.
-
     This is not a corner case: five of the ten corpus personas (`comcast`,
     `windstream`, `edco`, `upak`, `veritiv`) declare no `bill_to_name`
     selector at all, so `printed` is always `None` on their documents and
-    every one of them always takes this rung. On any of those five, a
-    document billed to the wrong party is claimed, fully extracted, and
-    routes `high` with no `bill_to_mismatch` tag.
+    every one of them always takes this rung, with no wrong-inbox check behind it.
 
-    The fix - requiring `_roster_match` to land at the head of a line, or to
-    have an address block under it like `_block_under` - can change which
-    rendering is returned on corpus documents that rely on this rung, so it
-    needs a full re-baseline and is Wave 2 work, not this test. The assertion
-    below stays exactly as it was; only what it is understood to mean changes.
+    The head-of-line requirement `_roster_match` now applies (see
+    `test_a_mid_line_roster_mention_is_not_the_bill_to_party`) narrowed the
+    EXPOSURE, not this limitation. A document that merely mentions a client
+    mid-line no longer has that mention promoted to bill-to party - the rung
+    returns nothing and `core.coverage` escalates the empty field instead. But
+    when the rung does answer, it still answers off the roster, so it still
+    cannot contradict it. Closing the limitation itself needs a printed name to
+    compare against, i.e. a `bill_to_name` selector on each of the five personas;
+    there is nothing left to fix inside this rung.
     """
     ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
     ctx = resolve_bill_to_alias(ctx)          # nothing extracted
