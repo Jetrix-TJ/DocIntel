@@ -7,8 +7,9 @@ anchor phrases actually occur (the disjointness this file's last test re-checks
 synthetically):
 
                                      Kinetic     Kinetic     Enterprise  Enterprise
+                                     (gold)
     anchor phrase                    041069076   021942648   216713099   205577168
-                                     (gold)      (native)    (ocr)
+    text_source                      native      ocr         native      ocr
     ------------------------------------------------------------------------------
     "Account number"                     2           1           -           -
     "Invoice date"                       1           1           -           -
@@ -74,6 +75,7 @@ import pytest
 
 from docintel.core.models import JobContext, PageMeta, PageText, Word
 from docintel.grammar.executor import Executor, _norm, _runs
+from docintel.grammar.ops.infer import resolve_vendor_alias
 from docintel.grammar.schema import parse_persona
 from docintel.packs.registry import load_packs
 
@@ -106,8 +108,14 @@ def _page(lines: list[Line], source: str = "native") -> PageText:
     return PageText(page_number=1, words=tuple(words), width=WIDTH, height=HEIGHT, source=source)
 
 
-def _extract(page: PageText, text_source: str = "native") -> dict[str, Any]:
-    persona = parse_persona(_shipped_persona())
+def _digitaldirection_pack() -> Any:
+    for pack in load_packs():
+        if pack.name == "digitaldirection":
+            return pack
+    raise AssertionError("digitaldirection pack not found")
+
+
+def _ctx(page: PageText, text_source: str = "native") -> JobContext:
     meta = (
         PageMeta(
             page_number=1,
@@ -117,15 +125,44 @@ def _extract(page: PageText, text_source: str = "native") -> dict[str, Any]:
             role="primary",
         ),
     )
-    ctx = JobContext(
+    return JobContext(
         document_id="d1",
         source_path="x.pdf",
         pages=(page,),
         page_meta=meta,
         text_source=text_source,
+        pack=_digitaldirection_pack(),
         doc_type="telecom_bill",
     )
-    return dict(Executor(persona).apply(ctx).extracted.values)
+
+
+def _extract(page: PageText, text_source: str = "native") -> dict[str, Any]:
+    persona = parse_persona(_shipped_persona())
+    return dict(Executor(persona).apply(_ctx(page, text_source)).extracted.values)
+
+
+def _vendor_identity(page: PageText, text_source: str = "native") -> dict[str, Any]:
+    """What the record would report about WHO sent this bill.
+
+    The selectors alone cannot answer that: `vendor_name` is settled in Stage 6
+    by `resolve_vendor_alias`, which decides between what the page printed and
+    what the pack's `DISPLAY_NAMES` table says. So this runs the real op over
+    the real extraction with the real pack attached - the only arrangement in
+    which "the printed brand wins where it is printed" is actually observable.
+
+    Extracted and derived are merged, because WHICH of the two carries
+    `vendor_name` is the mechanism rather than an implementation detail: a
+    printed name stays in `extracted` and the op leaves it there, while a
+    table-supplied one is written to `derived`. The record surfaces both (as
+    `fields.vendor_name` and `derived.vendor_name` respectively), and
+    `coverage.assess` counts either as satisfying the selector. Extracted is
+    applied second so that if the op ever started overwriting a printed name,
+    this would keep reporting the printed one and the assertions on the table
+    path would fail loudly instead of both paths quietly agreeing.
+    """
+    persona = parse_persona(_shipped_persona())
+    ctx = resolve_vendor_alias(Executor(persona).apply(_ctx(page, text_source)))
+    return {**ctx.derived.values, **ctx.extracted.values}
 
 
 # Every `adjust` op - `join_lines_comma`, `resolve_vendor_alias`,
@@ -158,6 +195,21 @@ def _extract(page: PageText, text_source: str = "native") -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 ENTERPRISE_LINES: list[Line] = [
+    (
+        32.2,
+        [("For", 185, 196), ("Customer", 197, 228), ("Service", 230, 253),
+         ("Correspondence:", 255, 309)],
+    ),
+    # The only place either Enterprise sample prints its brand as READABLE text.
+    # The native sample's letterhead is an image (the tokens WINDSTREAM and
+    # ENTERPRISE appear nowhere in its text layer, exactly as with Lumen's logo);
+    # the OCR sample's letterhead does come back, but this line is the one that
+    # survives on BOTH, which is why the selector reads here rather than there.
+    (
+        40.2,
+        [("ATTN:", 185, 205), ("Windstream", 207, 245), ("Enterprise", 246, 278),
+         ("Services", 280, 307)],
+    ),
     (36.7, [("Account", 349, 385), ("Invoice", 434, 465), ("Total", 520, 542)]),
     (
         48.2,
@@ -326,6 +378,16 @@ def kinetic() -> dict[str, Any]:
     return _extract(_page(KINETIC_LINES))
 
 
+@pytest.fixture
+def enterprise_identity() -> dict[str, Any]:
+    return _vendor_identity(_page(ENTERPRISE_LINES))
+
+
+@pytest.fixture
+def kinetic_identity() -> dict[str, Any]:
+    return _vendor_identity(_page(KINETIC_LINES))
+
+
 # ---------------------------------------------------------------------------
 # The Enterprise template must now extract.
 # ---------------------------------------------------------------------------
@@ -403,6 +465,91 @@ def test_enterprise_populates_most_of_the_contract_not_one_field(
     coincidences; this asserts the shape of the outcome directly.
     """
     assert len(enterprise) >= 8
+
+
+# ---------------------------------------------------------------------------
+# Who sent it. Review finding: an otherwise-correct record naming the wrong
+# sub-brand.
+# ---------------------------------------------------------------------------
+
+
+def test_enterprise_vendor_name_is_the_brand_the_page_prints(
+    enterprise: dict[str, Any],
+) -> None:
+    """Making these documents extract at all is what made this worth fixing.
+
+    `windstream.json` had no `vendor_name` selector, so `resolve_vendor_alias`
+    fell through to the pack's `DISPLAY_NAMES["windstream"]` and every Windstream
+    record reported "Kinetic Business by Windstream". On a Kinetic bill that is
+    right and is the reason the table entry exists - `aliases.py` documents it:
+    the Kinetic text layer breaks the brand mid-word (`Kinetic Business by
+    Windstre am`), so no pattern can read it. On an ENTERPRISE bill it is a
+    confidently wrong brand on a document letterheaded WINDSTREAM ENTERPRISE and
+    remitting to a different PO box - and it is wrong for no good reason, because
+    here the brand IS readable.
+
+    Before the fix these documents produced nothing, so nothing was wrong with
+    them. Afterwards they produce eight correct fields, which is exactly what
+    makes one wrong one worth catching.
+    """
+    assert enterprise["vendor_name"] == "Windstream Enterprise"
+
+
+def test_enterprise_vendor_name_survives_to_the_record(
+    enterprise_identity: dict[str, Any],
+) -> None:
+    """The selector capturing it is necessary but not sufficient.
+
+    `resolve_vendor_alias` overwrites `vendor_name` from the display-name table
+    only `if ... letterhead is None`. So the assertion that matters is that the
+    printed capture reaches the record unclobbered - which is the op's own stated
+    principle ("printed evidence wins where it exists ... the table is for where
+    the print is unreadable"), now actually exercised on a document where the two
+    disagree.
+    """
+    assert enterprise_identity["vendor_name"] == "Windstream Enterprise"
+
+
+def test_enterprise_still_collapses_onto_the_one_windstream_persona(
+    enterprise_identity: dict[str, Any],
+) -> None:
+    """F5, which reading a second brand name must not undo.
+
+    Two sub-brands, two remittance addresses, two layouts - one carrier, one
+    canonical key, one persona. If "Windstream Enterprise" resolved to its own
+    canonical, this fix would have traded a wrong display name for a split
+    vendor, which is worse: `carrier_canonical` is asserted by every gold label
+    in this pack.
+    """
+    assert enterprise_identity["vendor_canonical"] == "windstream"
+    assert enterprise_identity["carrier_canonical"] == "windstream"
+    # Resolved from the name the page printed, not by scanning page text for any
+    # token that happens to look like the brand.
+    assert enterprise_identity["vendor_basis"] == "letterhead_alias"
+
+
+def test_kinetic_vendor_name_still_comes_from_the_display_name_table(
+    kinetic_identity: dict[str, Any],
+) -> None:
+    """The other half: the table entry is still load-bearing where it was.
+
+    The Kinetic fixture prints "ATTN: SUPPORT SERVICES" - the same anchor the
+    Enterprise selector uses, with no brand beside it - so the anchor RESOLVES
+    here and the pattern finds nothing. That is the case most likely to break:
+    an anchor that hits on the wrong template and captures whatever is next to
+    it. Nothing is captured, `letterhead` stays None, and the table supplies the
+    Kinetic name exactly as before.
+    """
+    assert kinetic_identity["vendor_name"] == "Kinetic Business by Windstream"
+    assert kinetic_identity["vendor_canonical"] == "windstream"
+    assert kinetic_identity["vendor_basis"] == "page_text_alias"
+
+
+def test_no_vendor_name_is_captured_off_a_kinetic_page(kinetic: dict[str, Any]) -> None:
+    """Stated at the selector level too, so a failure localizes: if this passes
+    and the test above fails, the regression is in the op; if this fails, the
+    Enterprise pattern has started matching Kinetic text."""
+    assert "vendor_name" not in kinetic
 
 
 # ---------------------------------------------------------------------------

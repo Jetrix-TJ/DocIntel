@@ -186,8 +186,21 @@ class FieldSelector:
     #
     # The reason: `_resolve_anchor` would otherwise always return `hits[0]`, so a
     # label printed more than once always resolves to the first in reading order,
-    # and three personas' `remit_address` anchor on a payee name their invoice
-    # prints two or three times.
+    # and three personas' `remit_address` reads a payee name their invoice prints
+    # two or three times.
+    #
+    # `_pick_occurrence` is applied PER PHRASE, to whichever of `anchor` and
+    # `anchor_alts` is being tried - so this setting governs a brand-name phrase
+    # wherever it sits in that list, not only when it is the primary `anchor`.
+    # That distinction is now load-bearing for `windstream`: since Finding 3 its
+    # primary anchor is the Enterprise template's label `Remit Payment To` (once
+    # per page, so the mode is moot there) and the bare `WINDSTREAM` brand name
+    # has been DEMOTED TO AN ALT, reached only on a Kinetic bill. The measurements
+    # below still describe that alt exactly; only its position in the selector
+    # changed. It was demoted for a reason this comment already predicted - on the
+    # Enterprise template the brand name occurs 9 times and `"last"` resolved into
+    # a prose sentence, which is the punctuation-drift failure below arriving via a
+    # second layout rather than a reprint.
     #
     # `"first"` and `"last"` are ORDINAL, and therefore only ever right by count:
     #

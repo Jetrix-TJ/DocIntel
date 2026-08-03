@@ -29,6 +29,16 @@ LITERAL_ALIASES: dict[str, str] = {
     "windstream": "windstream",
     "kinetic business": "windstream",
     "kinetic business by windstream": "windstream",
+    # The carrier's OTHER retail brand (Finding 3). Two real bills are
+    # letterheaded `WINDSTREAM ENTERPRISE` and remit to a different PO box than
+    # the Kinetic template, and `windstream.json` now reads that name off the
+    # page - so it arrives here as a `letterhead` candidate, and rung 2 of
+    # `resolve_vendor_alias` is an EXACT dict lookup, not a pattern walk. Without
+    # this key the name would fall through to rung 3 and resolve from page text
+    # instead, reporting `page_text_alias` for a canonical that in fact came off
+    # the printed letterhead. Same canonical either way: one carrier, one
+    # persona, whichever brand it bills under (F5).
+    "windstream enterprise": "windstream",
     "comcast": "comcast",
     "comcast business": "comcast",
     "centracom": "centracom",
