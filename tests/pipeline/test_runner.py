@@ -301,6 +301,65 @@ def test_reprocessing_one_document_id_is_a_replay_not_a_duplicate_of_itself():
     )
 
 
+def test_beforeEmit_mutating_identity_is_committed_post_hook_not_pre_hook():
+    """Task N4 review finding: `_emit` read `ctx.derived["document_identity"]`
+    once, before `beforeEmit` ran, and reused that same local for `commit()`
+    afterwards - even though `build_record` (called in between) reads
+    `ctx.derived` fresh. If a `beforeEmit` hook ever mutated the identity, the
+    shipped record and the identity index would disagree about what identity
+    the document claimed.
+
+    d1's stage sets `document_identity` to "a"; its `beforeEmit` hook mutates
+    it to "shared". d1's shipped record must reflect "shared" (build_record
+    reads fresh regardless of the bug). What the bug affected is `commit()`:
+    a stale `_emit` would commit "a" to the index, not "shared".
+
+    d2's stage sets `document_identity` to "shared" directly, so d2's
+    pre-hook `peek()` - which must stay pre-hook, per `_emit`'s own comment -
+    looks up "shared" before its hook runs. That lookup only finds d1's
+    sighting if d1's commit used the same post-hook "shared" value that d1's
+    own record actually shipped with. A stale commit (pre-hook "a") makes d2
+    wrongly report no duplicate.
+    """
+    class SetIdentity:
+        name = "set_identity"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            ctx.doc_type = "standard_invoice"
+            identity = "a" if ctx.document_id == "d1" else "shared"
+            ctx.derived.set("document_identity", identity)
+            ctx.derived.set("identity_basis", "invoice_number")
+            return ctx
+
+    def mutate_a_to_shared(ctx: JobContext, nxt):
+        if ctx.derived.get("document_identity") == "a":
+            ctx.derived.set("document_identity", "shared")
+        return nxt(ctx)
+
+    hooks = HookRegistry()
+    hooks.register("beforeEmit", mutate_a_to_shared, pack="test")
+    r = Runner(stages=[SetIdentity()], hooks=hooks)
+
+    first = r.process("d1", "/tmp/a.pdf")
+    validate_record(first)
+    assert first["disposition"] == "processed"
+    assert first["derived"]["document_identity"] == "shared", (
+        "build_record reads ctx.derived fresh, so the shipped record already "
+        "reflects the hook-mutated identity"
+    )
+    assert first["possible_duplicate_of"] is None
+
+    second = r.process("d2", "/tmp/b.pdf")
+    validate_record(second)
+    assert second["disposition"] == "processed"
+    assert second["derived"]["document_identity"] == "shared"
+    assert second["possible_duplicate_of"] == "d1", (
+        "d1's shipped record claims identity 'shared', so the index must have "
+        "committed 'shared' (the post-hook value) under d1 - not the stale "
+        "pre-hook 'a' - for d2's pre-hook peek at 'shared' to find it"
+    )
+
+
 def test_a_stage_that_returns_none_is_a_programming_error_not_silent_data_loss():
     class Bad:
         name = "bad"

@@ -125,7 +125,13 @@ class Runner:
             # document told "duplicate of this one" would then point at a
             # record with no corroborating evidence at all (review finding on
             # this module's first version).
-            self._identity_index.commit(ctx.document_id, identity)
+            #
+            # Re-read fresh here rather than reusing the pre-hook `identity`
+            # local: `build_record` above already reads `ctx.derived` fresh,
+            # so if a `beforeEmit` hook mutates `document_identity`, the
+            # committed value must match what the record just shipped with -
+            # not the stale value `peek` used before the hook ran.
+            self._identity_index.commit(ctx.document_id, ctx.derived.get("document_identity"))
             return record
         except Exception as exc:  # noqa: BLE001 - deliberate catch-all
             ctx.log(f"emit failed, degrading: {exc}")
