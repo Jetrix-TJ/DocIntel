@@ -31,6 +31,7 @@ selector := field_selector | row_group_selector | scanline_selector
   "field":   "<field_name>",        // required, must be in the pack's field set
   "anchor":  "<literal string>",    // optional; printed label to locate
   "anchor_alts": ["<string>", …],   // optional; tried in order after `anchor`
+  "anchor_occurrence": "first" | "last" | "mid_line",   // default "first"
   "region":  "<region>",            // required unless anchor is provably unique
   "pattern": "<pattern>",           // required
   "capture": "first" | "all_matches",   // default "first"
@@ -38,6 +39,40 @@ selector := field_selector | row_group_selector | scanline_selector
   "required": true | false          // default true; false → absence is not a miss
 }
 ```
+
+**`anchor_occurrence` — which occurrence of the anchor to resolve to.** Closed enum, three values.
+Without it every anchor resolves to the first hit in reading order, which is wrong for a label the
+document prints more than once: three personas' remit fields read a payee name their invoice prints
+two or three times. Applied **per phrase** — to whichever of `anchor` and `anchor_alts` is being
+tried, not only to the primary `anchor`.
+
+| Value | Resolves to |
+|---|---|
+| `first` (default) | the first hit in reading order — **ordinal** |
+| `last` | the last hit in reading order — **ordinal** |
+| `mid_line` | the last hit that does **not** begin its visual line — **positional** |
+
+**The two ordinal modes are only ever right by count.** `last` is correct on Veritiv and Windstream
+because exactly two bare-brand matches exist per primary page today; both pages carry further
+mentions that miss only because normalization strips a trailing colon and not a comma or period
+(`Veritiv,`, `Windstream.`). One punctuation change and `last` silently resolves to boilerplate.
+EDCO prints its payee **three** times and the remittance block sits under the **middle** one, which
+neither ordinal reaches at all — that is what `mid_line` exists for.
+
+**`mid_line` is positional, and it is withheld at run time on OCR-sourced documents.** It reads a
+fact about visual line bands — a payment stub prints remit-to beside bill-to, so in the flattened
+line stream the stub's payee has the other column's text before it, whereas a letterhead, a heading
+and a prose sentence each begin their line. OCR line-grouping does not preserve that fact, so when
+the document's `text_source` is `ocr` the executor reports **no qualifying occurrence** — an
+ordinary miss, left for coverage to escalate — rather than falling back to an ordinal or to a hit
+that begins a line. Measured: on an OCR-sourced Windstream sample the stub's payee came back alone
+on its line, so `mid_line` skipped it and resolved into a prose sentence, turning a correct remit
+address into the word `by`. A wrong remit address that scores as a pass is worse than a miss.
+
+Two notes on that guard. It keys off the **document's actual text source at run time**, not the
+persona's `layout_fingerprint.text_source` (§6) — no runtime code reads any fingerprint member, and
+`windstream.json` declares `native` while four of its five real samples are OCR-sourced. And it is
+one-sided: the ordinal modes read nothing about line bands and are deliberately **not** withheld.
 
 ### 1.2 `row_group_selector` — repeating rows
 
