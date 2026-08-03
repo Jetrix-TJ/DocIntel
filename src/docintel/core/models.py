@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal
 
+from docintel.core.geometry import DEFAULT_TOLERANCE, group_lines
+
 PageRole = Literal["primary", "supporting", "unknown"]
 TextSource = Literal["native", "ocr"]
 Disposition = Literal["processed", "skipped", "dead_letter"]
@@ -26,8 +28,6 @@ DERIVED_ONLY: frozenset[str] = frozenset({
     "identity_basis",
     "carried_balance",
 })
-
-_LINE_TOLERANCE = 3.0  # points; words within this vertical distance share a line
 
 
 def _reject_derived(name: str) -> None:
@@ -60,6 +60,12 @@ class PageText:
     width: float
     height: float
     source: TextSource
+    # Computed once, at construction, by `extract/pdf.py` / `extract/ocr.py`
+    # (core.geometry.line_tolerance) — never recomputed by `lines()`, which is
+    # called 21 times across the grammar, several inside loops. The default
+    # covers the many call sites elsewhere (tests, `executor.py`'s scanline
+    # wrapper) that build a `PageText` without caring about line geometry.
+    line_tolerance: float = DEFAULT_TOLERANCE
 
     def __post_init__(self) -> None:
         if self.source not in ("native", "ocr"):
@@ -67,15 +73,7 @@ class PageText:
 
     def lines(self) -> list[list[Word]]:
         """Group words into visual lines, each sorted left to right."""
-        out: list[list[Word]] = []
-        for w in sorted(self.words, key=lambda w: (w.y0, w.x0)):
-            if out and abs(out[-1][0].y0 - w.y0) <= _LINE_TOLERANCE:
-                out[-1].append(w)
-            else:
-                out.append([w])
-        for line in out:
-            line.sort(key=lambda w: w.x0)
-        return out
+        return group_lines(self.words, self.line_tolerance)
 
     @property
     def text(self) -> str:

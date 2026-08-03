@@ -719,6 +719,10 @@ class Executor:
                     width=source_page.width,
                     height=source_page.height,
                     source=span.source,
+                    # Inherited from the real page, not recomputed from the
+                    # span's (windowed) words — same reasoning as `Span`
+                    # inheriting its page's tolerance in `regions._span`.
+                    line_tolerance=source_page.line_tolerance,
                 )
             )
 

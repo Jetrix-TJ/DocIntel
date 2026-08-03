@@ -12,6 +12,7 @@ import re
 
 import pdfplumber
 
+from docintel.core.geometry import line_tolerance
 from docintel.core.models import PageMeta, PageText, Word
 
 # Unicode Private Use Area. A codepoint in this range has NO portable meaning -
@@ -51,6 +52,9 @@ def read_pages(path: str) -> tuple[PageText, ...]:
                     width=float(page.width),
                     height=float(page.height),
                     source="native",
+                    # Computed once here, at construction (B2) — never inside
+                    # `lines()`, which is called 21 times across the grammar.
+                    line_tolerance=line_tolerance(words),
                 )
             )
     return tuple(pages)

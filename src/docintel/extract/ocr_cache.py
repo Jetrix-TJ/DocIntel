@@ -36,6 +36,7 @@ import json
 import os
 from pathlib import Path
 
+from docintel.core.geometry import line_tolerance
 from docintel.core.models import PageText, Word
 
 CACHE_DIR = Path("var") / "ocr-cache"
@@ -109,18 +110,26 @@ def load(key: str) -> tuple[PageText, ...] | None:
     try:
         with open(cache_path, encoding="utf-8") as fh:
             raw = json.load(fh)
-        return tuple(
-            PageText(
-                page_number=p["page_number"],
-                words=tuple(
-                    Word(text=w[0], x0=w[1], y0=w[2], x1=w[3], y1=w[4]) for w in p["words"]
-                ),
-                width=p["width"],
-                height=p["height"],
-                source="ocr",
+        pages = []
+        for p in raw:
+            words = tuple(Word(text=w[0], x0=w[1], y0=w[2], x1=w[3], y1=w[4]) for w in p["words"])
+            pages.append(
+                PageText(
+                    page_number=p["page_number"],
+                    words=words,
+                    width=p["width"],
+                    height=p["height"],
+                    source="ocr",
+                    # Not persisted in the cache entry itself (see `save`), so
+                    # this recomputes it from the cached words — once, here at
+                    # load, matching what a fresh `ocr.py` run over the same
+                    # words would produce. Without this a cache hit would keep
+                    # today's global 3.0 forever, silently diverging from a
+                    # cache miss on the exact same page.
+                    line_tolerance=line_tolerance(words),
+                )
             )
-            for p in raw
-        )
+        return tuple(pages)
     except Exception:
         return None
 

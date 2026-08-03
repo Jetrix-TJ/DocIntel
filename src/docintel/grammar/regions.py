@@ -31,9 +31,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from docintel.core.errors import ValidationError
+from docintel.core.geometry import DEFAULT_TOLERANCE, group_lines
 from docintel.core.models import PageMeta, PageText, TextSource, Word
 
-_LINE_TOLERANCE = 3.0       # points; matches PageText.lines()
 HEADER_FRACTION = 0.25      # header-block: top quarter of page 1
 TOP_FRACTION = 1.0 / 3.0    # top-left/center/right: top third of page 1
 REMITTANCE_FRACTION = 0.70  # remittance fallback: bottom 30%
@@ -126,18 +126,16 @@ class Span:
     source: TextSource
     words: tuple[Word, ...]
     bbox: tuple[float, float, float, float]
+    # Inherited from the page this span was cut from (see `_span`), never
+    # recomputed from the span's own (windowed) words: a region is a window
+    # onto one page, and recomputing from the window would give a different
+    # answer for the same ink. Defaults to today's ceiling for the two direct
+    # constructions below that don't go through `_span`.
+    line_tolerance: float = DEFAULT_TOLERANCE
 
     def lines(self) -> list[list[Word]]:
         """Group words into visual lines, each sorted left to right."""
-        out: list[list[Word]] = []
-        for w in sorted(self.words, key=lambda w: (w.y0, w.x0)):
-            if out and abs(out[-1][0].y0 - w.y0) <= _LINE_TOLERANCE:
-                out[-1].append(w)
-            else:
-                out.append([w])
-        for line in out:
-            line.sort(key=lambda w: w.x0)
-        return out
+        return group_lines(self.words, self.line_tolerance)
 
     @property
     def text(self) -> str:
@@ -185,7 +183,13 @@ _TOTALS_RE = re.compile(
 
 
 def _span(page: PageText, words: tuple[Word, ...], bbox: tuple[float, float, float, float]) -> Span:
-    return Span(page_number=page.page_number, source=page.source, words=words, bbox=bbox)
+    return Span(
+        page_number=page.page_number,
+        source=page.source,
+        words=words,
+        bbox=bbox,
+        line_tolerance=page.line_tolerance,
+    )
 
 
 def _whole(page: PageText) -> Span:
@@ -350,7 +354,7 @@ def _remittance_block(
     for page in order:
         cut = _label_y(page, _DETACH_RE)
         top = (
-            cut + _LINE_TOLERANCE
+            cut + page.line_tolerance
             if cut is not None
             else page.height * REMITTANCE_FRACTION
         )
@@ -369,7 +373,7 @@ def _table_body(pages: tuple[PageText, ...], anchor: Anchor) -> Span | None:
     page = _page_of(pages, anchor)
     if page is None:
         return None
-    return _band(page, anchor.word.y0 + _LINE_TOLERANCE + 1.0, page.height)
+    return _band(page, anchor.word.y0 + page.line_tolerance + 1.0, page.height)
 
 
 def _line_items(
@@ -395,6 +399,7 @@ def _last_table_row(
             source=body.source,
             words=tuple(last),
             bbox=(body.bbox[0], last[0].y0, body.bbox[2], last[0].y1),
+            line_tolerance=body.line_tolerance,
         ),
     )
 
@@ -411,7 +416,7 @@ def _near_anchor(
     page = _page_of(pages, a)
     if page is None:
         return ()
-    top = a.word.y0 - _LINE_TOLERANCE
+    top = a.word.y0 - page.line_tolerance
     x0 = a.word.x0 - NEAR_ANCHOR_LEFT
     x1 = a.word.x0 + NEAR_ANCHOR_RIGHT
     bottom = a.word.y0 + NEAR_ANCHOR_BELOW
@@ -425,7 +430,7 @@ def _same_row(
     page = _page_of(pages, a)
     if page is None:
         return ()
-    return (_band(page, a.word.y0 - _LINE_TOLERANCE, a.word.y0 + _LINE_TOLERANCE),)
+    return (_band(page, a.word.y0 - page.line_tolerance, a.word.y0 + page.line_tolerance),)
 
 
 def _label_block(
@@ -450,7 +455,7 @@ def _label_block(
 
     x0 = a.word.x0 - LABEL_BLOCK_LEFT
     x1 = a.word.x0 + LABEL_BLOCK_RIGHT
-    top = a.word.y0 - _LINE_TOLERANCE
+    top = a.word.y0 - page.line_tolerance
 
     bands: list[list[Word]] = []
     prev_y: float | None = None
@@ -534,7 +539,7 @@ def _same_cell(
         return ()
 
     row = sorted(
-        (w for w in page.words if abs(w.y0 - a.word.y0) <= _LINE_TOLERANCE),
+        (w for w in page.words if abs(w.y0 - a.word.y0) <= page.line_tolerance),
         key=lambda w: w.x0,
     )
     if not row:
@@ -555,6 +560,7 @@ def _same_cell(
             source=page.source,
             words=cell,
             bbox=(cell[0].x0, cell[0].y0, cell[-1].x1, cell[-1].y1),
+            line_tolerance=page.line_tolerance,
         ),
     )
 

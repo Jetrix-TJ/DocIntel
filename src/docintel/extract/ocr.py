@@ -24,6 +24,7 @@ from __future__ import annotations
 import pdfplumber
 import pytesseract
 
+from docintel.core.geometry import line_tolerance
 from docintel.core.models import PageText, Word
 from docintel.extract import ocr_cache
 
@@ -82,13 +83,17 @@ def _run_ocr(path: str, page_numbers: list[int]) -> tuple[PageText, ...]:
                 height = data["height"][i] * _SCALE
                 words.append(Word(text=text, x0=left, y0=top, x1=left + width, y1=top + height))
 
+            words_tuple = tuple(words)
             pages.append(
                 PageText(
                     page_number=page.page_number,
-                    words=tuple(words),
+                    words=words_tuple,
                     width=float(page.width),
                     height=float(page.height),
                     source="ocr",
+                    # Computed once here, at construction (B2) — never inside
+                    # `lines()`, which is called 21 times across the grammar.
+                    line_tolerance=line_tolerance(words_tuple),
                 )
             )
     return tuple(pages)
