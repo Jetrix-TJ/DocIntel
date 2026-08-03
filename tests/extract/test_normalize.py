@@ -316,3 +316,96 @@ def test_the_all_scanned_branch_also_enforces_completeness(tmp_path, monkeypatch
     monkeypatch.setattr(ocr, "ocr_pages", lambda p, n: real(p, n)[:1])
     with pytest.raises(PermanentError):
         load_document(str(path))
+
+
+# --------------------------------------------------------------------------
+# NATIVE_CHAR_THRESHOLD's safety margin, against the measured corpus
+# --------------------------------------------------------------------------
+#
+# Measured over 121 real PDFs / 1171 pages (the 10 gold documents plus every
+# second-sample): 158 pages read exactly 0 characters, the lowest NON-zero page
+# reads 58, and **no page anywhere reads between 1 and 57**. The threshold sits
+# inside a completely empty measured void, and the void's upper wall is the one
+# that has closed in - see `extract/normalize.py`'s docstring for the arithmetic.
+#
+# These tests pin both margins in realistic terms rather than at threshold +- 1,
+# because "one character either side of the constant" would still pass if the
+# constant were restored to a value with no headroom at all.
+
+_SPARSEST_REAL_NATIVE_PAGE = 58   # Comcast p2, the whole-pool minimum
+_LOWEST_REAL_SCANNED_PAGE = 0     # every one of 158 scanned pages
+
+
+def test_a_native_page_that_loses_a_component_is_still_not_ocrd(tmp_path) -> None:
+    """The failure this recalibration exists to prevent, with real arithmetic.
+
+    Comcast p2 reads `8633 0610 DY RP 09 12102025 NNNNNYNN 01 999457 Page 2 of 6`
+    - a routing string plus a page footer, 58 characters, on a template that
+    recurs monthly. Drop just the `Page 2 of 6` footer and the same genuinely
+    native page reads 46 characters. Under the old threshold of 50 that page
+    flipped to OCR, which marks the WHOLE document `text_source == "ocr"`, takes
+    the `ocr_source` confidence penalty and can drop it a lane - on a document
+    whose text layer was perfectly readable.
+
+    46 is used rather than 49 deliberately: it is the count an actual
+    decomposition of an actual corpus page produces, not the constant minus one.
+    """
+    path = _pdf_with_page_char_counts(tmp_path, [1320, 46])
+    pages, _, text_source = load_document(str(path))
+    assert text_source == "native"
+    assert [p.source for p in pages] == ["native", "native"]
+
+
+def test_the_two_sparsest_real_native_pages_keep_real_headroom(tmp_path) -> None:
+    """Comcast p2 (58) and Centracom p10 (60), the two pages the plan named.
+
+    Both stayed native at 50 too - by 8 and 10 characters. What this asserts is
+    that they now clear the threshold by roughly half their own length, so an
+    ordinary month-to-month rendering change cannot walk either of them over it.
+    """
+    path = _pdf_with_page_char_counts(tmp_path, [1320, 58, 60])
+    _, _, text_source = load_document(str(path))
+    assert text_source == "native"
+
+    from docintel.extract.normalize import NATIVE_CHAR_THRESHOLD
+
+    margin = _SPARSEST_REAL_NATIVE_PAGE - NATIVE_CHAR_THRESHOLD
+    assert margin >= _SPARSEST_REAL_NATIVE_PAGE // 2, (
+        f"the sparsest real native page in the pool reads "
+        f"{_SPARSEST_REAL_NATIVE_PAGE} chars; a threshold of "
+        f"{NATIVE_CHAR_THRESHOLD} leaves it only {margin} to lose"
+    )
+
+
+def test_a_scanned_page_carrying_a_page_footer_still_routes_to_ocr(tmp_path) -> None:
+    """The other margin, and the reason the threshold is not simply dropped to 1.
+
+    Every one of the 158 scanned pages measured reads exactly 0, so this shape is
+    unattested in the pool - which is precisely why it needs a synthetic fixture.
+    A raster page carrying a little incidental live text (a page number, a Bates
+    stamp, a scanner date stamp) has nothing readable on it and must still be
+    OCR'd; keeping it native would lose the page's real content silently, since a
+    wordless page assigns role `unknown` and reference matching finds nothing.
+
+    11 characters is `Page 2 of 6` - the shortest such artefact, and the shortest
+    single component of any near-threshold corpus page.
+    """
+    path = _pdf_with_page_char_counts(tmp_path, [1320, 11])
+    pages, _, text_source = load_document(str(path))
+    assert text_source == "ocr"
+    assert [p.source for p in pages] == ["native", "ocr"]
+
+
+def test_the_threshold_stays_inside_the_measured_void(tmp_path) -> None:
+    """The invariant behind the number, so a future edit cannot silently break it.
+
+    A threshold at or below the lowest real scanned page stops catching scanned
+    pages at all; one at or above the sparsest real native page starts misrouting
+    genuine text. Every real page measured sits outside `[1, 57]`, so the whole
+    void is available - and staying strictly inside it is what keeps `text_source`
+    unchanged on all 121 real documents.
+    """
+    from docintel.extract.normalize import NATIVE_CHAR_THRESHOLD
+
+    assert _LOWEST_REAL_SCANNED_PAGE < NATIVE_CHAR_THRESHOLD
+    assert NATIVE_CHAR_THRESHOLD < _SPARSEST_REAL_NATIVE_PAGE
