@@ -51,22 +51,48 @@ TOTALS_FALLBACK = 0.60      # totals fallback: bottom 40%
 # corpus document's region ever narrows, the same discipline as
 # `HEADER_BAND_PITCHES` (`grammar/executor.py`) and Task 7's
 # `core.geometry.line_tolerance`.
+#
+# `NEAR_ANCHOR_RIGHT` and `CELL_GAP` are the two exceptions this "LINE COUNT"
+# framing doesn't literally fit - both are HORIZONTAL, scaled by this same
+# VERTICAL pitch only because no horizontal-pitch measurement exists anywhere
+# in this codebase. See the caveat comment at each of their own `..._PITCHES`
+# lines below before assuming they behave exactly like the other three.
 _ASSUMED_PITCH = 14.0
 
 TOTALS_BAND = 80.0          # points below the totals label to include
 TOTALS_BAND_PITCHES = TOTALS_BAND / _ASSUMED_PITCH   # ~5.7 lines
 TOTALS_LEAD = 2.0           # a hair above the label line, so the label is inside the band
 NEAR_ANCHOR_RIGHT = 300.0   # points right of the anchor
-NEAR_ANCHOR_RIGHT_PITCHES = NEAR_ANCHOR_RIGHT / _ASSUMED_PITCH   # ~21.4 lines
 # ...and a little to the LEFT. Section 2 says "within 300pt right of", but a value
 # printed BELOW its label is left-aligned with it, and layout jitter routinely puts
 # it a point or two further left. Strict equality dropped `Northstar Recycling
 # Company, LLC` from under its own `Bill To` label. One cell gap is enough.
 NEAR_ANCHOR_LEFT = 12.0
+NEAR_ANCHOR_RIGHT_PITCHES = NEAR_ANCHOR_RIGHT / _ASSUMED_PITCH   # ~21.4 lines
+# NEAR_ANCHOR_RIGHT is a HORIZONTAL reach, scaled here by VERTICAL line pitch
+# anyway - there is no horizontal-pitch measurement anywhere in this codebase,
+# so the page's own line pitch is used as a font-scale proxy (a bigger font
+# generally has both taller lines and wider characters). `max(floor, ...)`
+# means this can only widen the reach, never narrow it, so it is provably
+# inert on today's corpus (every page's pitch is below the 14pt assumption).
+# But it IS an axis mismatch: a document with an unusual leading-to-character
+# width ratio (e.g. double-spaced but normal-size type) would widen this past
+# what its actual character width justifies, and could overreach across a
+# genuine column boundary. Revisit if a real horizontal-pitch measurement
+# (e.g. median inter-word gap, or character width) is ever added.
 NEAR_ANCHOR_BELOW = 40.0    # points below the anchor
 NEAR_ANCHOR_BELOW_PITCHES = NEAR_ANCHOR_BELOW / _ASSUMED_PITCH   # ~2.9 lines
 CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
 CELL_GAP_PITCHES = CELL_GAP / _ASSUMED_PITCH   # ~0.9 lines
+# Same axis mismatch as `NEAR_ANCHOR_RIGHT_PITCHES` above, and for the same
+# reason: `CELL_GAP` is a HORIZONTAL gap, scaled by VERTICAL line pitch
+# because no horizontal-pitch measurement exists here. `max(floor, ...)` means
+# this can only widen (never narrow) the gap that still counts as "one cell",
+# so it is provably inert on today's corpus - but on a document with an
+# unusual leading-to-character-width ratio, widening past what the actual
+# character width justifies could merge two cells across a real column
+# gutter. Revisit alongside `NEAR_ANCHOR_RIGHT_PITCHES` if that measurement
+# is ever added.
 # `CELL_GAP` the module constant stays a plain float on purpose: `executor.py`'s
 # `_cells()` also reads it, to split a candidate LINE OF TEXT into cells - a
 # pattern-matching concern with no `PageText` in scope, out of this task's
