@@ -283,7 +283,7 @@ class Executor:
         return found
 
     def _pick_occurrence(
-        self, hits: list[AnchorMatch], occurrence: str
+        self, ctx: JobContext, hits: list[AnchorMatch], occurrence: str
     ) -> AnchorMatch | None:
         """The one occurrence `occurrence` names, or None if none qualifies.
 
@@ -294,6 +294,21 @@ class Executor:
         the bill-to column in a payment stub. See
         `schema.FieldSelector.anchor_occurrence` for the measurements.
 
+        **`mid_line` is withheld entirely on an OCR-sourced document.** It reads a
+        fact about visual line bands, and OCR line-grouping does not preserve that
+        fact: measured on the real OCR-sourced `Windstream_021942648_09022025`, the
+        stub's payee came back alone on its line, so `mid_line` skipped it and
+        resolved to an earlier prose mention - a wrong remit address on a payment,
+        arriving silently. The two ordinal modes read nothing about line bands and
+        are deliberately not withheld.
+
+        `ctx.text_source` and not the persona's `layout_fingerprint.text_source`,
+        because the fingerprint is validated at write time and then never consulted
+        by any runtime code - and `windstream.json` declares `"native"` while four
+        of its five real samples are OCR-sourced, so it would be no protection even
+        if it were read. `ctx.text_source` is the signal `s6_capture` and the
+        Northstar ladder already key off.
+
         Returning None when nothing qualifies is deliberate, and it is why this
         cannot just index into `hits`: falling back to an occurrence that begins a
         line would put the vendor's own street address on a payment the one time
@@ -303,6 +318,8 @@ class Executor:
         if not hits:
             return None
         if occurrence == "mid_line":
+            if ctx.text_source == "ocr":
+                return None
             beside = [h for h in hits if not h.line_head]
             return beside[-1] if beside else None
         return hits[-1] if occurrence == "last" else hits[0]
@@ -328,7 +345,7 @@ class Executor:
             *((alt, True) for alt in selector.anchor_alts),
         ):
             hits = self._find_anchors(ctx, phrase)
-            match = self._pick_occurrence(hits, selector.anchor_occurrence)
+            match = self._pick_occurrence(ctx, hits, selector.anchor_occurrence)
             if match is not None:
                 return match, used_alt, len(hits) > 1
         return None, False, False

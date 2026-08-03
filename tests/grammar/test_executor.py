@@ -530,12 +530,17 @@ def test_the_default_occurrence_is_still_the_first() -> None:
 #     NORTHSTAR RECYCLING   EDCO WASTE & RECYCLING SERVICE  <- stub, does NOT
 #     EDCO WASTE & RECYCLING SERVICE FOR SERVICE AT:     <- notice, begins
 #
-# and that has a cause rather than being a coincidence: a payment stub prints
-# remit-to in the right-hand column beside bill-to in the left, so in the
-# flattened line stream the payee name always has the other column's text before
-# it. A letterhead, a section heading and a prose sentence all start their line.
-# Verified on all three personas that print their payee more than once - EDCO,
-# Veritiv and Windstream - where it selects the stub occurrence every time.
+# and the intended cause is that a payment stub prints remit-to in the right-hand
+# column beside bill-to in the left, so in the flattened line stream the stub's
+# payee name has the other column's text before it, while a letterhead, a section
+# heading and a prose sentence all start their line.
+#
+# Measured on the three GOLD documents that print their payee more than once
+# (EDCO, Veritiv, Windstream), where it selects the stub occurrence. That is the
+# extent of the claim: it is a property of those layouts, not of the personas.
+# OCR line-grouping breaks it on a real Windstream sample, which is why
+# `mid_line` is withheld on OCR-sourced documents - see
+# `test_mid_line_never_answers_on_an_ocr_sourced_document`.
 
 
 def test_mid_line_reaches_the_middle_of_three_occurrences() -> None:
@@ -616,6 +621,74 @@ def test_mid_line_takes_the_last_qualifying_occurrence() -> None:
         "pattern": "text_block", "anchor_occurrence": "mid_line",
     })
     assert ctx.extracted.get("remit_address") == "PO BOX 5488"
+
+
+def test_mid_line_never_answers_on_an_ocr_sourced_document() -> None:
+    """The guard that makes `mid_line` safe, and the only thing that does.
+
+    `mid_line` reads a fact about visual line bands - the payee printed beside the
+    bill-to column - and OCR line-grouping does not preserve it. Measured on the
+    real OCR-sourced `Windstream_021942648_09022025`: the stub's `WINDSTREAM` came
+    back alone on its line, so `mid_line` skipped it and resolved to an earlier
+    mid-line prose mention (`Please call Kinetic Susiness by Windstream or visit
+    Sur website.`), turning a correct `PO BOX 9001908, LOUISVILLE, KY 40290-1908`
+    into `by`. That is a wrong remit address on a payment, arriving silently.
+
+    A persona's `layout_fingerprint.text_source` is NOT what protects this: no
+    runtime code reads any fingerprint member (it is validated at write time and
+    never consulted), and `windstream.json` itself declares `"native"` while four
+    of its five real samples are OCR-sourced. `ctx.text_source` is the signal that
+    actually exists at run time - the same one `s6_capture` and the Northstar
+    ladder key off.
+
+    The fixture below is that shape: the wanted occurrence has been grouped onto
+    its own line, so the only mid-line candidate left is boilerplate whose block is
+    not an address.
+    """
+    words = (
+        # boilerplate, mid-line, with something that is not an address under it
+        ("Please", 50.0, 100.0), ("call", 100.0, 100.0), ("ACME", 140.0, 100.0),
+        ("or", 140.0, 112.0), ("visit", 165.0, 112.0),
+        # the stub's own occurrence, grouped alone on its line by OCR
+        ("ACME", 300.0, 400.0),
+        ("PO", 300.0, 412.0), ("BOX", 320.0, 412.0), ("5488", 345.0, 412.0),
+    )
+    selector = {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "mid_line",
+    }
+
+    # Native: the boilerplate mention is the only mid-line candidate, so this is
+    # exactly the wrong answer the guard exists to suppress.
+    native = _run(_ctx(_page(1, *words)), selector)
+    assert native.extracted.get("remit_address") == "or visit"
+
+    ocr = _ctx(_page(1, *words, source="ocr"))
+    ocr.text_source = "ocr"
+    ocr = _run(ocr, selector)
+    assert ocr.extracted.get("remit_address") is None
+
+
+def test_the_ordinal_occurrence_modes_still_work_on_ocr() -> None:
+    """The guard is scoped to `mid_line` alone.
+
+    `first` and `last` are ordinal, so they do not depend on line grouping and
+    have no reason to be withheld - `windstream`'s `remit_address` reads correctly
+    off `last` on that same OCR'd document, which is why it keeps `last`.
+    """
+    ocr = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0), ("letterhead", 90.0, 100.0),
+        ("ACME", 50.0, 300.0),
+        ("PO", 50.0, 312.0), ("BOX", 70.0, 312.0), ("5488", 95.0, 312.0),
+        source="ocr",
+    ))
+    ocr.text_source = "ocr"
+    ocr = _run(ocr, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "last",
+    })
+    assert ocr.extracted.get("remit_address") == "PO BOX 5488"
 
 
 def test_mid_line_with_no_qualifying_occurrence_is_an_ordinary_miss() -> None:

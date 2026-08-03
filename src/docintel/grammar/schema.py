@@ -203,14 +203,21 @@ class FieldSelector:
     #   is under the MIDDLE one. Neither ordinal reaches it.
     #
     # `"mid_line"` is POSITIONAL WITHIN THE LINE instead: the last occurrence that
-    # does not begin its visual line. Measured, that selects the remittance stub's
-    # own occurrence on all three personas, and it does so for a structural reason
-    # rather than by count - a payment stub prints remit-to in the right-hand
-    # column beside bill-to in the left, so in the flattened line stream the payee
-    # name always has the other column's text before it, whereas a letterhead, a
-    # section heading and a prose sentence all start their line. That also
-    # excludes the whole punctuation-drift class above by construction, since
-    # every one of those mentions begins its line.
+    # does not begin its visual line. The intended structure is that a payment stub
+    # prints remit-to in the right-hand column beside bill-to in the left, so in
+    # the flattened line stream the stub's payee name has the other column's text
+    # before it, whereas a letterhead, a section heading and a prose sentence all
+    # start their line.
+    #
+    # **What was actually measured, and its limit.** On the three GOLD documents
+    # that print their payee more than once (`edco`, `veritiv`, `windstream`) this
+    # selects the remittance stub's occurrence, and there it also excludes the
+    # punctuation-drift mentions above, since each of those begins its line. It
+    # does NOT hold generally: the structure depends on the payee and the bill-to
+    # being grouped into one visual line band, and OCR line-grouping does not
+    # preserve that - see the OCR guard below for a real sample where it selects
+    # the wrong occurrence. So read the claim as "on these gold layouts", not as a
+    # property of the personas or of stubs in general.
     #
     # Note what `"mid_line"` is NOT: "the occurrence with an address block under
     # it". That was the obvious candidate and it does not discriminate - measured,
@@ -219,18 +226,23 @@ class FieldSelector:
     #
     # **`"mid_line"` is for native text layers, and `edco` is the only user.**
     # `veritiv` and `windstream` were migrated onto it and the migration was
-    # REVERTED, on measurement: the predicate depends on the payee and the bill-to
-    # landing in one visual line band, and OCR line-grouping does not preserve
-    # that. On `Windstream_021942648_09022025` (OCR-sourced) the stub's
-    # `WINDSTREAM` is alone on its line, so `"mid_line"` skipped it and resolved to
-    # `Please call Kinetic Susiness by Windstream or visit Sur website.` instead,
-    # turning a correct `PO BOX 9001908, LOUISVILLE, KY 40290-1908` into `by`.
-    # `"last"` reads it correctly on that document. So the trade for those two is a
-    # MEASURED OCR fragility against a hypothesised punctuation one, which is the
-    # wrong way round; they keep `"last"`. `edco` has no such choice - no ordinal
-    # reaches its middle occurrence at all - and its `layout_fingerprint` claims
-    # `text_source: "native"` only, which is what makes `"mid_line"` safe there.
-    # Verified on all 22 processed real `edco` samples.
+    # REVERTED, on measurement: on `Windstream_021942648_09022025` (OCR-sourced)
+    # the stub's `WINDSTREAM` is alone on its line, so `"mid_line"` skipped it and
+    # resolved to `Please call Kinetic Susiness by Windstream or visit Sur
+    # website.` instead, turning a correct `PO BOX 9001908, LOUISVILLE, KY
+    # 40290-1908` into `by`. `"last"` reads it correctly on that document. So the
+    # trade for those two is a MEASURED OCR fragility against a hypothesised
+    # punctuation one, which is the wrong way round; they keep `"last"`. `edco` has
+    # no such choice - no ordinal reaches its middle occurrence at all.
+    #
+    # What keeps `edco` safe is `executor._pick_occurrence`'s RUNTIME check on
+    # `ctx.text_source`, which withholds `"mid_line"` on any OCR-sourced document.
+    # Emphatically NOT the persona's `layout_fingerprint.text_source`: no runtime
+    # code reads any fingerprint member at all - it is validated at write time and
+    # never consulted - and `windstream.json` declares `"native"` while four of its
+    # five real samples are OCR-sourced, so the declaration would be no protection
+    # even if something did read it. `edco`'s 29 real samples are all native, so
+    # the guard is inert on them and its 22 processed samples read correctly.
     #
     # Default "first", pinned by a test: flipping it would silently move every
     # anchored selector in both packs.
