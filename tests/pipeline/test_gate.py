@@ -11,6 +11,7 @@ import random
 
 import pytest
 
+from docintel.core.coverage import Coverage
 from docintel.core.models import new_context
 from docintel.pipeline.stages.s7_gate import (
     DEFAULT_FORCED_REVIEW_TAGS,
@@ -173,7 +174,9 @@ def test_the_gate_never_clears_an_upstream_review_flag():
 
 def test_a_systemic_failure_outranks_a_forced_review():
     """Both are true, but `low` carries the actionable signal: regenerate the
-    rules. `review_flag` is set either way, so nothing is lost by preferring it.
+    rules. `review_flag` is set either way, so the ROUTING loses nothing by
+    preferring it. The forced REASON is a separate claim, covered by
+    `test_a_forced_reason_is_not_dropped_when_confidence_also_collapses` below.
     """
     ctx = new_context("d", "/x.pdf")
     ctx.confidence = {"a": 0.1, "b": 0.1, "c": 0.1}
@@ -182,6 +185,43 @@ def test_a_systemic_failure_outranks_a_forced_review():
     assert out.lane == "low"
     assert out.regen_flag is True
     assert out.review_flag is True
+
+
+def test_a_forced_reason_is_not_dropped_when_confidence_also_collapses():
+    """N3: `lane == "low"` correctly outranks `review` for ROUTING (both are
+    already forced to `review_flag=True` regardless), but the forced reason
+    (e.g. `bill_to_mismatch` - a wrong-inbox document) must still be reported,
+    not silently replaced by the collapse reason. A human reading the log
+    should see "this may be the wrong inbox", not just "regenerate the rules".
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.1, "b": 0.1, "c": 0.1}
+    ctx.add_tag("bill_to_mismatch")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "low"
+    assert out.regen_flag is True
+    assert out.review_flag is True
+    assert any("bill_to_mismatch" in e for e in out.events), (
+        "the forced reason must still be surfaced even though `low` wins routing"
+    )
+
+
+def test_a_forced_reason_is_not_dropped_when_coverage_collapses():
+    """The same drop, via the OTHER `low` path: `_collapsed(ctx)` (coverage-based,
+    not confidence-based) also outranks forced review for routing, and must also
+    not swallow the forced reason.
+    """
+    ctx = new_context("d", "/x.pdf")
+    ctx.confidence = {"a": 0.99}
+    ctx.coverage = Coverage(declared=10, populated=2, missing_required=(), assessed=True)
+    ctx.add_tag("bill_to_mismatch")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "low"
+    assert out.regen_flag is True
+    assert out.review_flag is True
+    assert any("bill_to_mismatch" in e for e in out.events), (
+        "the forced reason must still be surfaced even though `low` wins routing"
+    )
 
 
 def test_an_unforced_tag_does_not_force_review():

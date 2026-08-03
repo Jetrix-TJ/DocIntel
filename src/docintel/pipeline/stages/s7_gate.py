@@ -227,7 +227,12 @@ class ConfidenceGate:
         if collapsed:
             # Ranked with the confidence collapse below, and above forced review,
             # for the same reason: `low` carries the actionable signal (rewrite the
-            # rules) and review_flag is set either way, so nothing is lost.
+            # rules) and review_flag is set either way, so the ROUTING loses
+            # nothing. But the forced REASON is a separate fact - e.g. this may be
+            # a wrong-inbox document - and it must still reach the log even though
+            # `low` wins the lane, or a human reading it is told only "regenerate
+            # the persona" when the more actionable truth is "this may be the
+            # wrong inbox".
             ctx.lane = "low"
             ctx.regen_flag = True
             ctx.review_flag = True
@@ -235,15 +240,25 @@ class ConfidenceGate:
                 f"s7: {ctx.coverage.populated}/{ctx.coverage.declared} declared "
                 f"selectors produced a value; the rules no longer fit this document"
             )
+            if forced or incomplete:
+                ctx.log(f"s7: also forced by {', '.join([*forced, *incomplete])}")
             return ctx
 
         if lane == "low":
-            # A systemic collapse outranks a forced review. Both are true, but
-            # `low` carries the actionable signal - regenerate the rules - and
-            # review_flag is set either way, so nothing is lost.
+            # A systemic collapse outranks a forced review for ROUTING - both are
+            # true, but `low` carries the actionable signal (regenerate the rules)
+            # and review_flag is set either way. The forced REASON is still a
+            # separate fact that must not be dropped; see the `collapsed` branch
+            # above for why.
             ctx.lane = "low"
             ctx.regen_flag = True
             ctx.review_flag = True
+            ctx.log(
+                "s7: most fields fell below the very-low floor; the rules no "
+                "longer fit this document"
+            )
+            if forced or incomplete:
+                ctx.log(f"s7: also forced by {', '.join([*forced, *incomplete])}")
             return ctx
 
         if forced or incomplete:
