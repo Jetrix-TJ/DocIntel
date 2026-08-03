@@ -3,11 +3,14 @@
   "status": "active",
   "doc_type": "telecom_bill",
   "sender_fingerprint": "digitaldirection|windstream",
-  "notes": "A three-column header/value pair: `Account number Telephone number Invoice date` on one line, the three values on the next. One anchor therefore yields three fields. The letterhead brand is broken in the text layer (`Windstre am`), so vendor_name cannot be captured exactly. No vendor_name selector: the text layer breaks the brand mid-word (`Windstre am`), so the pack's display-name table supplies it.",
+  "notes": "TWO templates, one persona. (1) `Kinetic Business by Windstream`, the gold layout: a three-column header/value pair, `Account number Telephone number Invoice date` on one line and the three values on the next, so one anchor yields three fields. (2) `Windstream Enterprise`, carried in `anchor_alts` on every selector: same three-column idea but the labels are stacked over TWO lines (`Account Invoice Total` / `Number Date Amount Due` / values), so nothing spells `Account Number` or `Total Amount Due` as a contiguous run and each alt anchors a header row read across instead. Its summary ladder is reworded throughout (`Previous Total`, `Payments Applied`, `New Charges - Due by <date>`, `TOTAL INVOICE AMOUNT`) and it prints no telephone number and no separate `Due date` label. The two vocabularies are disjoint, so an alt is unreachable on a Kinetic bill and a primary is unreachable on an Enterprise one; `tests/packs/test_windstream_enterprise_template.py` asserts that, because it is what makes one persona safe for both. The sole exception is the brand name, which is on both - which is why `remit_address` is the one selector ordered the other way round, Enterprise label first and the bare `WINDSTREAM` anchor demoted to the alt: as the primary it matched the word inside a sentence of portal boilerplate and returned a paragraph. No vendor_name selector: the text layer breaks the brand mid-word (`Windstre am`), so the pack's display-name table supplies it.",
   "field_selectors": [
     {
       "field": "account_number",
       "anchor": "Account number",
+      "anchor_alts": [
+        "Account Invoice Total"
+      ],
       "region": "near-anchor",
       "pattern": "([0-9]{9})"
     },
@@ -21,6 +24,9 @@
     {
       "field": "bill_date",
       "anchor": "Invoice date",
+      "anchor_alts": [
+        "Account Invoice Total"
+      ],
       "region": "near-anchor",
       "pattern": "date",
       "adjust": [
@@ -30,6 +36,9 @@
     {
       "field": "due_date",
       "anchor": "Due date",
+      "anchor_alts": [
+        "Due by"
+      ],
       "region": "near-anchor",
       "pattern": "date",
       "adjust": [
@@ -40,12 +49,18 @@
     {
       "field": "prior_balance",
       "anchor": "Previous Bill",
+      "anchor_alts": [
+        "Previous Total"
+      ],
       "region": "near-anchor",
       "pattern": "currency"
     },
     {
       "field": "payments_credits",
       "anchor": "Payments/Adjustments",
+      "anchor_alts": [
+        "Payments Applied"
+      ],
       "region": "near-anchor",
       "pattern": "currency",
       "required": false,
@@ -63,12 +78,18 @@
     {
       "field": "current_charges",
       "anchor": "Current Charges Due",
+      "anchor_alts": [
+        "New Charges"
+      ],
       "region": "near-anchor",
       "pattern": "currency"
     },
     {
       "field": "total_printed",
       "anchor": "Total Amount Due",
+      "anchor_alts": [
+        "TOTAL INVOICE AMOUNT"
+      ],
       "region": "near-anchor",
       "pattern": "currency",
       "adjust": [
@@ -111,7 +132,10 @@
     },
     {
       "field": "remit_address",
-      "anchor": "WINDSTREAM",
+      "anchor": "Remit Payment To",
+      "anchor_alts": [
+        "WINDSTREAM"
+      ],
       "anchor_occurrence": "last",
       "region": "label-block",
       "pattern": "text_block",
