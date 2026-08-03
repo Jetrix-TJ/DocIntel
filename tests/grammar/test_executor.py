@@ -1089,6 +1089,32 @@ def test_a_roll_up_row_inside_the_ladder_is_not_a_charge() -> None:
     assert not any(label.startswith("Subtotal") for label in labels)
 
 
+def test_a_previous_balance_row_inside_the_ladder_is_not_a_charge() -> None:
+    """Centracom also prints `Previous Balance $20,123.80` inside the same block
+    as its three real charges - a second roll-up phrasing, distinct from
+    `Subtotal ...` above. `_ROLLUP_LABEL`'s comment already claimed to catch this
+    one, but the regex never actually matched it: it starts with `Previous`, not
+    one of the filter's leading alternatives (task-5 review, 2026-08-03). This was
+    silent while `_label_block`'s old `min`-based pitch bug floor-clamped the
+    block's break threshold low enough that `Previous Balance` never reached this
+    filter in the first place; fixing that bug exposed the pre-existing gap here."""
+    ctx = _ctx(_page(
+        1,
+        ("This", 421.0, 147.0), ("Month", 447.0, 147.0),
+        ("Internet", 325.0, 161.0), ("Charges", 364.0, 161.0), ("140.90", 549.0, 161.0),
+        ("Special", 325.0, 175.0), ("Circuit", 358.0, 175.0), ("Charges", 391.0, 175.0),
+        ("13,611.50", 536.0, 175.0),
+        ("Previous", 325.0, 189.0), ("Balance", 363.0, 189.0), ("$20,123.80", 530.0, 189.0),
+    ))
+    ctx = _run(ctx, {
+        "row_group": "charges", "table_anchor": "Internet Charges",
+        "region": "label-block",
+        "columns": {"label": "text", "amount": "currency"},
+    })
+    labels = [r["label"] for r in ctx.row_groups["charges"]]
+    assert not any(label.startswith("Previous") for label in labels)
+
+
 def test_the_RIGHTMOST_money_token_is_the_amount() -> None:
     """A charge line reads name-then-number, so an id or a date earlier on the line
     must not be mistaken for the amount."""

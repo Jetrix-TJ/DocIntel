@@ -112,8 +112,20 @@ MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
 # $20,123.80` inside the same block as its three real charges, and its gold
 # `charges` label correctly contains only the three. This is a property of ladders
 # in general rather than of one vendor, which is why it lives here.
+#
+# `previous\s+balance` (task-5 review, 2026-08-03): the comment above already
+# claimed this filter caught `Previous Balance` - it never did, because the regex
+# is anchored at the label's START (`^\s*`) and "Previous" was not one of the
+# alternatives, only "balance" was. `_label_block`'s old `min`-based pitch bug
+# floor-clamped the block's break threshold low enough that `Previous Balance`
+# never entered the ladder's window at all, so this gap was silent. Fixing that
+# bug (task-5) raised the threshold and exposed it: `Previous Balance $20,123.80`
+# started reaching this filter and falling through unmatched. Added as its own
+# alternative rather than loosening `balance` to match mid-string, which would
+# risk matching a genuine charge whose label happens to contain the word "balance".
 _ROLLUP_LABEL = re.compile(
-    r"^\s*(sub\s?total|total|amount\s+due|balance|please\s+pay)\b", re.IGNORECASE
+    r"^\s*(sub\s?total|total|amount\s+due|balance|please\s+pay|previous\s+balance)\b",
+    re.IGNORECASE,
 )
 
 
