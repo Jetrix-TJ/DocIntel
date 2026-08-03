@@ -14,7 +14,7 @@
       "field": "vendor_account_number",
       "anchor": "FOR BILLING INQUIRIES OR SERVICE,",
       "region": "any-page",
-      "pattern": "(25-3A [0-9]{6})"
+      "pattern": "(25-[0-9][A-Z] [0-9]{6})"
     },
     {
       "field": "bill_date",
