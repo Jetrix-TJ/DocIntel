@@ -45,18 +45,24 @@ NAMED_PATTERNS = frozenset({
 
 # (persona, field) where the anchor is part of the value it captures.
 #
-# All four are blocked on the same thing rather than on authoring: the line above
-# each address is a payee name that also appears EARLIER on the page, and
-# `_resolve_anchor` returns `hits[0]` in reading order. `anchor_occurrence: "last"`
-# reaches the right block and the fixed x-window then contaminates it, so these
-# clear when the column boundary does.
+# `edco/remit_address` CLEARED (task-6/8c). It anchored on `P.O. BOX 5488` - the
+# first line of its own answer - because the honest anchor, the payee name printed
+# above the block, occurs three times on the primary page and the remittance block
+# is under the MIDDLE one, which neither `anchor_occurrence: "first"` nor `"last"`
+# can reach. `anchor_occurrence: "mid_line"` reaches it (the stub prints the payee
+# beside the bill-to column, so it is the only occurrence that does not begin its
+# line), and the selector now anchors on `EDCO WASTE & RECYCLING SERVICE`.
+#
+# The two that remain are blocked on the column boundary, not on authoring: the
+# line above each address is a payee name that also appears EARLIER on the page,
+# and reaching the right occurrence leaves the fixed x-window contaminating the
+# block. They clear when that boundary does.
 # `upak/vendor_name` is the one to read the docstring of `test_scorecard.py` about:
 # it is a DEAD selector (`same-row` + anchor-equals-value leaves an empty span)
 # whose assertion passes only through the scorecard's `derived` fallback, and any
 # working replacement would currently turn a passing assertion red. This guardrail
 # found it independently, which is a useful sign the check is measuring something.
 ANCHOR_IN_VALUE_DEBT = frozenset({
-    ("edco", "remit_address"),
     ("federal_recycling", "vendor_address"),
     ("upak", "vendor_name"),
 })

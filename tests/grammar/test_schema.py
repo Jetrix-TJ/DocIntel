@@ -103,6 +103,48 @@ def test_field_selector_defaults_match_the_spec() -> None:
     assert sel.anchor_alts == ()
 
 
+def test_the_default_anchor_occurrence_is_first() -> None:
+    """Pinned separately from the other defaults: flipping it would silently move
+    every anchored selector in both packs."""
+    (sel,) = parse_persona(_base(field_selectors=[
+        {"field": "vendor_name", "region": "header-block", "pattern": "text"},
+    ])).field_selectors
+    assert isinstance(sel, FieldSelector)
+    assert sel.anchor_occurrence == "first"
+
+
+def test_anchor_occurrence_accepts_the_three_defined_modes() -> None:
+    """`first` and `last` are ordinal; `mid_line` is positional within the line -
+    the occurrence printed beside another column, which is the only thing that
+    reaches EDCO's remittance block (see `FieldSelector.anchor_occurrence`)."""
+    for mode in ("first", "last", "mid_line"):
+        (sel,) = parse_persona(_base(field_selectors=[
+            {"field": "remit_address", "anchor": "ACME", "region": "label-block",
+             "pattern": "text_block", "anchor_occurrence": mode},
+        ])).field_selectors
+        assert isinstance(sel, FieldSelector)
+        assert sel.anchor_occurrence == mode
+
+
+def test_an_unknown_anchor_occurrence_is_rejected() -> None:
+    """The enum stays closed: `second` or `middle` is a typo that would otherwise
+    silently fall back to the first occurrence."""
+    with pytest.raises(ValidationError):
+        parse_persona(_base(field_selectors=[
+            {"field": "remit_address", "anchor": "ACME", "region": "label-block",
+             "pattern": "text_block", "anchor_occurrence": "middle"},
+        ]))
+
+
+def test_mid_line_still_requires_an_anchor() -> None:
+    """Selecting an occurrence OF nothing is a typo, not a no-op."""
+    with pytest.raises(ValidationError):
+        parse_persona(_base(field_selectors=[
+            {"field": "remit_address", "region": "label-block",
+             "pattern": "text_block", "anchor_occurrence": "mid_line"},
+        ]))
+
+
 def test_adjust_accepts_a_bare_string_or_a_list() -> None:
     """Section 1.1 allows both; downstream should only ever see a tuple."""
     (one,) = parse_persona(_base(field_selectors=[

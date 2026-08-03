@@ -26,7 +26,7 @@ from docintel.core.errors import ValidationError
 
 PersonaWriteStatus = Literal["draft", "active"]
 Capture = Literal["first", "all_matches"]
-AnchorOccurrence = Literal["first", "last"]
+AnchorOccurrence = Literal["first", "last", "mid_line"]
 TotalsPageRole = Literal["last", "first"]
 FingerprintTextSource = Literal["native", "ocr", "either"]
 
@@ -121,6 +121,12 @@ SCANLINE_AS_FORMS: frozenset[str] = frozenset({
 # five, and a single named page is just as narrow as page one.
 SCANLINE_REGIONS: frozenset[str] = frozenset({"last-page", "remittance-block"})
 
+# The closed `anchor_occurrence` vocabulary, kept beside the other enums rather
+# than inlined in the parser so `AnchorOccurrence` has exactly one list of members
+# to agree with. See `FieldSelector.anchor_occurrence` for what each mode means and
+# the measurements behind `mid_line`.
+ANCHOR_OCCURRENCES: frozenset[str] = frozenset({"first", "last", "mid_line"})
+
 
 @runtime_checkable
 class Pack(Protocol):
@@ -178,22 +184,53 @@ class FieldSelector:
     anchor_alts: tuple[str, ...] = ()
     # Which occurrence of `anchor` to resolve to. GRAMMAR EXTENSION, section 10.
     #
-    # The reason: `_resolve_anchor` returns `hits[0]`, so a label printed more than
-    # once always resolves to the first in reading order. `veritiv` and
-    # `windstream` each print their own name exactly TWICE on the primary page,
-    # and the second (last) occurrence is the one sitting above the remittance
-    # block, so `anchor_occurrence: "last"` reaches it - both personas'
-    # `remit_address` selectors depend on this.
+    # The reason: `_resolve_anchor` would otherwise always return `hits[0]`, so a
+    # label printed more than once always resolves to the first in reading order,
+    # and three personas' `remit_address` anchor on a payee name their invoice
+    # prints two or three times.
     #
-    # That does NOT generalize to every repeated anchor. `edco` prints its payee
-    # name THREE times on its primary page (the letterhead, the remittance
-    # block, and the "FOR SERVICE AT:" service-location header); `last` lands on
-    # the third occurrence, not the remittance block. That is why `edco`'s
-    # `remit_address` still anchors on "P.O. BOX 5488" (a value-in-the-anchor
-    # workaround) rather than the payee name, and remains tracked in
-    # `ANCHOR_IN_VALUE_DEBT` (`tests/packs/test_no_hardcoded_values.py`) - not a
-    # trivial one-line fix, since the third occurrence is where the correct
-    # anchor is unreachable, not simply the last one.
+    # `"first"` and `"last"` are ORDINAL, and therefore only ever right by count:
+    #
+    # * `veritiv` and `windstream` resolve correctly on `"last"` because exactly
+    #   two bare-word matches exist per primary page today. Both pages carry
+    #   further mentions that miss only because `executor._norm` strips a trailing
+    #   colon and not a comma or period (`Veritiv,` at y=384.4; `Windstream.` at
+    #   y=522.8, `WINDSTREAM,` at y=541.6). One punctuation change and `"last"`
+    #   silently resolves to boilerplate.
+    # * `edco` prints its payee name THREE times on its primary page - the
+    #   letterhead (y=33.3), the remittance stub (y=164.9), and the "PLEASE MAIL
+    #   ALL OTHER CORRESPONDENCE TO" notice (y=304.0) - and the remittance block
+    #   is under the MIDDLE one. Neither ordinal reaches it.
+    #
+    # `"mid_line"` is POSITIONAL WITHIN THE LINE instead: the last occurrence that
+    # does not begin its visual line. Measured, that selects the remittance stub's
+    # own occurrence on all three personas, and it does so for a structural reason
+    # rather than by count - a payment stub prints remit-to in the right-hand
+    # column beside bill-to in the left, so in the flattened line stream the payee
+    # name always has the other column's text before it, whereas a letterhead, a
+    # section heading and a prose sentence all start their line. That also
+    # excludes the whole punctuation-drift class above by construction, since
+    # every one of those mentions begins its line.
+    #
+    # Note what `"mid_line"` is NOT: "the occurrence with an address block under
+    # it". That was the obvious candidate and it does not discriminate - measured,
+    # all three of `edco`'s occurrences have a two-line postal address beneath
+    # them (the vendor's street address twice, the P.O. box once).
+    #
+    # **`"mid_line"` is for native text layers, and `edco` is the only user.**
+    # `veritiv` and `windstream` were migrated onto it and the migration was
+    # REVERTED, on measurement: the predicate depends on the payee and the bill-to
+    # landing in one visual line band, and OCR line-grouping does not preserve
+    # that. On `Windstream_021942648_09022025` (OCR-sourced) the stub's
+    # `WINDSTREAM` is alone on its line, so `"mid_line"` skipped it and resolved to
+    # `Please call Kinetic Susiness by Windstream or visit Sur website.` instead,
+    # turning a correct `PO BOX 9001908, LOUISVILLE, KY 40290-1908` into `by`.
+    # `"last"` reads it correctly on that document. So the trade for those two is a
+    # MEASURED OCR fragility against a hypothesised punctuation one, which is the
+    # wrong way round; they keep `"last"`. `edco` has no such choice - no ordinal
+    # reaches its middle occurrence at all - and its `layout_fingerprint` claims
+    # `text_source: "native"` only, which is what makes `"mid_line"` safe there.
+    # Verified on all 22 processed real `edco` samples.
     #
     # Default "first", pinned by a test: flipping it would silently move every
     # anchored selector in both packs.
@@ -346,9 +383,10 @@ def _parse_field_selector(raw: Mapping[str, Any]) -> FieldSelector:
     if capture not in ("first", "all_matches"):
         raise ValidationError(f"capture must be 'first' or 'all_matches', got {capture!r}")
     occurrence = raw.get("anchor_occurrence", "first")
-    if occurrence not in ("first", "last"):
+    if occurrence not in ANCHOR_OCCURRENCES:
         raise ValidationError(
-            f"anchor_occurrence must be 'first' or 'last', got {occurrence!r}"
+            f"anchor_occurrence must be one of {sorted(ANCHOR_OCCURRENCES)}, "
+            f"got {occurrence!r}"
         )
     if occurrence != "first" and raw.get("anchor") is None:
         # An occurrence selector with no anchor to select an occurrence OF is a

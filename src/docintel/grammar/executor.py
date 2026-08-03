@@ -136,6 +136,11 @@ class AnchorMatch:
 
     page_number: int
     words: tuple[Word, ...]
+    # Whether this occurrence BEGINS its visual line. Recorded at match time
+    # because only `_find_anchors` still has the line in hand; recovering it later
+    # would mean re-grouping the page. Backs `anchor_occurrence: "mid_line"` - see
+    # `schema.FieldSelector.anchor_occurrence`.
+    line_head: bool = True
 
     def as_anchor(self) -> Anchor:
         return Anchor(word=self.words[0], page_number=self.page_number)
@@ -272,30 +277,60 @@ class Executor:
                 continue
             for line in page.lines():
                 for run in _runs(line, needle):
-                    found.append(AnchorMatch(page.page_number, run))
+                    found.append(
+                        AnchorMatch(page.page_number, run, line_head=run[0] is line[0])
+                    )
         return found
+
+    def _pick_occurrence(
+        self, hits: list[AnchorMatch], occurrence: str
+    ) -> AnchorMatch | None:
+        """The one occurrence `occurrence` names, or None if none qualifies.
+
+        `hits` is in reading order, so the two ordinal modes are just its two ends.
+        `mid_line` first drops every occurrence that BEGINS its line - a
+        letterhead, a section heading, a sentence opening with the brand - and
+        takes the last of whatever is left, which is the payee name printed beside
+        the bill-to column in a payment stub. See
+        `schema.FieldSelector.anchor_occurrence` for the measurements.
+
+        Returning None when nothing qualifies is deliberate, and it is why this
+        cannot just index into `hits`: falling back to an occurrence that begins a
+        line would put the vendor's own street address on a payment the one time
+        the stub's layout shifted. `_apply_field` treats it as an ordinary miss, so
+        the field is left empty for `core.coverage` to escalate.
+        """
+        if not hits:
+            return None
+        if occurrence == "mid_line":
+            beside = [h for h in hits if not h.line_head]
+            return beside[-1] if beside else None
+        return hits[-1] if occurrence == "last" else hits[0]
 
     def _resolve_anchor(
         self, ctx: JobContext, selector: FieldSelector
     ) -> tuple[AnchorMatch | None, bool, bool]:
-        """(match, used_alt, ambiguous). Alts are tried in declaration order."""
+        """(match, used_alt, ambiguous). Alts are tried in declaration order.
+
+        An anchor whose occurrences all fail the `anchor_occurrence` test counts as
+        unresolved, so the declared alternates still get their turn: "no occurrence
+        qualified" is the same kind of nothing as "the label is absent".
+
+        `ambiguous` is measured on how many occurrences the page carries, not on
+        how many survived the pick - choosing an occurrence deliberately is not the
+        same as the page having only one, so the F12 modifier still applies.
+        """
         if selector.anchor is None:
             return None, False, False
 
-        # `hits` is in reading order, so "last" is simply the other end. An
-        # ambiguous anchor stays ambiguous either way: the modifier still applies,
-        # because choosing an occurrence deliberately is not the same as the page
-        # having only one.
-        pick = -1 if selector.anchor_occurrence == "last" else 0
-
-        hits = self._find_anchors(ctx, selector.anchor)
-        if hits:
-            return hits[pick], False, len(hits) > 1
-
-        for alt in selector.anchor_alts:
-            hits = self._find_anchors(ctx, alt)
-            if hits:
-                return hits[pick], True, len(hits) > 1
+        for phrase, used_alt in (
+            (selector.anchor, False),
+            *((alt, True) for alt in selector.anchor_alts),
+        ):
+            hits = self._find_anchors(ctx, phrase)
+            match = self._pick_occurrence(hits, selector.anchor_occurrence)
+            if match is not None:
+                return match, used_alt, len(hits) > 1
         return None, False, False
 
     # -- candidate generation ---------------------------------------------

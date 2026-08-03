@@ -511,6 +511,152 @@ def test_the_default_occurrence_is_still_the_first() -> None:
     assert ctx.extracted.get("remit_address") == "letterhead"
 
 
+# --------------------------------------------------------------------------
+# anchor_occurrence: "mid_line" - the remittance stub's own occurrence (8c)
+# --------------------------------------------------------------------------
+#
+# `first` and `last` are ordinal, so they can only be right by count. EDCO prints
+# `EDCO WASTE & RECYCLING SERVICE` three times on its primary page and the
+# remittance block is under the MIDDLE one, which neither ordinal reaches - which
+# is why its `remit_address` was stuck anchoring on `P.O. BOX 5488`, a value in
+# the anchor.
+#
+# Measured, all three occurrences have an address block under them (letterhead,
+# remittance stub, and the "PLEASE MAIL ALL OTHER CORRESPONDENCE TO" notice), so
+# "the occurrence with a block under it" cannot separate them either. What does
+# separate them is whether the name BEGINS its visual line:
+#
+#     EDCO WASTE & RECYCLING SERVICE                     <- letterhead, begins
+#     NORTHSTAR RECYCLING   EDCO WASTE & RECYCLING SERVICE  <- stub, does NOT
+#     EDCO WASTE & RECYCLING SERVICE FOR SERVICE AT:     <- notice, begins
+#
+# and that has a cause rather than being a coincidence: a payment stub prints
+# remit-to in the right-hand column beside bill-to in the left, so in the
+# flattened line stream the payee name always has the other column's text before
+# it. A letterhead, a section heading and a prose sentence all start their line.
+# Verified on all three personas that print their payee more than once - EDCO,
+# Veritiv and Windstream - where it selects the stub occurrence every time.
+
+
+def test_mid_line_reaches_the_middle_of_three_occurrences() -> None:
+    """The EDCO shape, which no ordinal can express.
+
+    Three occurrences, each with a real address block beneath it, and the wanted
+    one is neither first nor last. It is the only one printed beside another
+    column rather than starting its own line.
+    """
+    ctx = _ctx(_page(
+        1,
+        # 1: letterhead, begins its line, with an address under it
+        ("ACME", 50.0, 100.0),
+        ("224", 50.0, 112.0), ("LAS", 75.0, 112.0), ("POSAS", 100.0, 112.0),
+        # 2: the stub - bill-to on the left, ACME beside it on the right
+        ("CUSTOMER", 50.0, 300.0), ("ACME", 300.0, 300.0),
+        ("PO", 50.0, 312.0), ("BOX", 70.0, 312.0), ("188", 95.0, 312.0),
+        ("PO", 300.0, 312.0), ("BOX", 320.0, 312.0), ("5488", 345.0, 312.0),
+        # 3: the correspondence notice, begins its line, address under it
+        ("ACME", 50.0, 500.0), ("MAIL", 90.0, 500.0), ("TO:", 130.0, 500.0),
+        ("224", 50.0, 512.0), ("LAS", 75.0, 512.0), ("POSAS", 100.0, 512.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "mid_line",
+    })
+    assert ctx.extracted.get("remit_address") == "PO BOX 5488"
+
+
+def test_mid_line_ignores_an_occurrence_that_begins_a_boilerplate_line() -> None:
+    """Why this is more robust than `last`, not merely different.
+
+    `last` is one punctuation change away from a footer: `_norm` strips a trailing
+    colon but not a comma or period, so `Veritiv,` and `Windstream.` miss today
+    purely by luck. Every such occurrence is a brand name STARTING a sentence, so
+    `mid_line` excludes the whole class by construction rather than relying on the
+    stub happening to be printed last.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("CUSTOMER", 50.0, 100.0), ("ACME", 300.0, 100.0),
+        ("PO", 300.0, 112.0), ("BOX", 320.0, 112.0), ("5488", 345.0, 112.0),
+        # a later boilerplate line that STARTS with the anchor: `last` would
+        # take this one and read the paragraph under it as an address.
+        ("ACME", 50.0, 400.0), ("reserves", 90.0, 400.0), ("the", 150.0, 400.0),
+        ("right", 50.0, 412.0), ("to", 90.0, 412.0), ("amend", 115.0, 412.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "mid_line",
+    })
+    assert ctx.extracted.get("remit_address") == "PO BOX 5488"
+
+
+def test_mid_line_takes_the_last_qualifying_occurrence() -> None:
+    """Two occurrences printed beside another column: the later one wins.
+
+    Measured on the drift case the plan warns about - if `_norm` were changed to
+    strip a trailing period, Windstream's `Detach and return this payment slip
+    with your check payable to OKLAHOMA WINDSTREAM, LLC.` would start matching,
+    and it is mid-line too. On that page the boilerplate mention precedes the
+    stub, so `last` among the qualifying occurrences is the safer tiebreak.
+
+    Note this is a tiebreak, not the mechanism: on all three real personas
+    exactly one occurrence qualifies today. It is also why `mid_line` is not a
+    universal replacement for `last` - see `FieldSelector.anchor_occurrence` for
+    the OCR measurement that keeps Veritiv and Windstream on `last`.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("payable", 50.0, 100.0), ("to", 100.0, 100.0), ("ACME", 130.0, 100.0),
+        ("Amount", 130.0, 112.0), ("Due", 180.0, 112.0),
+        ("CUSTOMER", 50.0, 400.0), ("ACME", 300.0, 400.0),
+        ("PO", 300.0, 412.0), ("BOX", 320.0, 412.0), ("5488", 345.0, 412.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "mid_line",
+    })
+    assert ctx.extracted.get("remit_address") == "PO BOX 5488"
+
+
+def test_mid_line_with_no_qualifying_occurrence_is_an_ordinary_miss() -> None:
+    """A visible empty field, never a fallback to an occurrence that begins a line.
+
+    If EDCO's bill-to block ever shifted a line so the payee no longer sat beside
+    it, the honest answer is nothing: `core.coverage` escalates the empty required
+    field, whereas silently taking the letterhead would put the vendor's street
+    address on a payment.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0),
+        ("PO", 50.0, 112.0), ("BOX", 70.0, 112.0), ("5488", 95.0, 112.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "region": "label-block",
+        "pattern": "text_block", "anchor_occurrence": "mid_line",
+    })
+    assert ctx.extracted.get("remit_address") is None
+
+
+def test_mid_line_falls_through_to_anchor_alts() -> None:
+    """"No occurrence qualified" is the same kind of nothing as "the label is
+    absent", so the declared alternates still get their turn."""
+    ctx = _ctx(_page(
+        1,
+        # the declared anchor appears, but only at the head of a line
+        ("ACME", 50.0, 100.0), ("letterhead", 90.0, 100.0),
+        # the alternate is the rendering used in the stub, beside the bill-to
+        ("CUSTOMER", 50.0, 300.0), ("ACME-CORP", 300.0, 300.0),
+        ("PO", 300.0, 312.0), ("BOX", 320.0, 312.0), ("5488", 345.0, 312.0),
+    ))
+    ctx = _run(ctx, {
+        "field": "remit_address", "anchor": "ACME", "anchor_alts": ["ACME-CORP"],
+        "region": "label-block", "pattern": "text_block",
+        "anchor_occurrence": "mid_line",
+    })
+    assert ctx.extracted.get("remit_address") == "PO BOX 5488"
+
+
 def test_a_row_equal_to_the_running_sum_ends_the_table() -> None:
     """Every invoice in the corpus prints a totals row below its items, and on
     Complete Beverage and Federal Recycling it is TIGHTER than the body it follows

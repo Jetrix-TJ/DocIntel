@@ -85,7 +85,8 @@
     },
     {
       "field": "remit_address",
-      "anchor": "P.O. BOX 5488",
+      "anchor": "EDCO WASTE & RECYCLING SERVICE",
+      "anchor_occurrence": "mid_line",
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
