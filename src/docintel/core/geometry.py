@@ -48,6 +48,52 @@ A fraction near 0.5 was rejected: `0.5 * 5.8 = 2.9`, only 0.12pt under the
 3.02pt floor — effectively the same near-zero margin this task exists to
 remove. 0.4 leaves real headroom without being so small that ordinary
 baseline jitter *inside* one visual line starts reading as two.
+
+**The floor, against a page where the pitch is not a pitch (final-review
+Finding 1).** Every argument above assumes the measured pitch IS a text
+leading. On one corpus page it demonstrably is not: `_AP Invoice 32930 Complete
+Beverage Destruction` page 2 is a degraded OCR'd scan whose bootstrap-measured
+median pitch is **4.68pt** — below any genuine leading in the corpus — because
+the scan fragments enough lines that the fragments become the median. Bootstrapping
+from lines rather than raw word y0s (above) reduces that failure mode but does
+not eliminate it: it only takes a page where most lines fragment. `0.4 * 4.68 =
+1.872` then shatters the page further, 99 lines to 124, splitting real visual
+lines apart (`FL S35R3, Seal number(s); 5 GSii GF` becomes two lines). A ceiling
+cannot catch this. The derived value needs a floor as well.
+
+`MIN_TOLERANCE = 2.5`, justified against the same corpus, re-measured over all
+39 pages of the 10 gold documents:
+
+- **it can never merge two real lines.** The tightest GENUINE inter-line gap
+  measured is 3.018pt (`digitaldirection-windstream-041069076` p2 — the low end
+  of the 3.02-3.60pt range quoted above, confirmed). 2.5 sits 0.52pt under it,
+  so adding a floor does not weaken the ceiling's safety property at all; the
+  floor is still further below the tightest genuine gap than today's 3.0 is.
+- **it engages only below a pitch no real leading reaches:** at `pitch <
+  MIN_TOLERANCE / _PITCH_FRACTION == 6.25`. Exactly ONE of the 39 pages is under
+  that line — Complete Beverage p2, at 4.68. The other 38 are unchanged, including
+  the only other page the ceiling does not already pin at 3.0 (Lumen p2, pitch
+  7.2 -> 2.88, still above the floor).
+- **it BOUNDS the damage, it does not repair it.** At 2.5 that page groups to 114
+  lines, not the 99 a plain 3.0 gives. Restoring 99 would take a floor of 2.88,
+  which is 0.14pt under the 3.018pt genuine gap — the same near-zero margin this
+  module exists to remove — and would make the ceiling's entire tightening inert.
+  2.5 recovers 10 of the 25 spurious splits and keeps half a point of real
+  margin, which is the better trade.
+
+Two things to be honest about here. First, the deliberate consequence: below
+`pitch == 2.5` the floor EXCEEDS the measured pitch, so such a page is grouped
+loosely rather than tightly, and `tolerance < pitch` stops holding. That is the
+correct failure direction, not an oversight — a pitch that small is
+fragmentation rather than leading, and the page above shows the harm on such a
+page comes from over-splitting, not over-merging. Second, the `5.8pt` low end of
+the pitch range quoted further up does not reproduce against today's corpus:
+re-measuring puts the tightest genuine median pitch at 7.2pt (the 4.68 outlier
+aside). That range predates `NATIVE_CHAR_THRESHOLD`'s recentring from 50 to 29,
+which moved pages between the native and OCR paths. The fraction's margin
+argument only gets *stronger* under the newer numbers, so `_PITCH_FRACTION` is
+left exactly as it was and the older figure is left on the record rather than
+quietly restated.
 """
 
 from __future__ import annotations
@@ -63,7 +109,8 @@ if TYPE_CHECKING:
     from docintel.core.models import Word
 
 DEFAULT_TOLERANCE = 3.0  # points; today's ceiling, and the <2-line default
-_PITCH_FRACTION = 0.4  # see module docstring for the corpus math behind this
+MIN_TOLERANCE = 2.5  # points; the floor, 0.52pt under the tightest genuine gap
+_PITCH_FRACTION = 0.4  # see module docstring for the corpus math behind these
 
 
 def group_lines(words: tuple[Word, ...], tolerance: float) -> list[list[Word]]:
@@ -91,17 +138,24 @@ def line_tolerance(words: tuple[Word, ...]) -> float:
     """The vertical distance within which two words share a line, for this page.
 
     The median gap between distinct line baselines, times `_PITCH_FRACTION`,
-    capped at `DEFAULT_TOLERANCE`. Fewer than two lines means there is no pitch
-    to measure, so the default applies. The lines used to measure the gap are
-    bootstrapped with `DEFAULT_TOLERANCE` itself (today's grouping) rather than
-    read off raw distinct `Word.y0` values — see the module docstring for why
-    that distinction matters on OCR'd pages.
+    clamped between `MIN_TOLERANCE` and `DEFAULT_TOLERANCE`. Fewer than two
+    lines means there is no pitch to measure, so the default applies. The lines
+    used to measure the gap are bootstrapped with `DEFAULT_TOLERANCE` itself
+    (today's grouping) rather than read off raw distinct `Word.y0` values — see
+    the module docstring for why that distinction matters on OCR'd pages.
+
+    Both bounds exist for the same reason from opposite sides: a measured pitch
+    is only trustworthy inside the band real text leading occupies. Above the
+    band the ceiling keeps a loose page at exactly today's grouping; below it the
+    floor stops a degraded scan's fragmentation artifact from being read as a
+    pitch and shattering the page. The module docstring has the measurements for
+    both numbers.
     """
     lines = group_lines(words, DEFAULT_TOLERANCE)
     pitch = median_pitch(lines)
     if pitch is None:
         return DEFAULT_TOLERANCE
-    return min(pitch * _PITCH_FRACTION, DEFAULT_TOLERANCE)
+    return max(MIN_TOLERANCE, min(pitch * _PITCH_FRACTION, DEFAULT_TOLERANCE))
 
 
 def median_pitch(lines: list[list[Word]]) -> float | None:
@@ -115,6 +169,17 @@ def median_pitch(lines: list[list[Word]]) -> float | None:
     and friends, B4/Task 8) by the page's real pitch, not by 40% of it. Extracted
     so both measure "the median gap between two line baselines" the same way,
     rather than `regions.py` re-deriving this arithmetic a second time.
+
+    **`line[0].y0` is the LEFTMOST word's y0, not the line's lowest one** —
+    `group_lines` x-sorts each line before returning it. So these are not quite
+    baselines: within one line the leftmost word can sit a point or two off the
+    others, and the "gap" absorbs that. It is why a measured pitch BELOW
+    `DEFAULT_TOLERANCE` is reachable at all (the bootstrap's own group heads are
+    always more than the tolerance apart, so a true baseline measurement could
+    never go under it), and therefore why `line_tolerance` needs a floor and not
+    only a ceiling. Left as is deliberately: both `line_tolerance` and
+    `grammar.regions` have been measured and tuned against exactly this
+    definition, so changing it here silently re-tunes both.
     """
     if len(lines) < 2:
         return None

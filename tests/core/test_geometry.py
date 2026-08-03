@@ -11,6 +11,8 @@ against the actual corpus measurements.
 
 from __future__ import annotations
 
+import pytest
+
 import docintel.core.geometry as geometry
 from docintel.core.geometry import group_lines, line_tolerance, median_pitch
 from docintel.core.models import PageText, Word
@@ -65,6 +67,56 @@ def test_no_page_is_grouped_more_loosely_than_today() -> None:
     """
     assert line_tolerance(_words_at_pitch(20.0)) == 3.0
     assert line_tolerance(_words_at_pitch(5.8)) < 3.02
+
+
+def test_an_implausible_bootstrap_pitch_is_floored_not_trusted() -> None:
+    """4.68pt is the REAL bootstrap pitch of `_AP Invoice 32930 Complete
+    Beverage Destruction` page 2, a degraded OCR'd scan. It is not a text
+    leading — it is the median of the scan's own line fragments — and
+    `0.4 * 4.68 = 1.872` shatters that page from 99 lines to 124, splitting
+    real visual lines apart. The ceiling cannot catch this; the floor does.
+    """
+    assert line_tolerance(_words_at_pitch(4.68)) == geometry.MIN_TOLERANCE
+    assert line_tolerance(_words_at_pitch(4.68)) > 4.68 * geometry._PITCH_FRACTION
+
+
+def test_ocr_jitter_pitch_cannot_drive_the_tolerance_to_nothing(monkeypatch) -> None:
+    """The degenerate end, all the way down.
+
+    `median_pitch` is patched rather than fed synthetic words, because a
+    one-word-per-row fixture CANNOT produce a measured pitch below 3.0: every
+    bootstrap line's head is more than `DEFAULT_TOLERANCE` from the previous
+    one by construction. A real page reaches 4.68 anyway because `median_pitch`
+    reads each line's LEFTMOST word's `y0`, which on a fragmented scan is not
+    that line's own lowest baseline — so arbitrarily small measured pitches are
+    reachable on real input and the clamp has to hold for all of them.
+    """
+    for pitch in (0.36, 1.0, 2.0, 4.0, 6.24):
+        monkeypatch.setattr(geometry, "median_pitch", lambda _lines, p=pitch: p)
+        assert line_tolerance(_words_at_pitch(12.0)) == geometry.MIN_TOLERANCE
+
+
+def test_the_floor_stays_under_the_tightest_genuine_corpus_gap() -> None:
+    """The floor is only safe because it can never merge two real lines: the
+    tightest GENUINE inter-line gap measured across the corpus is 3.018pt
+    (`digitaldirection-windstream-041069076` p2). A floor at or above that
+    number would merge it and corrupt every row read off that page.
+    """
+    assert geometry.MIN_TOLERANCE < 3.018
+    assert geometry.MIN_TOLERANCE < geometry.DEFAULT_TOLERANCE
+
+
+def test_the_floor_engages_only_below_a_pitch_no_real_leading_reaches() -> None:
+    """`MIN_TOLERANCE / _PITCH_FRACTION` is where the floor starts to bind. The
+    38 corpus pages with a genuine measurable pitch all sit at 7.2pt or above,
+    so the floor is inert on every one of them; only the degraded scan is
+    below the line.
+    """
+    engages_at = geometry.MIN_TOLERANCE / geometry._PITCH_FRACTION
+    assert engages_at < 7.2, "the floor must not reach a genuine corpus pitch"
+    assert line_tolerance(_words_at_pitch(7.2)) == pytest.approx(
+        7.2 * geometry._PITCH_FRACTION
+    )
 
 
 def test_a_single_line_falls_back_to_the_default() -> None:
