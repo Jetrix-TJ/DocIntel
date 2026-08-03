@@ -31,23 +31,47 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from docintel.core.errors import ValidationError
-from docintel.core.geometry import DEFAULT_TOLERANCE, group_lines
+from docintel.core.geometry import DEFAULT_TOLERANCE, group_lines, median_pitch
 from docintel.core.models import PageMeta, PageText, TextSource, Word
 
 HEADER_FRACTION = 0.25      # header-block: top quarter of page 1
 TOP_FRACTION = 1.0 / 3.0    # top-left/center/right: top third of page 1
 REMITTANCE_FRACTION = 0.70  # remittance fallback: bottom 30%
 TOTALS_FALLBACK = 0.60      # totals fallback: bottom 40%
+
+# B4: `TOTALS_BAND`, `NEAR_ANCHOR_RIGHT`, `NEAR_ANCHOR_BELOW`, `CELL_GAP` and
+# `LABEL_BLOCK_MAX` are each a LINE COUNT, hard-coded as points against an
+# assumed 14pt line pitch — `LABEL_BLOCK_MAX`'s own comment says as much
+# outright ("~10 lines" for 140.0, and 140 / 14 == 10 exactly). A document set
+# tighter or looser than that pitch either truncates a region that should have
+# kept going, or extends further than intended. Each constant below carries a
+# paired `..._PITCHES` ratio (`constant / _ASSUMED_PITCH`) that expresses the
+# same line count relative to a page's OWN measured pitch (`_pitch`, below),
+# resolved through `_scaled` so today's absolute value is kept as a FLOOR — no
+# corpus document's region ever narrows, the same discipline as
+# `HEADER_BAND_PITCHES` (`grammar/executor.py`) and Task 7's
+# `core.geometry.line_tolerance`.
+_ASSUMED_PITCH = 14.0
+
 TOTALS_BAND = 80.0          # points below the totals label to include
+TOTALS_BAND_PITCHES = TOTALS_BAND / _ASSUMED_PITCH   # ~5.7 lines
 TOTALS_LEAD = 2.0           # a hair above the label line, so the label is inside the band
 NEAR_ANCHOR_RIGHT = 300.0   # points right of the anchor
+NEAR_ANCHOR_RIGHT_PITCHES = NEAR_ANCHOR_RIGHT / _ASSUMED_PITCH   # ~21.4 lines
 # ...and a little to the LEFT. Section 2 says "within 300pt right of", but a value
 # printed BELOW its label is left-aligned with it, and layout jitter routinely puts
 # it a point or two further left. Strict equality dropped `Northstar Recycling
 # Company, LLC` from under its own `Bill To` label. One cell gap is enough.
 NEAR_ANCHOR_LEFT = 12.0
 NEAR_ANCHOR_BELOW = 40.0    # points below the anchor
+NEAR_ANCHOR_BELOW_PITCHES = NEAR_ANCHOR_BELOW / _ASSUMED_PITCH   # ~2.9 lines
 CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
+CELL_GAP_PITCHES = CELL_GAP / _ASSUMED_PITCH   # ~0.9 lines
+# `CELL_GAP` the module constant stays a plain float on purpose: `executor.py`'s
+# `_cells()` also reads it, to split a candidate LINE OF TEXT into cells - a
+# pattern-matching concern with no `PageText` in scope, out of this task's
+# region-vocabulary brief. Only `_same_cell` below (a region resolver) applies
+# the pitch-scaled variant, via `_scaled(CELL_GAP, CELL_GAP_PITCHES, ...)`.
 
 # `label-block`: the anchor's own column, from its line down to the next blank
 # line. Added after C5b, where addresses were the single largest remaining class
@@ -67,6 +91,7 @@ CELL_GAP = 12.0             # points of horizontal whitespace that ends a cell
 LABEL_BLOCK_LEFT = 12.0     # same left tolerance as near-anchor
 LABEL_BLOCK_RIGHT = 300.0   # same column width as near-anchor
 LABEL_BLOCK_MAX = 140.0     # hard ceiling, ~10 lines: a block, not a page
+LABEL_BLOCK_MAX_PITCHES = LABEL_BLOCK_MAX / _ASSUMED_PITCH   # == 10.0, matching the comment above
 # Whitespace that means "a different column", used to replace the fixed
 # LABEL_BLOCK_RIGHT with the real column edge.
 #
@@ -220,6 +245,53 @@ def _require(anchor: Anchor | None, region: str) -> Anchor:
     return anchor
 
 
+_MIN_LINES_FOR_PITCH = 4  # 3 gaps: the fewest for a median to be an actual
+# middle value rather than the average of two (2 lines) or the single
+# distance between them (a lone gap dominated entirely by whatever those two
+# lines happen to be). A `near-anchor` or `totals-block` unit-test fixture
+# often has only 2-3 lines total, one of them a deliberately distant probe
+# word (a "toofar"/"waybelow" exclusion check, or a scanline stub 460pt below
+# the totals label) - exactly the outlier a real multi-line invoice page never
+# has just one of. Below this count, `_scaled` falls back to its floor,
+# unscaled: today's behaviour on a page too sparse to trust a pitch reading.
+
+
+def _pitch(page: PageText) -> float | None:
+    """This page's own median line-to-line pitch, or `None` if there are too
+    few lines to trust one (see `_MIN_LINES_FOR_PITCH`).
+
+    Delegates to `core.geometry.median_pitch` over the page's own already-grouped
+    lines (`page.lines()`, using the page's REAL `line_tolerance`, not the
+    bootstrap tolerance `line_tolerance()` itself uses internally) - the same
+    measurement `grammar.executor`'s `_median_pitch` makes for `HEADER_BAND_PITCHES`,
+    so this file does not grow a second implementation of "the median gap
+    between two line baselines".
+    """
+    lines = page.lines()
+    if len(lines) < _MIN_LINES_FOR_PITCH:
+        return None
+    return median_pitch(lines)
+
+
+def _scaled(floor: float, pitches: float, pitch: float | None) -> float:
+    """`floor`, or `pitches` lines at this page's own measured pitch, whichever
+    reaches further.
+
+    B4/Task 8's whole fix: each `floor` (`NEAR_ANCHOR_BELOW` and friends) was
+    hard-coded against an assumed 14pt pitch, so `pitches = floor / 14.0`
+    expresses the same line count relative to whatever pitch THIS page actually
+    measures. `floor` stays a FLOOR rather than being replaced outright, so a
+    page at or below the 14pt assumption never gets a narrower region than it
+    has today - the corpus (median pitch 5.8-12.4pt, per Task 7) is entirely
+    below that assumption and so is provably unaffected by this function for
+    every one of these five constants. `pitch is None` (fewer than two lines to
+    measure) leaves `floor` as the answer: there is nothing to scale by.
+    """
+    if pitch is None:
+        return floor
+    return max(floor, pitch * pitches)
+
+
 def _label_y(page: PageText, pattern: re.Pattern[str]) -> float | None:
     """The top edge of the last line matching `pattern`.
 
@@ -318,7 +390,8 @@ def _totals_on(page: PageText, anchor: Anchor | None) -> Span:
         top = _label_y(page, _TOTALS_RE)
     if top is None:
         return _band(page, page.height * TOTALS_FALLBACK, page.height)
-    return _band(page, top - TOTALS_LEAD, min(top + TOTALS_BAND, page.height))
+    band = _scaled(TOTALS_BAND, TOTALS_BAND_PITCHES, _pitch(page))
+    return _band(page, top - TOTALS_LEAD, min(top + band, page.height))
 
 
 def _totals_block(
@@ -416,10 +489,11 @@ def _near_anchor(
     page = _page_of(pages, a)
     if page is None:
         return ()
+    pitch = _pitch(page)
     top = a.word.y0 - page.line_tolerance
     x0 = a.word.x0 - NEAR_ANCHOR_LEFT
-    x1 = a.word.x0 + NEAR_ANCHOR_RIGHT
-    bottom = a.word.y0 + NEAR_ANCHOR_BELOW
+    x1 = a.word.x0 + _scaled(NEAR_ANCHOR_RIGHT, NEAR_ANCHOR_RIGHT_PITCHES, pitch)
+    bottom = a.word.y0 + _scaled(NEAR_ANCHOR_BELOW, NEAR_ANCHOR_BELOW_PITCHES, pitch)
     return (_box(page, x0, top, x1, bottom),)
 
 
@@ -456,6 +530,7 @@ def _label_block(
     x0 = a.word.x0 - LABEL_BLOCK_LEFT
     x1 = a.word.x0 + LABEL_BLOCK_RIGHT
     top = a.word.y0 - page.line_tolerance
+    max_reach = _scaled(LABEL_BLOCK_MAX, LABEL_BLOCK_MAX_PITCHES, _pitch(page))
 
     bands: list[list[Word]] = []
     prev_y: float | None = None
@@ -466,7 +541,7 @@ def _label_block(
         y = line[0].y0
         if y < top:
             continue
-        if y - a.word.y0 > LABEL_BLOCK_MAX:
+        if y - a.word.y0 > max_reach:
             break
         band = [w for w in line if x0 <= w.x0 < x1]
         if not band:
@@ -545,12 +620,13 @@ def _same_cell(
     if not row:
         return ()
 
+    gap = _scaled(CELL_GAP, CELL_GAP_PITCHES, _pitch(page))
     idx = min(range(len(row)), key=lambda i: abs(row[i].x0 - a.word.x0))
     lo = idx
-    while lo > 0 and row[lo].x0 - row[lo - 1].x1 <= CELL_GAP:
+    while lo > 0 and row[lo].x0 - row[lo - 1].x1 <= gap:
         lo -= 1
     hi = idx
-    while hi + 1 < len(row) and row[hi + 1].x0 - row[hi].x1 <= CELL_GAP:
+    while hi + 1 < len(row) and row[hi + 1].x0 - row[hi].x1 <= gap:
         hi += 1
 
     cell = tuple(row[lo : hi + 1])

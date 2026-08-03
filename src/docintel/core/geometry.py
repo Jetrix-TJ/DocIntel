@@ -98,9 +98,26 @@ def line_tolerance(words: tuple[Word, ...]) -> float:
     that distinction matters on OCR'd pages.
     """
     lines = group_lines(words, DEFAULT_TOLERANCE)
-    if len(lines) < 2:
+    pitch = median_pitch(lines)
+    if pitch is None:
         return DEFAULT_TOLERANCE
+    return min(pitch * _PITCH_FRACTION, DEFAULT_TOLERANCE)
+
+
+def median_pitch(lines: list[list[Word]]) -> float | None:
+    """The median gap between consecutive line baselines, or `None` below two lines.
+
+    The RAW pitch — not `line_tolerance`'s scaled-and-capped derivative of it.
+    `line_tolerance` multiplies this by `_PITCH_FRACTION` and ceilings it at
+    `DEFAULT_TOLERANCE`, which answers "how close counts as the same line" but
+    is the wrong number for a caller that wants the actual line spacing itself:
+    `grammar.regions` scales its own absolute point constants (`NEAR_ANCHOR_BELOW`
+    and friends, B4/Task 8) by the page's real pitch, not by 40% of it. Extracted
+    so both measure "the median gap between two line baselines" the same way,
+    rather than `regions.py` re-deriving this arithmetic a second time.
+    """
+    if len(lines) < 2:
+        return None
     baselines = sorted(line[0].y0 for line in lines)
     gaps = [b - a for a, b in zip(baselines, baselines[1:])]
-    pitch = statistics.median(gaps)
-    return min(pitch * _PITCH_FRACTION, DEFAULT_TOLERANCE)
+    return statistics.median(gaps) if gaps else None

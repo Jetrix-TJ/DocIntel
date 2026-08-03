@@ -14,8 +14,13 @@ from docintel.core.errors import ValidationError
 from docintel.core.models import PageMeta, PageText, Word
 from docintel.grammar.regions import (
     ANCHOR_REQUIRED,
+    CELL_GAP,
+    LABEL_BLOCK_MAX,
+    NEAR_ANCHOR_BELOW,
+    NEAR_ANCHOR_RIGHT,
     NON_NARROWING,
     RESOLVERS,
+    TOTALS_BAND,
     Anchor,
     Span,
     is_known,
@@ -572,3 +577,127 @@ def test_label_block_needs_an_anchor() -> None:
 
 def test_label_block_narrows_so_a_bare_digit_pattern_is_legal_in_it() -> None:
     assert "label-block" not in NON_NARROWING
+
+
+# --------------------------------------------------------------------------
+# B4/Task 8 - the five absolute point constants scale with the page's own
+# measured line pitch, not a hard-coded assumption of 14pt.
+#
+# Each constant below is really a LINE COUNT (`constant / 14.0`), exactly the
+# ratio `LABEL_BLOCK_MAX`'s own comment states outright (140 / 14 == 10, its
+# "~10 lines"). A page leaded at 20pt must still reach that many lines; one
+# leaded at 6pt trivially already does (today's absolute is generous headroom
+# at a tight pitch, which is why the 6pt half of each test is a sanity check,
+# not the fix demonstration - the 20pt half is).
+#
+# `_pitch_fillers` gives each page enough OTHER lines, spaced at the exact
+# leading under test, well outside the region being probed, so the page's
+# measured pitch (`regions._pitch`) reads as that leading and not as
+# whatever incidental distance separates the anchor from the probe word
+# itself - four is `_MIN_LINES_FOR_PITCH`'s minimum for a genuine median (see
+# that constant's own comment in `regions.py`).
+# --------------------------------------------------------------------------
+
+
+def _pitch_fillers(leading: float, y0: float = 5000.0, x0: float = 30.0) -> list[tuple[str, float, float]]:
+    """Four lines, `leading` points apart, far from anything a test probes.
+
+    Far enough (`y0=5000` by default) that no resolver's own reach - even
+    after this task's scaling - includes them; their only job is to make the
+    page's measured pitch read as `leading`.
+    """
+    return [("filler", x0, y0 + i * leading) for i in range(4)]
+
+
+@pytest.mark.parametrize("leading,margin", [(6.0, 3.0), (20.0, 3.0)])
+def test_near_anchor_below_scales_with_the_pages_own_pitch(leading: float, margin: float) -> None:
+    """`NEAR_ANCHOR_BELOW` (40pt) is ~2.9 lines at the assumed 14pt pitch
+    (40 / 14). At 20pt leading, 2.9 lines is 57.1pt - comfortably past
+    today's fixed 40pt, which is exactly B4's failure mode: a looser document
+    truncates a region that should have kept going.
+    """
+    ratio = NEAR_ANCHOR_BELOW / 14.0
+    target_delta = ratio * leading - margin
+    words = [
+        ("FOR", 100.0, 300.0),
+        ("TARGET", 100.0, 300.0 + target_delta),
+        *_pitch_fillers(leading),
+    ]
+    p = _page(1, *words)
+    (span,) = resolve("near-anchor")((p,), _meta(p), _anchor("FOR", 100.0, 300.0))
+    assert "TARGET" in span.text, (leading, target_delta)
+
+
+@pytest.mark.parametrize("leading,margin", [(6.0, 5.0), (20.0, 5.0)])
+def test_totals_band_scales_with_the_pages_own_pitch(leading: float, margin: float) -> None:
+    """`TOTALS_BAND` (80pt) is ~5.7 lines at the assumed 14pt pitch. At 20pt
+    leading that is 114.3pt, past today's fixed 80pt - a figure printed a
+    few rows below its own `TOTAL` label on a looser document must not fall
+    outside the band searched for it.
+    """
+    ratio = TOTALS_BAND / 14.0
+    target_delta = ratio * leading - margin
+    words = [
+        ("TOTAL", 300.0, 300.0),
+        ("999.99", 300.0, 300.0 + target_delta),
+        *_pitch_fillers(leading),
+    ]
+    p = _page(1, *words)
+    (span,) = resolve("totals-block")((p,), _meta(p), None)
+    assert "999.99" in span.text, (leading, target_delta)
+
+
+@pytest.mark.parametrize("leading,margin", [(6.0, 1.0), (20.0, 1.0)])
+def test_label_block_max_scales_with_the_pages_own_pitch(leading: float, margin: float) -> None:
+    """`LABEL_BLOCK_MAX`'s own comment already says ~10 lines for its 140pt
+    ceiling (140 / 14 == 10 exactly). At 20pt leading that is 200pt; today's
+    fixed 140pt cuts the block off after 7 lines instead of 10.
+    """
+    ratio = LABEL_BLOCK_MAX / 14.0
+    target_delta = ratio * leading - margin
+    words = [
+        ("Bill", 30.0, 100.0), ("To", 60.0, 100.0),
+        ("TARGET", 30.0, 100.0 + target_delta),
+        *_pitch_fillers(leading),
+    ]
+    p = _page(1, *words)
+    (span,) = resolve("label-block")((p,), _meta(p), _anchor("Bill To", 30.0, 100.0))
+    assert "TARGET" in span.text, (leading, target_delta)
+
+
+@pytest.mark.parametrize("leading,margin", [(6.0, 1.0), (20.0, 1.0)])
+def test_cell_gap_scales_with_the_pages_own_pitch(leading: float, margin: float) -> None:
+    """`CELL_GAP` (12pt) is ~0.9 lines at the assumed 14pt pitch. A normal
+    inter-word gap within one cell grows with font size too, so at 20pt
+    leading a ~16pt gap between two words of the SAME value must not read as
+    a column break - today's fixed 12pt would split them.
+    """
+    ratio = CELL_GAP / 14.0
+    target_delta = ratio * leading - margin
+    balance_x1 = 100.0 + 6.0 * len("BALANCE")
+    words = [
+        ("BALANCE", 100.0, 400.0),
+        ("FORWARD", balance_x1 + target_delta, 400.0),
+        *_pitch_fillers(leading),
+    ]
+    p = _page(1, *words)
+    (span,) = resolve("same-cell")((p,), _meta(p), _anchor("BALANCE", 100.0, 400.0))
+    assert _words_in(span) == {"BALANCE", "FORWARD"}, (leading, target_delta)
+
+
+@pytest.mark.parametrize("leading,margin", [(6.0, 10.0), (20.0, 10.0)])
+def test_near_anchor_right_scales_with_the_pages_own_pitch(leading: float, margin: float) -> None:
+    """`NEAR_ANCHOR_RIGHT` (300pt) is ~21.4 lines at the assumed 14pt pitch.
+    At 20pt leading that is 428.6pt; today's fixed 300pt would drop a value
+    printed further right on a wider, larger-typeface table row.
+    """
+    ratio = NEAR_ANCHOR_RIGHT / 14.0
+    target_delta = ratio * leading - margin
+    words = [
+        ("FOR", 100.0, 300.0),
+        ("TARGET", 100.0 + target_delta, 300.0),
+        *_pitch_fillers(leading),
+    ]
+    p = _page(1, *words)
+    (span,) = resolve("near-anchor")((p,), _meta(p), _anchor("FOR", 100.0, 300.0))
+    assert "TARGET" in span.text, (leading, target_delta)

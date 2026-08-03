@@ -12,7 +12,7 @@ against the actual corpus measurements.
 from __future__ import annotations
 
 import docintel.core.geometry as geometry
-from docintel.core.geometry import line_tolerance
+from docintel.core.geometry import group_lines, line_tolerance, median_pitch
 from docintel.core.models import PageText, Word
 
 
@@ -70,6 +70,19 @@ def test_no_page_is_grouped_more_loosely_than_today() -> None:
 def test_a_single_line_falls_back_to_the_default() -> None:
     """No second baseline, so no pitch to measure."""
     assert line_tolerance(_words_at_pitch(14.0, rows=1)) == 3.0
+
+
+def test_median_pitch_is_the_raw_gap_not_line_tolerances_scaled_derivative() -> None:
+    """B4/Task 8: `grammar.regions` needs the actual line spacing to scale its
+    own absolute constants, not `line_tolerance`'s 40%-of-pitch-capped-at-3.0
+    value. `median_pitch` is the shared measurement both now delegate to."""
+    lines = group_lines(_words_at_pitch(20.0), geometry.DEFAULT_TOLERANCE)
+    assert median_pitch(lines) == 20.0
+
+
+def test_median_pitch_is_none_below_two_lines() -> None:
+    lines = group_lines(_words_at_pitch(14.0, rows=1), geometry.DEFAULT_TOLERANCE)
+    assert median_pitch(lines) is None
 
 
 def test_the_tolerance_is_computed_once_not_per_lines_call(monkeypatch) -> None:
