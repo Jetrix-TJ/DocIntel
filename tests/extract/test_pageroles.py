@@ -206,6 +206,43 @@ def test_balance_payable_and_now_due_resolve_a_page_2_case_without_cascading_to_
     assert solo_used_last_resort is False  # tier 1: totals label present, just no anchor
 
 
+def test_total_invoice_amount_is_a_totals_label_so_no_last_resort_guess_is_needed(caplog):
+    """Finding 3: the "Windstream Enterprise" bill template names its payable
+    `TOTAL INVOICE AMOUNT`, which the enumeration missed.
+
+    Two real documents (`Windstream_205577168_08222025_BILL.pdf`,
+    `Windstream_216713099_08272025_BILL.pdf`) print exactly that, and their
+    header stacks the identity label over two visual lines -
+
+        Account    Invoice        Total
+        Number     Date           Amount Due
+
+    - so `_ANCHOR_RE` finds no contiguous "Account Number" either. With
+    NEITHER signal recognized, both documents cascaded to the tier-2 last
+    resort and carried `page_role_fallback` on the record: a blind guess tag
+    on a page that in fact prints its total in 8pt caps.
+
+    `TOTAL INVOICE AMOUNT` is added under the enumeration's stated policy (see
+    the module docstring): an obvious, common invoice phrasing the list
+    happened to miss, observed printed on real documents - not a loosening of
+    the pattern into a general phrase detector. The cross-line identity label
+    is deliberately NOT addressed; recognizing labels split over two lines
+    would change the page-role signal for every document. Tier 1 covers this
+    case correctly on its own, and tier 1 is a reasoned inference rather than
+    a guess, so it carries no tag.
+    """
+    pages = (
+        _page(1, [["Account", "Invoice", "Total"], ["TOTAL", "INVOICE", "AMOUNT", "$4.82"]]),
+        _page(2, [NOISE_LINE]),
+    )
+    meta = _meta(list(pages))
+    with caplog.at_level(logging.WARNING, logger="docintel.extract.pageroles"):
+        new_meta, used_last_resort = pageroles.assign(pages, meta)
+    assert [m.role for m in new_meta] == ["primary", "supporting"]
+    assert used_last_resort is False, "tier 2 fired: TOTAL INVOICE AMOUNT was not recognized"
+    assert "last resort" not in caplog.text
+
+
 def test_page_2_is_primary_when_the_anchor_and_totals_first_appear_there():
     """A 3-page document with a cover/routing page 1 that carries neither
     signal, real content (anchor + totals) on page 2, and an unrelated

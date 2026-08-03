@@ -130,9 +130,23 @@ _MAX_ANCHOR_LINE_WORDS = 8
 # unusual phrasing an invoice uses WILL still miss both signals and cascade
 # to the tier-2 fallback; that is by design, and is exactly why the fallback
 # is tagged onto the record rather than only logged (see `assign`).
+#
+# "TOTAL INVOICE AMOUNT" joins the list on the same terms (Finding 3). It is
+# how the "Windstream Enterprise" bill template names its payable, printed on
+# `Windstream_205577168_08222025_BILL.pdf` and
+# `Windstream_216713099_08272025_BILL.pdf`. Note what is NOT being fixed
+# alongside it: the same template stacks its identity label over two visual
+# lines ("Account Invoice Total" / "Number Date Amount Due"), so `_ANCHOR_RE`
+# finds no contiguous "ACCOUNT NUMBER" on those pages and never will. Teaching
+# either check to read a label split across lines would change the page-role
+# signal for every document in the corpus, and it buys nothing here: with the
+# totals label recognized, tier 1 picks the right page on its own, and tier 1
+# is a reasoned inference from a signal that IS present, so it carries no tag.
+# What that leaves is the honest outcome - these pages resolve via tier 1,
+# not via a blind page-1 guess.
 _TOTALS_RE = re.compile(
     r"\b(TOTAL AMOUNT DUE|PLEASE PAY|BALANCE DUE|BALANCE PAYABLE|TOTAL DUE|"
-    r"NOW DUE|GRAND TOTAL|TOTAL AMT)\b"
+    r"NOW DUE|GRAND TOTAL|TOTAL AMT|TOTAL INVOICE AMOUNT)\b"
 )
 _MAX_TOTALS_LINE_WORDS = 12
 
