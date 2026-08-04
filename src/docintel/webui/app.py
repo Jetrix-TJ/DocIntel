@@ -8,8 +8,10 @@ and classify the resulting record into one of four screens.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
+import urllib.parse
 from collections.abc import Callable
 from typing import Any
 
@@ -113,6 +115,10 @@ def _view(record: dict[str, Any], filename: str, runner: Runner) -> dict[str, An
             for tag in record.get("confidence_modifiers") or []
         ],
         "duplicate_of": record.get("possible_duplicate_of"),
+        "record_json_url": (
+            "data:application/json;charset=utf-8,"
+            + urllib.parse.quote(json.dumps(record, indent=2))
+        ),
     }
 
     if record["disposition"] in ("skipped", "dead_letter"):

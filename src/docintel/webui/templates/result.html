@@ -60,5 +60,9 @@
     </table>
   {% endif %}
 
-  <p><a href="{{ url_for('upload_form') }}">Process another document</a></p>
+  <p>
+    <a download="{{ filename }}.json" href="{{ record_json_url }}">Download raw JSON</a>
+    &middot;
+    <a href="{{ url_for('upload_form') }}">Process another document</a>
+  </p>
 {% endblock %}

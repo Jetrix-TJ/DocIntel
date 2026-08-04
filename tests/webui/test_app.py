@@ -278,3 +278,24 @@ def test_result_template_renders_the_severe_modifier_class():
         )
     assert "modifier-severe" in html
     assert "roster" in html
+
+
+def test_view_record_json_url_round_trips_the_full_record():
+    import urllib.parse
+
+    from docintel.webui.app import _view
+
+    record = _base_record()
+    view = _view(record, "test.pdf", _DummyRunner())
+    prefix = "data:application/json;charset=utf-8,"
+    assert view["record_json_url"].startswith(prefix)
+    decoded = urllib.parse.unquote(view["record_json_url"][len(prefix):])
+    assert json.loads(decoded) == record
+
+
+def test_a_clean_document_offers_a_json_download_link():
+    app = create_app(runner_factory=_real_runner_factory())
+    resp = _upload(app.test_client(), DTSS_PDF)
+    body = resp.data.decode()
+    assert "Download raw JSON" in body
+    assert "data:application/json;charset=utf-8," in body
