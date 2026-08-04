@@ -206,3 +206,75 @@ def test_a_collapsed_persona_shows_which_declared_fields_are_missing():
     for field in kept:
         assert _label(field) in body
     assert f"{coverage['populated']}/{coverage['declared']}" in body
+
+
+class _DummyRunner:
+    stages: list = []
+
+
+def _base_record(**overrides):
+    record = {
+        "disposition": "processed",
+        "extraction_coverage": {"declared": 1},
+        "regen_flag": False,
+        "lane": "high",
+        "review_flag": False,
+        "fields": {"vendor_name": "Acme"},
+        "derived": {},
+        "confidence": {"vendor_name": 0.99},
+        "confidence_modifiers": [],
+        "possible_duplicate_of": None,
+        "sender_fingerprint": "acme|acme",
+        "doc_type": "invoice",
+        "extraction_rule_version": 1,
+    }
+    record.update(overrides)
+    return record
+
+
+def test_view_maps_bill_to_mismatch_to_its_specific_warning():
+    from docintel.webui.app import _view
+
+    view = _view(_base_record(confidence_modifiers=["bill_to_mismatch"]), "test.pdf", _DummyRunner())
+    tags = dict(view["modifiers"])
+    assert "bill_to_mismatch" in tags
+    assert "roster" in tags["bill_to_mismatch"].lower()  # names what disagreed, not just the tag
+
+
+def test_view_falls_back_to_a_humanized_label_for_unknown_modifiers():
+    from docintel.webui.app import _view
+
+    view = _view(_base_record(confidence_modifiers=["some_future_tag"]), "test.pdf", _DummyRunner())
+    assert view["modifiers"] == [("some_future_tag", "Some Future Tag")]
+
+
+def test_view_passes_through_possible_duplicate_of():
+    from docintel.webui.app import _view
+
+    view = _view(_base_record(possible_duplicate_of="webui-abc123"), "test.pdf", _DummyRunner())
+    assert view["duplicate_of"] == "webui-abc123"
+
+
+def test_result_template_renders_the_severe_modifier_class():
+    from docintel.webui.app import create_app
+
+    app = create_app(runner_factory=_real_runner_factory())
+    with app.app_context(), app.test_request_context():
+        from flask import render_template
+
+        html = render_template(
+            "result.html",
+            filename="test.pdf",
+            classification={"company": "Acme", "doc_type": "invoice", "persona": "acme|acme"},
+            coverage_rows=None,
+            modifiers=[("bill_to_mismatch", "The printed bill-to party does not match this vendor's known client roster.")],
+            duplicate_of=None,
+            record_json_url="data:application/json,{}",
+            state="extracted",
+            status="Needs review",
+            lane="low",
+            rows=[],
+            coverage_summary=None,
+        )
+    assert "modifier-severe" in html
+    assert "roster" in html

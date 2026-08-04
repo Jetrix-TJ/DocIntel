@@ -27,6 +27,16 @@ MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25MB
 # suffix so a new "*_basis" field added to a pack doesn't need this list touched.
 _PLUMBING_SUFFIXES = ("_basis", "_fingerprint", "_canonical")
 
+# Human-readable copy for confidence_modifiers tags (s7_gate.py / infer.py). Any
+# tag not listed here falls back to a humanized version of the raw tag name, so
+# a newly-added modifier doesn't require a template change to be visible.
+_MODIFIER_COPY = {
+    "bill_to_mismatch": (
+        "The printed bill-to party does not match this vendor's known client "
+        "roster — confirm this document is actually billed to us before approving payment."
+    ),
+}
+
 
 def default_runner_factory() -> Callable[[], Runner]:
     """Same wiring `docintel process` uses: real packs, vision fallback off."""
@@ -94,7 +104,16 @@ def _view(record: dict[str, Any], filename: str, runner: Runner) -> dict[str, An
     coverage = record.get("extraction_coverage") or {}
     values = {**(record.get("fields") or {}), **(record.get("derived") or {})}
     classification = _classification(record, coverage, values)
-    base = {"filename": filename, "classification": classification, "coverage_rows": None}
+    base = {
+        "filename": filename,
+        "classification": classification,
+        "coverage_rows": None,
+        "modifiers": [
+            (tag, _MODIFIER_COPY.get(tag, _label(tag)))
+            for tag in record.get("confidence_modifiers") or []
+        ],
+        "duplicate_of": record.get("possible_duplicate_of"),
+    }
 
     if record["disposition"] in ("skipped", "dead_letter"):
         return {

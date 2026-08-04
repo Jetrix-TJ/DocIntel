@@ -16,3 +16,7 @@ table.coverage tr.missing-required td { color: #b02a24; font-weight: 600; }
 table.coverage tr.missing-optional td { color: #888; }
 table.coverage tr.ok td { color: #1e7e34; }
 h2 { font-size: 1.05rem; margin-top: 1.6rem; }
+.modifiers { list-style: none; padding: 0; margin: 0.8rem 0; }
+.modifiers li { padding: 0.5rem 0.8rem; border-radius: 4px; margin-bottom: 0.4rem; }
+.modifier-severe { background: #fde2e1; border: 1px solid #f5a9a6; color: #a12822; font-weight: 600; }
+.modifier-note { background: #f1f1f1; border: 1px solid #ddd; color: #555; }

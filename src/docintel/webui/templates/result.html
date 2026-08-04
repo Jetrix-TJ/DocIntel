@@ -8,6 +8,18 @@
     <dt>Persona used</dt><dd>{{ classification.persona }}</dd>
   </dl>
 
+  {% if modifiers %}
+    <ul class="modifiers">
+      {% for tag, message in modifiers %}
+        <li class="{{ 'modifier-severe' if tag == 'bill_to_mismatch' else 'modifier-note' }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if duplicate_of %}
+    <p class="stop">Possible duplicate of {{ duplicate_of }}.</p>
+  {% endif %}
+
   {% if state == "no_persona" %}
     <p class="stop">No extraction rules exist yet for this document.</p>
 
