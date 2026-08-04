@@ -1,0 +1,9 @@
+{% extends "_base.html" %}
+{% block content %}
+  <p>Upload one PDF invoice or bill. It will be run through the real extraction
+     pipeline (rule-engine only - the AI vision fallback is off).</p>
+  <form method="post" action="{{ url_for('process') }}" enctype="multipart/form-data">
+    <input type="file" name="pdf" accept=".pdf" required>
+    <button type="submit">Process</button>
+  </form>
+{% endblock %}

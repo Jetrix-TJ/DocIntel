@@ -1,0 +1,52 @@
+{% extends "_base.html" %}
+{% block content %}
+  <p class="filename">{{ filename }}</p>
+
+  <dl class="classification">
+    <dt>Company</dt><dd>{{ classification.company }}</dd>
+    <dt>Document type</dt><dd>{{ classification.doc_type }}</dd>
+    <dt>Persona used</dt><dd>{{ classification.persona }}</dd>
+  </dl>
+
+  {% if state == "no_persona" %}
+    <p class="stop">No extraction rules exist yet for this document.</p>
+
+  {% elif state == "collapsed" %}
+    <p class="stop">Rules exist for this vendor but aren't matching this document
+       &mdash; may need updating.</p>
+
+  {% elif state == "failed" %}
+    <p class="stop">Could not process this document: {{ reason }}</p>
+
+  {% elif state == "extracted" %}
+    <p class="badge badge-{{ 'ok' if status == 'Auto-approved' else 'review' }}">
+      {{ status }}{% if lane %} (lane: {{ lane }}){% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for name, value in rows %}
+          <tr><td>{{ name }}</td><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if coverage_rows is not none %}
+    <h2>Expected vs extracted ({{ coverage_summary }})</h2>
+    <table class="coverage">
+      <thead><tr><th>Field</th><th>Required</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for name, required, extracted in coverage_rows %}
+          <tr class="{{ 'ok' if extracted else ('missing-required' if required else 'missing-optional') }}">
+            <td>{{ name }}</td>
+            <td>{{ 'Required' if required else 'Optional' }}</td>
+            <td>{{ 'Extracted' if extracted else 'Missing' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <p><a href="{{ url_for('upload_form') }}">Process another document</a></p>
+{% endblock %}

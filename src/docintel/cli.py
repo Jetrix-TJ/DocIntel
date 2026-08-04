@@ -104,6 +104,32 @@ def _cmd_replay_gold(args: argparse.Namespace) -> int:
     return 0 if card["summary"]["failed"] == 0 else 1
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    """Start the local web UI. Lazy-imports flask: the default install has no
+    web dependency, and `docintel process`/`replay-gold` must keep working
+    without it. Install with `pip install 'docintel[ui]'` to use this command.
+    """
+    try:
+        from docintel.webui.app import create_app
+    except ModuleNotFoundError as exc:
+        print(
+            "The web UI needs flask, which isn't installed. "
+            "Run: pip install 'docintel[ui]'",
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from exc
+
+    app = create_app()
+    url = f"http://127.0.0.1:{args.port}/"
+    if not args.no_browser:
+        import webbrowser
+
+        webbrowser.open(url)
+    print(f"Serving on {url} (Ctrl+C to stop)")
+    app.run(host="127.0.0.1", port=args.port, debug=False)
+    return 0
+
+
 def _add_vision_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--vision",
@@ -146,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--json", action="store_true")
     _add_vision_args(g)
     g.set_defaults(func=_cmd_replay_gold)
+
+    s = sub.add_parser("serve", help="start the local web UI (upload one PDF, see the result)")
+    s.add_argument("--port", type=int, default=5000)
+    s.add_argument("--no-browser", action="store_true", help="don't auto-open a browser tab")
+    s.set_defaults(func=_cmd_serve)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

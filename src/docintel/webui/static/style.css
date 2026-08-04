@@ -1,0 +1,18 @@
+body { font-family: system-ui, sans-serif; max-width: 640px; margin: 3rem auto; color: #222; }
+h1 { font-size: 1.4rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ddd; }
+th { color: #555; font-weight: 600; }
+.filename { color: #666; font-size: 0.9rem; }
+.classification { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.8rem; margin: 0.8rem 0; }
+.classification dt { color: #555; font-weight: 600; }
+.classification dd { margin: 0; }
+.stop { padding: 0.8rem; background: #fff3cd; border: 1px solid #ffe08a; border-radius: 4px; }
+.error { padding: 0.8rem; background: #fde2e1; border: 1px solid #f5a9a6; border-radius: 4px; }
+.badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-weight: 600; }
+.badge-ok { background: #d4edda; color: #1e7e34; }
+.badge-review { background: #fff3cd; color: #856404; }
+table.coverage tr.missing-required td { color: #b02a24; font-weight: 600; }
+table.coverage tr.missing-optional td { color: #888; }
+table.coverage tr.ok td { color: #1e7e34; }
+h2 { font-size: 1.05rem; margin-top: 1.6rem; }
