@@ -91,8 +91,11 @@ def test_a_clean_document_shows_extracted_fields_and_auto_approved():
     resp = _upload(app.test_client(), DTSS_PDF)
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "699" in body
-    assert "D.T.S.S" in body
+    # Specifically inside the field table's <td> markup, not just anywhere on the
+    # page - the record_json_url data: URI also contains these characters, so a
+    # bare substring check would pass even with an empty field table.
+    assert "<td>699.00</td>" in body
+    assert "<td>D.T.S.S., Inc.</td>" in body
     assert "Auto-approved" in body
 
 
@@ -106,13 +109,16 @@ def test_a_clean_document_shows_company_doc_type_and_persona_used():
     assert "v1" in body  # the persona's rule_version
 
 
-
 def test_a_clean_document_shows_per_field_confidence():
     app = create_app(runner_factory=_real_runner_factory())
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
     assert "Confidence" in body  # column header
-    assert "0.99" in body  # DTSS's total_printed/balance_due land at 0.99
+    # Specifically inside the field table's <td> markup, not just anywhere on the
+    # page - the record_json_url data: URI also contains "0.99", so a bare
+    # substring check would pass even with an empty field table.
+    assert "<td>0.99</td>" in body  # DTSS's total_printed/balance_due land at 0.99
+
 
 def test_a_non_pdf_is_rejected_before_the_pipeline_runs():
     app = create_app(runner_factory=_real_runner_factory())
@@ -278,6 +284,55 @@ def test_result_template_renders_the_severe_modifier_class():
         )
     assert "modifier-severe" in html
     assert "roster" in html
+
+
+def test_result_template_renders_the_note_modifier_class():
+    from docintel.webui.app import create_app
+
+    app = create_app(runner_factory=_real_runner_factory())
+    with app.app_context(), app.test_request_context():
+        from flask import render_template
+
+        html = render_template(
+            "result.html",
+            filename="test.pdf",
+            classification={"company": "Acme", "doc_type": "invoice", "persona": "acme|acme"},
+            coverage_rows=None,
+            modifiers=[("some_future_tag", "Some Future Tag")],
+            duplicate_of=None,
+            record_json_url="data:application/json,{}",
+            state="extracted",
+            status="Needs review",
+            lane="low",
+            rows=[],
+            coverage_summary=None,
+        )
+    assert "modifier-note" in html
+
+
+def test_result_template_renders_the_duplicate_banner_without_the_opaque_id():
+    from docintel.webui.app import create_app
+
+    app = create_app(runner_factory=_real_runner_factory())
+    with app.app_context(), app.test_request_context():
+        from flask import render_template
+
+        html = render_template(
+            "result.html",
+            filename="test.pdf",
+            classification={"company": "Acme", "doc_type": "invoice", "persona": "acme|acme"},
+            coverage_rows=None,
+            modifiers=[],
+            duplicate_of="webui-x",
+            record_json_url="data:application/json,{}",
+            state="extracted",
+            status="Needs review",
+            lane="low",
+            rows=[],
+            coverage_summary=None,
+        )
+    assert "Possible duplicate of a document already processed in this session." in html
+    assert "webui-x" not in html
 
 
 def test_view_record_json_url_round_trips_the_full_record():
