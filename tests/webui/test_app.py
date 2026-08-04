@@ -106,6 +106,14 @@ def test_a_clean_document_shows_company_doc_type_and_persona_used():
     assert "v1" in body  # the persona's rule_version
 
 
+
+def test_a_clean_document_shows_per_field_confidence():
+    app = create_app(runner_factory=_real_runner_factory())
+    resp = _upload(app.test_client(), DTSS_PDF)
+    body = resp.data.decode()
+    assert "Confidence" in body  # column header
+    assert "0.99" in body  # DTSS's total_printed/balance_due land at 0.99
+
 def test_a_non_pdf_is_rejected_before_the_pipeline_runs():
     app = create_app(runner_factory=_real_runner_factory())
     client = app.test_client()

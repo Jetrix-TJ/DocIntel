@@ -127,8 +127,9 @@ def _view(record: dict[str, Any], filename: str, runner: Runner) -> dict[str, An
         else "Needs review"
     )
 
+    confidence = record.get("confidence") or {}
     rows = sorted(
-        (_label(name), value)
+        (_label(name), value, confidence.get(name))
         for name, value in values.items()
         if value is not None and not name.endswith(_PLUMBING_SUFFIXES)
     )

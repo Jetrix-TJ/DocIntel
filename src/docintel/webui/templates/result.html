@@ -23,10 +23,10 @@
       {{ status }}{% if lane %} (lane: {{ lane }}){% endif %}
     </p>
     <table>
-      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <thead><tr><th>Field</th><th>Value</th><th>Confidence</th></tr></thead>
       <tbody>
-        {% for name, value in rows %}
-          <tr><td>{{ name }}</td><td>{{ value }}</td></tr>
+        {% for name, value, confidence in rows %}
+          <tr><td>{{ name }}</td><td>{{ value }}</td><td>{{ confidence if confidence is not none else '—' }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
