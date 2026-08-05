@@ -69,3 +69,49 @@ def test_reads_a_different_printed_bill_to_name() -> None:
     """The whole point: a name that is NOT on the roster must still be read,
     or bill_to_mismatch can never fire."""
     assert _extract_bill_to_name("SOME OTHER COMPANY LLC") == "SOME OTHER COMPANY LLC"
+
+
+def _bill_to_page_with_same_row_label(company: str) -> PageText:
+    """Reproduces the real gold PDF's hazard: `Bill To:` shares its row with an
+    unrelated `Location:` label 265pt to the right (real geometry: `Bill`/`To:`
+    at x0=90.0/104.6, `Location:` at x0=355.1, all at y0=135.7), well inside
+    `near-anchor`'s 300pt horizontal reach. `pattern: "text"` returns the first
+    non-empty line-candidate in the region - which is the anchor's own row,
+    still carrying `Location:` after `Bill`/`To:` are excluded as the matched
+    anchor - so it reads the neighbouring label instead of the customer name
+    on the row below. `pattern: "text_block"`'s column-cut logic is what
+    excludes `Location:` from the block. This is the actual bug that
+    `_bill_to_page` above (single label, no same-row neighbour) cannot catch."""
+    words = [
+        Word(text="Bill", x0=90.0, y0=135.7, x1=104.6, y1=145.7),
+        Word(text="To:", x0=104.6, y0=135.7, x1=118.0, y1=145.7),
+        Word(text="Location:", x0=355.1, y0=135.7, x1=391.0, y1=145.7),
+        *[
+            Word(text=tok, x0=90.0 + i * 60.0, y0=169.2, x1=90.0 + i * 60.0 + 55.0, y1=179.2)
+            for i, tok in enumerate(company.split())
+        ],
+    ]
+    return PageText(page_number=1, words=tuple(words), width=WIDTH, height=HEIGHT, source="native")
+
+
+def test_does_not_read_a_same_row_neighbouring_label() -> None:
+    """The real gold PDF prints `Bill To:` and `Location:` on the same row,
+    265pt apart - both inside near-anchor's 300pt horizontal reach. A selector
+    using `pattern: "text"` (the brief's original proposal, and Lumen's
+    shipped shape) reads `Location:` off that shared row instead of the
+    customer name printed on the line below. This is what forced the switch
+    to `pattern: "text_block"` (whose column-cut logic drops the neighbouring
+    label). Reverting to `pattern: "text"` must fail this test."""
+    persona = parse_persona(
+        {
+            "sender_fingerprint": "x|y", "doc_type": "standard_invoice",
+            "rule_version": "v1", "status": "draft",
+            "field_selectors": [_upak_bill_to_name_selector()],
+            "layout_fingerprint": {},
+        }
+    )
+    page = _bill_to_page_with_same_row_label("NORTHSTAR RECYCLING COMPANY")
+    ctx = Executor(persona).apply(_ctx(page))
+    value = ctx.extracted.get("bill_to_name")
+    assert value == "NORTHSTAR RECYCLING COMPANY"
+    assert "Location:" not in (value or "")
