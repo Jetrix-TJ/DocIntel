@@ -3,7 +3,7 @@
   "status": "active",
   "sender_fingerprint": "northstar|federal_recycling",
   "doc_type": "contra_invoice",
-  "notes": "A contra: every commodity rate is negative. Flattened annotations carry human corrections OCR cannot distinguish from print (F3), so this document is forced to review whatever the confidence. The letterhead and the remittance payee are different legal names (F5).",
+  "notes": "A contra: every commodity rate is negative. Flattened annotations carry human corrections OCR cannot distinguish from print (F3), so this document is forced to review whatever the confidence. The letterhead and the remittance payee are different legal names (F5). No vendor_address selector, deliberately: the address block (7935 Clayton Rd / St. Louis, MO 63117, x0=38.9) sits in a different visual column than everything printed above it on this OCR'd page (the letterhead tagline 'Est. 1914 No. 1330123' is at x0=111.2, ~72pt to the right), and label-block/near-anchor's LEFT tolerance (12pt) cannot bridge that gap - no anchor exists within reach that is not itself part of the address. Confirmed no regression: the old anchor-is-value selector (anchored on the address's own first line, 'anchor is the value' per GUARDRAIL 9) was already failing this assertion before removal - the anchor's own line ('7935 Clayton Rd') was correctly excluded as the anchor's own words, but the block ran on past the address into the phone number line, producing 'St. Louis, MO 63117, 281-580-1242' against gold's '7935 Clayton Rd, St. Louis, MO 63117'. Deleted rather than shipped restating its own answer, same remediation as edco/bill_to_attention and upak/vendor_name.",
   "field_selectors": [
     {
       "field": "vendor_name",
@@ -70,16 +70,6 @@
       "allow_empty_cells": true,
       "require_amount": true,
       "stop_at_subtotal": true
-    },
-    {
-      "field": "vendor_address",
-      "anchor": "7935 Clayton Rd",
-      "region": "label-block",
-      "pattern": "text_block",
-      "adjust": [
-        "join_lines_comma"
-      ],
-      "required": false
     },
     {
       "field": "service_location",

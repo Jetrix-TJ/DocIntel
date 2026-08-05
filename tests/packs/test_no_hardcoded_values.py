@@ -53,19 +53,39 @@ NAMED_PATTERNS = frozenset({
 # beside the bill-to column, so it is the only occurrence that does not begin its
 # line), and the selector now anchors on `EDCO WASTE & RECYCLING SERVICE`.
 #
-# The two that remain are blocked on the column boundary, not on authoring: the
-# line above each address is a payee name that also appears EARLIER on the page,
-# and reaching the right occurrence leaves the fixed x-window contaminating the
-# block. They clear when that boundary does.
-# `upak/vendor_name` is the one to read the docstring of `test_scorecard.py` about:
-# it is a DEAD selector (`same-row` + anchor-equals-value leaves an empty span)
-# whose assertion passes only through the scorecard's `derived` fallback, and any
-# working replacement would currently turn a passing assertion red. This guardrail
-# found it independently, which is a useful sign the check is measuring something.
-ANCHOR_IN_VALUE_DEBT = frozenset({
-    ("federal_recycling", "vendor_address"),
-    ("upak", "vendor_name"),
-})
+# `upak/vendor_name` CLEARED. It was a DEAD selector (`same-row` + anchor-equals-
+# value leaves an empty span) whose assertion passed only through the scorecard's
+# `derived` fallback - this guardrail found it independently of that, which is a
+# useful sign the check is measuring something. No working selector exists to
+# replace it with: the printed name is page 1's very first line, wider than every
+# closed-vocabulary top region can capture without truncating it (`top-left` cuts
+# off "LTD"), and there is nothing above it on the page to anchor a `label-block`
+# or `near-anchor` read on instead. Deleted rather than shipped restating its own
+# answer - the same remediation already used for `edco/bill_to_attention` and
+# `complete_beverage/bill_to_attention` below. `derived.vendor_name` still supplies
+# the correct value via `resolve_vendor_alias`'s `DISPLAY_NAMES` table (not that
+# table's intended case - the print here is readable, just unreachable by any
+# region - but the honest outcome given the geometry).
+#
+# `federal_recycling/vendor_address` CLEARED. Confirmed genuinely blocked on the
+# column boundary, not on authoring, before removing it: the address block
+# ('7935 Clayton Rd' / 'St. Louis, MO 63117', x0=38.9) sits in a different visual
+# column from everything printed above it on this OCR'd page - the nearest
+# candidate anchor ('Est. 1914 No. 1330123', a letterhead tagline) is at x0=111.2,
+# ~72pt to the right, and both `label-block` and `near-anchor`'s LEFT tolerance
+# (`LABEL_BLOCK_LEFT`/`NEAR_ANCHOR_LEFT`, both 12pt) cannot bridge that gap - the
+# resolved span never reaches past the anchor's own line. Widening either constant
+# to reach it would risk exactly the "fixed x-window contaminating the block"
+# failure this project has hit before (Task 5/8): a wider LEFT tolerance pulls in
+# a neighbouring column's content on some OTHER document, for every persona that
+# uses either region, not just this one. The old anchor-is-value selector (anchor
+# on the address's own first line) was independently confirmed ALREADY FAILING
+# this assertion before removal - it excluded 'Address' but ran the block on into
+# the phone number line, producing 'St. Louis, MO 63117, 281-580-1242' against
+# gold's '7935 Clayton Rd, St. Louis, MO 63117' - so clearing it costs no passing
+# assertion. Deleted rather than shipped restating its own answer, same
+# remediation as `edco/bill_to_attention` and `upak/vendor_name` above.
+ANCHOR_IN_VALUE_DEBT: frozenset[tuple[str, str]] = frozenset()
 
 # (persona, field) where the pattern spells out the answer.
 #
