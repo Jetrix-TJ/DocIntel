@@ -66,8 +66,8 @@ TOTALS_LEAD = 2.0           # a hair above the label line, so the label is insid
 NEAR_ANCHOR_RIGHT = 300.0   # points right of the anchor
 # ...and a little to the LEFT. Section 2 says "within 300pt right of", but a value
 # printed BELOW its label is left-aligned with it, and layout jitter routinely puts
-# it a point or two further left. Strict equality dropped `Northstar Recycling
-# Company, LLC` from under its own `Bill To` label. One cell gap is enough.
+# it a point or two further left. Strict equality dropped a corpus client's full
+# legal name from under its own `Bill To` label. One cell gap is enough.
 NEAR_ANCHOR_LEFT = 12.0
 NEAR_ANCHOR_RIGHT_PITCHES = NEAR_ANCHOR_RIGHT / _ASSUMED_PITCH   # ~21.4 lines
 # NEAR_ANCHOR_RIGHT is a HORIZONTAL reach, scaled here by VERTICAL line pitch

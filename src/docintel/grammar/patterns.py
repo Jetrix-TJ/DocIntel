@@ -12,8 +12,9 @@ Two design notes worth keeping:
   machinery already knows how to price. Raising would turn a routine miss into a
   pipeline error.
 * `currency` deliberately requires a decimal part. That single restriction is
-  what keeps `123142812RT0001` (an H.S.T. number) and `4670` (a quantity) from
-  reading as money next to a `Total` anchor - the F14 anchor hazard.
+  what keeps a tax-registration number (`999999999XX0000`-shaped) and a bare
+  quantity (`1234`) from reading as money next to a `Total` anchor - the F14
+  anchor hazard.
 """
 
 from __future__ import annotations
@@ -85,8 +86,9 @@ def _integer(raw: str) -> int | None:
 def _decimal(raw: str) -> Decimal | None:
     """Requires a decimal point, and preserves the printed precision.
 
-    `83.7900` stays four places: the printed precision is evidence about the
-    document, and Decimal is the only way to keep it without float drift.
+    A unit price printed `12.3400` stays four places: the printed precision is
+    evidence about the document, and Decimal is the only way to keep it without
+    float drift.
     """
     m = _DECIMAL.match(raw or "")
     if m is None:
@@ -110,7 +112,8 @@ def _date(raw: str) -> DateResult | None:
 def _date_loose(raw: str) -> DateResult | None:
     """Lenient: keeps the raw text when it cannot be parsed (F9).
 
-    Centracom's due date is printed as `25TH OF THE MONTH`. Recording that
+    One corpus vendor prints its due date as an ordinal day-of-month phrase
+    rather than a calendar date (e.g. `Nth OF THE MONTH`). Recording that
     verbatim with `parsed: False` is the honest answer; inventing a calendar
     date from it would be a fabrication the reviewer could not see.
     """

@@ -231,7 +231,7 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
 
     **Why a roster rather than a selector.** Two of the four telecom templates
     print their bill-to with no label anywhere near it - no `Bill To:`, no
-    `Account Name:`, nothing - so there is no anchor for a selector to hang on.
+    account-name caption, nothing - so there is no anchor for a selector to hang on.
     That absence is why those personas carried the client's name as their pattern,
     which meant an unseen client returned nothing. The roster moves the string out
     of the per-document rule into the pack's business registry: one entry serves
@@ -239,10 +239,10 @@ def resolve_bill_to_alias(ctx: JobContext) -> JobContext:
     rather than four rule rewrites.
 
     **It returns the name AS PRINTED.** Each vendor renders the same party its own
-    way - `Northstar Recycling`, `Northstar Recycling Company LLC` and `NorthStar
-    Recycling Company, LLC` are one AP department - and every gold label asserts
-    the rendering on its own document. Canonicalising here would be a second,
-    quieter kind of hardcoding.
+    way - `Example Client`, `Example Client Company LLC` and `ExampleClient
+    Company, LLC` would be one AP department - and every gold label asserts the
+    rendering on its own document. Canonicalising here would be a second, quieter
+    kind of hardcoding.
 
     **An unknown party stays empty.** `core.coverage` escalates a missing required
     field to review, which is the right answer for a newly onboarded client:
@@ -295,10 +295,10 @@ def _party_matches(
     """`(heads, mentions)`: the lines `needle` STARTS, and the ones it merely sits on.
 
     A party name printed mid-line is a mention; at the head of a line it is the top
-    of a block. Centracom prints both - `Account Name: CLYDE COMPANIES` in the
-    summary table, whose neighbours below are `Bill Date:` and `Due Date:`, and the
-    same party again heading the remittance block, which is the one with an address
-    under it. Reading order alone picks the wrong one, every time.
+    of a block. One corpus telecom bill prints both - the party mid-line in a
+    labelled summary-table cell, whose neighbours below are the bill and due dates,
+    and the same party again heading the remittance block, which is the one with an
+    address under it. Reading order alone picks the wrong one, every time.
 
     **Two callers, two different decisions, one split.** `_candidate_lines` uses it
     to choose which occurrence an address block hangs under; `_roster_match` uses it
@@ -391,24 +391,27 @@ def _pack_bill_to_roster(ctx: JobContext) -> tuple[str, ...]:
 def _roster_match(ctx: JobContext, roster: tuple[str, ...]) -> str | None:
     """The longest roster name that HEADS a line on a primary page, as printed.
 
-    Longest first because `Northstar Recycling` is a prefix of `Northstar
-    Recycling Company, LLC`; taking the shorter one would truncate the party on
-    every vendor printing the full legal name. The head test is applied per
+    Longest first because a roster may hold both a short trading name and the
+    full legal name it is a prefix of; taking the shorter one would truncate the
+    party on every vendor printing the full form. The head test is applied per
     roster entry rather than once to a winner already chosen on length, or a long
     entry seen only mid-line would still beat a short one heading its own block.
 
     **Why the head requirement.** This rung answers with a name read OFF the
     roster, so `bill_to_matches_roster` can never disagree with it - the printed
-    rung is the only one that can raise `bill_to_mismatch`. Five personas
-    (`comcast`, `windstream`, `edco`, `upak`, `veritiv`) declare no
-    `bill_to_name` selector, so every one of their documents takes this rung with
-    no wrong-inbox check behind it. A whole-page `re.search` therefore turned any
-    passing mention of a client into that client being billed: a Veritiv-template
-    invoice addressed elsewhere prints `SHEARER'S BREWSTER O NORTHSTAR RECYCLING
-    COMPANY LLC` as a routing line, and a Windstream batch billed to a different
-    company routed `high` with the roster name on the record and no signal
-    raised. Requiring the name to start a line makes the rung read block headers
-    - which is what a bill-to party is - instead of prose.
+    rung is the only one that can raise `bill_to_mismatch`. That mattered most
+    when five personas (`comcast`, `windstream`, `edco`, `upak`, `veritiv`)
+    declared no `bill_to_name` selector at all, so every one of their documents
+    took this rung with no wrong-inbox check behind it. All five carry a selector
+    as of this branch and the printed rung answers first where it matches, but
+    this rung is still what runs whenever a selector misses, so the head test
+    stays load-bearing. A whole-page `re.search` turned any passing mention of a
+    client into that client being billed: one corpus vendor's template prints a
+    routing line that merely NAMES the client on an invoice addressed elsewhere,
+    and a telecom batch billed to a different company routed `high` with the
+    roster name on the record and no signal raised. Requiring the name to start a
+    line makes the rung read block headers - which is what a bill-to party is -
+    instead of prose.
 
     An unmatched document returns `None`, which leaves `bill_to_name` empty and
     lets `core.coverage` escalate it. That is the intended outcome for a genuinely
@@ -418,11 +421,11 @@ def _roster_match(ctx: JobContext, roster: tuple[str, ...]) -> str | None:
     line" expressible at all - and it costs the one thing flat text bought: a
     party name wrapped across two printed lines is no longer matched in full. In
     practice a shorter roster rendering heading the first line answers instead
-    (U-PAK prints `NORTHSTAR RECYCLING COMPANY` / `LLC` across a two-column
-    interleave and already resolved that way). `\\s+` between tokens is kept
-    because a line's own words may be joined by more than one space; everything
-    else is escaped - a roster entry is a company name, not a pattern the pack
-    author gets to write.
+    (one corpus vendor wraps the trailing `LLC` of the legal name onto its own
+    line across a two-column interleave and already resolved that way). `\\s+`
+    between tokens is kept because a line's own words may be joined by more than
+    one space; everything else is escaped - a roster entry is a company name, not
+    a pattern the pack author gets to write.
     """
     if not roster:
         return None

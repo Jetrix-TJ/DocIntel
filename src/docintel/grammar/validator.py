@@ -250,8 +250,8 @@ def _check_literal_capture(pattern: str, region: str, anchor: Any, where: str) -
 def _check_anchors_are_not_values(selectors: Sequence[Any]) -> None:
     """V14, second half: an anchor may not restate a value the persona captures.
 
-    An anchor is a literal string by nature, so `Account Name:` and
-    `CLYDE COMPANIES` are indistinguishable here - with one exception. If the same
+    An anchor is a literal string by nature, so a printed label and the party name
+    printed beside it are indistinguishable here - with one exception. If the same
     persona also captures that exact string as a field value, the persona has
     itself declared the string to be a value, and anchoring on it keys the rule to
     one document exactly as a literal pattern would.
