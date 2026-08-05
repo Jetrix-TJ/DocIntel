@@ -1,0 +1,145 @@
+{
+  "gold_id": "northstar-edco-819387",
+  "source_file": "_AP Invoice 819387AUG25     Edco Waste & Recycling Services Inc. 2628.44000.pdf",
+  "pack": "northstar-recycling",
+  "labelled_by": "generalization second-sample pass, 2026-08-04",
+  "teaches": [
+    "F17"
+  ],
+  "notes": "Second real Edco sample, distinct account (819387 vs 077087) and a distinct account-suffix letter (-3R vs -3A), added to confirm the vendor_account_number generalization (063df59) and the mid_line remit_address fix (727b25c) hold on data neither fix was tuned against. No F1 trap here: a same-statement PAYMENT -- THANK YOU (08/27, 3380.67) exactly offsets BALANCE FORWARD (3380.67), so the carried balance is 0.00 and amount_payable == total_printed == current_charges, no ambiguity. This document surfaces three pre-existing, already-tracked Edco extraction gaps (same class as northstar-edco-077087's known failures, not new bugs from this label): (1) the persona has no selector for the payment line, so fields.payments_credits will read null against this label's -3380.67; (2) the persona has no line-item ladder at all, so line_items.count/amounts will read 0 against this label's 11 rows; (3) bill_to_attention is not separated from bill_to_address (folded together in the real record), same as 077087. A fourth, NEW observation: expected_routing.review_flag is asserted false because the arithmetic closes cleanly (validate_gold.py's closure rule), but the real pipeline currently returns review_flag=true / lane=medium because total_printed's selector confidence (0.90) sits below Edco's own 0.95 threshold for that field (packs/northstar/thresholds.py) - a confidence-calibration gap, not a page-role issue, and not something this label authoring fixes.",
+  "classification": {
+    "doc_type": "standard_invoice",
+    "tags": [
+      "page_role_fallback"
+    ],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "EDCO Waste & Recycling Service",
+    "vendor_address": "224 S Las Posas Rd, San Marcos, CA 92078",
+    "vendor_phone": "(760) 744-2700",
+    "remit_payee": "EDCO Waste & Recycling Service",
+    "remit_address": "P.O. Box 5488, Buena Park, CA 90622-5488",
+    "vendor_account_number": "25-3R 819387",
+    "vendor_account_number_normalized": "253R819387",
+    "bill_date": "2025-08-31",
+    "bill_to_name": "Northstar Recycling",
+    "bill_to_attention": "Hunter Industr",
+    "bill_to_address": "PO Box 188, East Longmeadow, MA 01028",
+    "service_location": "Hunter Industries, 1940 Diamond St, San Marcos, CA 92069",
+    "prior_balance": 3380.67,
+    "current_charges": 2628.44,
+    "total_printed": 2628.44,
+    "payments_credits": -3380.67,
+    "currency": "USD",
+    "currency_basis": "pack_default",
+    "prior_balance_basis": "gross",
+    "prior_balance_basis_note": "BALANCE FORWARD 3380.67 is fully offset by a same-statement PAYMENT -- THANK YOU of 3380.67 dated 08/27, so the carried balance is 0.00 and this statement closes on current_charges alone."
+  },
+  "line_items": [
+    {
+      "description": "BALANCE FORWARD",
+      "balance": 3380.67
+    },
+    {
+      "date": "08 27",
+      "description": "PAYMENT -- THANK YOU",
+      "payments": 3380.67
+    },
+    {
+      "date": "08 07",
+      "description": "900096 LF 4.37 TONS",
+      "charges": 334.57
+    },
+    {
+      "date": "08 07",
+      "description": "900096 HAUL 40 YD",
+      "charges": 299.00
+    },
+    {
+      "date": "08 14",
+      "description": "900097 HAUL 40 YD",
+      "charges": 299.00
+    },
+    {
+      "date": "08 14",
+      "description": "900097 LF 4.41 TONS",
+      "charges": 337.63
+    },
+    {
+      "date": "08 21",
+      "description": "900098 LF 4.90 TONS",
+      "charges": 375.14
+    },
+    {
+      "date": "08 21",
+      "description": "900098 HAUL 40 YD",
+      "charges": 299.00
+    },
+    {
+      "date": "08 28",
+      "description": "900099 LF 5.03 TONS",
+      "charges": 385.10
+    },
+    {
+      "date": "08 28",
+      "description": "900099 HAUL 40 YD",
+      "charges": 299.00
+    },
+    {
+      "description": "CURRENT CHARGES:",
+      "charges": 2628.44,
+      "balance": 2628.44
+    }
+  ],
+  "reference_list": [],
+  "reference_list_complete": true,
+  "scanline": {
+    "raw": "25218193871002628446",
+    "encodes_account": "819387",
+    "encodes_amount": 2628.44,
+    "binds_to": [
+      "total_printed",
+      "vendor_account_number"
+    ],
+    "note": "Same encoding shape as northstar-edco-077087's scanline"
+  },
+  "derived": {
+    "amount_payable": 2628.44,
+    "payable_basis": "total_printed"
+  },
+  "assertions": [
+    {
+      "check": "balance_composition",
+      "expr": "3380.67 + -3380.67 + 2628.44",
+      "equals": 2628.44
+    },
+    {
+      "check": "amount_payable",
+      "equals": 2628.44,
+      "note": "carried balance is 0.00 (payment fully offsets prior), so payable is the printed total, not current_charges alone"
+    },
+    {
+      "check": "payable_basis",
+      "equals": "total_printed"
+    },
+    {
+      "check": "scanline_agrees_with_printed_total",
+      "equals": 2628.44
+    },
+    {
+      "check": "review_not_needed",
+      "equals": false,
+      "note": "closure verified (payment exactly offsets prior balance), so the derivation is trustworthy by policy - see top-level notes for why the real pipeline still routes this to review today"
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}
