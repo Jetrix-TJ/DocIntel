@@ -22,3 +22,7 @@ var/
 
 # OS
 .DS_Store
+
+# Raw sample drops (4GB+ scratch pool, not curated source) - the curated
+# subset that matters lives in docs/ and docs/persona-regeneration/
+all-docs/
