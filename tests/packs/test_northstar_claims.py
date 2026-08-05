@@ -43,7 +43,10 @@ def test_claims_a_typo_d_bill_to_name_via_the_intact_zip() -> None:
 
 
 def test_claims_a_transposed_typo_via_the_intact_zip() -> None:
-    page = _page_with("NORTHSTRAY RECYCLING", "SYSCO - 40YD", "94 MAPLE ST", "EAST LONGMEADOW MA 01028")
+    """Real 823282 documents print 'NORTHSTRAY RECYCLING' (transposed typo) and
+    176024 has the address garbled ('EASTE LONGMEADOWN'); this fixture combines
+    them so every existing marker fails but the new 'ma 01028' matches."""
+    page = _page_with("NORTHSTRAY RECYCLING", "HUNTER INDUSTRY", "PO BOX 188", "EASTE LONGMEADOWN MA 01028")
     assert NorthstarPack().claims(_ctx(page)) is True
 
 
