@@ -3,7 +3,7 @@
   "status": "active",
   "sender_fingerprint": "northstar|veritiv",
   "doc_type": "standard_invoice",
-  "notes": "Labels appear twice - once on the remittance stub and once in the body - so the body occurrences are reached with all_matches plus dedupe. No vendor_name selector: the letterhead shares a flattened line with the invoice header block, so the pack's display-name table supplies it.",
+  "notes": "Labels appear twice - once on the remittance stub and once in the body - so the body occurrences are reached with all_matches plus dedupe. No vendor_name selector: the letterhead shares a flattened line with the invoice header block, so the pack's display-name table supplies it. bill_to_name (Task 8) reads the stub's LEFT column off the row it shares with the payee name, same shape as edco: 'VERITIV OPERATING COMPANY' occurs exactly twice on page 1 and only the second (top=151.24, beside the customer name) does not begin its line, so anchor_occurrence 'mid_line' lands on the stub row and same-row + text returns the customer's cell once the anchor's words are dropped. Anchoring on the VENDOR's name to read the CUSTOMER's is not GUARDRAIL 9's anchor-is-value. Measured alternatives that do NOT work, so they are not retried: top-left/header-block return Veritiv's own letterhead (top=92.70) first; near-anchor off 'Fairfield, OH 45014', the nearest same-column line above, falls 0.54pt short of the name (40.54pt gap vs NEAR_ANCHOR_BELOW's 40.0) and would be a city-name anchor besides; label-block off the letterhead ends at that same 40.54pt gap, which is what makes it correct for vendor_address; and no label exists BELOW the name either, so an 'above-anchor' mirror of near-anchor would not have reached it.",
   "field_selectors": [
     {
       "field": "invoice_number",
@@ -81,6 +81,14 @@
       "adjust": [
         "join_lines_comma"
       ],
+      "required": false
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "VERITIV OPERATING COMPANY",
+      "anchor_occurrence": "mid_line",
+      "region": "same-row",
+      "pattern": "text",
       "required": false
     },
     {
