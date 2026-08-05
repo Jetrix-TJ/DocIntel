@@ -23,7 +23,7 @@
       "field": "vendor_account_number",
       "anchor": "Account No.",
       "region": "near-anchor",
-      "pattern": "(0[0-9]{5})",
+      "pattern": "([0-9]{6})",
       "required": false
     },
     {
