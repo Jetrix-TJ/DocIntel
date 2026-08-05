@@ -130,6 +130,11 @@
     {
       "field": "bill_to_address",
       "anchor": "CHOCTAW TRAVEL MART",
+      "anchor_alts": [
+        "Clyde Administration Servi",
+        "Clyde Companies",
+        "City of Dublin"
+      ],
       "region": "label-block",
       "pattern": "text_block",
       "adjust": [
