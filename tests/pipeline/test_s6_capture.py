@@ -320,3 +320,32 @@ def test_a_modifier_scoped_to_a_field_that_DID_produce_stays_scoped() -> None:
     assert ctx.confidence["total_printed"] == 0.99, (
         "a field-scoped modifier leaked onto a field it does not belong to"
     )
+
+
+def test_apply_prior_balance_basis_fires_for_centracom_and_edco() -> None:
+    """Task 11 prerequisite: resolve_carried_balance needs this hook's output.
+
+    Registering the hook alone must not change any scored assertion - nothing
+    yet reads `prior_balance_basis` except this hook itself - so this test
+    checks the hook's own effect directly rather than through the scorecard.
+    """
+    import json
+    import os
+
+    from docintel.adapters.vision.fake import FakeVision
+    from docintel.pipeline.stages import build_pipeline
+
+    def _run(gold_id: str) -> dict:
+        with open(os.path.join("docs", "corpus", "gold", f"{gold_id}.json")) as fh:
+            gold = json.load(fh)
+        runner = build_pipeline(FakeVision())
+        return runner.process(
+            document_id=gold["gold_id"],
+            source_path=os.path.join("docs", gold["source_file"]),
+        )
+
+    centracom = _run("digitaldirection-centracom-0384043574")
+    assert centracom["fields"]["prior_balance_basis"] == "net_of_payments"
+
+    edco = _run("northstar-edco-077087")
+    assert edco["fields"]["prior_balance_basis"] == "gross"

@@ -12,9 +12,9 @@ a single low-confidence bill is weak evidence of rule drift and two consecutive
 months is strong evidence. The AP-oriented pile-up trigger is too twitchy for a
 monthly rhythm.
 
-`applyBillingConventions` is deferred by the printed-fields-only narrowing: it
-supplies `prior_balance_basis`, a derived classification. The implementation
-stays in the tree (`conventions.py`).
+`applyBillingConventions` is registered here, at `afterExtraction`. It
+supplies `prior_balance_basis` from the carrier's known convention
+(`conventions.py`), which `resolve_carried_balance` (Stage 6) needs.
 
 `refineProseBalanceTags` is NOT deferred, though an earlier pass of the narrowing
 unregistered it on the grounds that it retagged on `carried_balance`. That left
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from docintel.core.models import JobContext
 from docintel.core.senders import is_aggregator
-from docintel.packs.digitaldirection import aliases, ladder, references
+from docintel.packs.digitaldirection import aliases, conventions, ladder, references
 from docintel.packs.registry import primary_text
 from docintel.pipeline.hooks import HookRegistry, Next
 
@@ -84,6 +84,11 @@ def collect_references(ctx: JobContext, next_: Next) -> JobContext:
     return next_(references.collect(ctx))
 
 
+def apply_billing_conventions(ctx: JobContext, next_: Next) -> JobContext:
+    """Supply `prior_balance_basis` from the carrier's known convention (F1b)."""
+    return next_(conventions.apply_prior_balance_basis(ctx))
+
+
 def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
     """Upgrade `prior_balance_present` to `prior_balance_cleared` on the amounts.
 
@@ -98,5 +103,6 @@ def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
 def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", telecom_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_carrier_fingerprint, PACK_NAME)
+    registry.register("afterExtraction", apply_billing_conventions, PACK_NAME)
     registry.register("beforeConfidenceGate", refine_prior_balance_tags, PACK_NAME)
     registry.register("beforeConfidenceGate", collect_references, PACK_NAME)
