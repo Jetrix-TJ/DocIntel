@@ -1846,3 +1846,30 @@ accepted as self-evidently correct rather than re-run. Flagged here rather than 
 assumed, consistent with standing rule 7 (a guardrail/verification nobody has watched
 fail is reporting coverage it does not have) — a live re-check would be cheap if anyone
 doubts it.
+
+---
+
+## RULING (human, 2026-08-05): Task 11, the payable amount — full re-enable
+
+Wave 3's Task 11 is a decision gate; the plan explicitly says "do not start
+these without an answer recorded" here. Investigated first (not assumed):
+`derive_amount_payable`/`resolve_carried_balance` (`grammar/ops/derive.py`) are
+fully implemented and unit-tested, just unreferenced by any persona's `adjust`
+list. Re-enabling surfaced one thing the plan's own framing did not name: a
+hidden blocker. `apply_prior_balance_basis` (the hook that supplies
+`prior_balance_basis`, needed by `resolve_carried_balance`) is also registered
+at no socket in either pack — without re-registering it too, Centracom and EDCO
+(both print a `prior_balance`) would make `derive_amount_payable` *refuse*
+rather than reproduce gold's answer, on exactly the two documents this task
+exists for.
+
+**Decision: full re-enable across all 10 personas** (not just Centracom/EDCO,
+not the "declare downstream owns the payable" alternative branch). Confirmed
+with the user after presenting the fuller scope (both packs' hooks, both
+packs' thresholds, the scorecard's `CHECKED_DERIVED`/`GOLD_ASSERTION_COVERAGE`,
+two guardrail un-skips, one test that pins the opposite behaviour on purpose).
+Plan written: `docs/superpowers/plans/2026-08-05-task11-payable-amount.md`.
+Explicitly out of scope, stated in the plan's Global Constraints: re-enabling
+`infer_currency` or any `crosscheck_*` op, and scoring `fields.prior_balance_basis`
+in `CHECKED_FIELDS` (the hook populates it as a side effect of enabling
+`resolve_carried_balance`, but measuring it is a separate, later widening).
