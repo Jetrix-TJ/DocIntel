@@ -273,10 +273,11 @@ DEFERRED_ARITHMETIC_MODIFIERS: frozenset[str] = frozenset({
 #   deferred:<why>   needs a capability that does not exist yet.
 GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # -- the payable (F1, F8) — wired in Task 11 -----------------------------
-    # All three check names are observations of the SAME record value,
-    # derived.amount_payable: a correct payable, a correctly-null payable
+    # The three `amount_payable*` names are observations of the SAME record
+    # value, derived.amount_payable: a correct payable, a correctly-null payable
     # (U-PAK's F8 refusal), and a mismatched pair that also produces a null
     # payable. One assertion measures all three; nothing further to wire.
+    # `payable_basis` observes a separate record value, derived.payable_basis.
     "amount_payable": "wired:derived.amount_payable",
     "amount_payable_is_null": "wired:derived.amount_payable",
     "payable_basis": "wired:derived.payable_basis",
@@ -303,8 +304,9 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "line_extended": DEFERRED_REASON,
     # `prior_balance_basis` is a derived CLASSIFICATION of which label supplied
     # the balance (design section 2), supplied by the `apply_billing_conventions`
-    # hook that section 5 unwires - now unregistered in both packs. The
-    # `fields.prior_balance_basis` assertion left CHECKED_FIELDS with them.
+    # hook - the hook is registered again (Task 1), but `fields.prior_balance_basis`
+    # is deliberately kept out of CHECKED_FIELDS: scoring it is a separate, later
+    # widening, not part of this task.
     "prior_balance_is_net": DEFERRED_REASON,
     # Printed, and staying: `prior_balance` is ink on the page even though the
     # gold check name describes how the labeller reasoned about it.

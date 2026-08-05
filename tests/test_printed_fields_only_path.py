@@ -40,7 +40,16 @@ DIGITALDIRECTION_GOLD = "digitaldirection-centracom-0384043574"
 # `derive_document_identity` runs unconditionally and stays out of the narrowing:
 # `core/contract.py` requires the PRESENCE of both keys, so dropping them would
 # break `count(intaken) == count(emitted)`.
-RETAINED_DERIVED = {"document_identity", "identity_basis", "amount_payable", "payable_basis", "carried_balance"}
+CONTRACT_DERIVED_KEYS = {"document_identity", "identity_basis"}
+
+# Names Task 11 re-wired that must not leak past `_leaked()`'s allowlist check,
+# but carry no contract-level presence guarantee - `carried_balance` in
+# particular is absent (not None, absent) whenever `resolve_carried_balance`
+# cannot determine a basis (grammar/ops/derive.py:160-165).
+RETAINED_DERIVED = {
+    "document_identity", "identity_basis",
+    "amount_payable", "payable_basis", "carried_balance",
+}
 
 
 def _run(gold_id: str) -> dict:
@@ -84,15 +93,21 @@ def test_northstar_record_still_carries_the_identity_contract_keys(
     northstar_record: dict,
 ) -> None:
     """core/contract.py requires their PRESENCE - None is a valid value, absence
-    is not. Dropping them would break count(intaken) == count(emitted)."""
-    for key in RETAINED_DERIVED:
+    is not. Dropping them would break count(intaken) == count(emitted).
+
+    Only `document_identity`/`identity_basis` carry this guarantee. The other
+    names in `RETAINED_DERIVED` (`amount_payable`, `payable_basis`,
+    `carried_balance`) are re-wired as of Task 11 but have no contract-level
+    presence requirement - `carried_balance` in particular is genuinely absent
+    on the undeterminable-basis path (grammar/ops/derive.py:160-165)."""
+    for key in CONTRACT_DERIVED_KEYS:
         assert key in northstar_record["derived"]
 
 
 def test_centracom_record_still_carries_the_identity_contract_keys(
     centracom_record: dict,
 ) -> None:
-    for key in RETAINED_DERIVED:
+    for key in CONTRACT_DERIVED_KEYS:
         assert key in centracom_record["derived"]
 
 

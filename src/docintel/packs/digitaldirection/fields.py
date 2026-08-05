@@ -35,8 +35,8 @@ _IDENTITY: frozenset[str] = frozenset({
 })
 
 # Amounts exactly as printed. No derivation: `amount_payable` and
-# `carried_balance` are DERIVED_ONLY and no longer registered anywhere, and
-# `prior_balance_basis` was a carrier convention's classification of which
+# `carried_balance` are DERIVED_ONLY — no selector may target them. And
+# `prior_balance_basis` is a carrier convention's classification of which
 # label supplied the balance rather than a figure anyone printed.
 _AMOUNTS: frozenset[str] = frozenset({
     "prior_balance",

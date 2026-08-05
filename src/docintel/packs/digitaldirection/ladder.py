@@ -136,10 +136,12 @@ def retag_prior_balance(ctx: JobContext) -> JobContext:
     The anchor text alone cannot tell them apart: Centracom prints both a prior
     balance and a payment, and its prior is still 20,123.80 outstanding.
 
-    This used to read `derived.carried_balance`, which the printed-fields-only
-    narrowing no longer produces. Both inputs it uses now are ink on the page -
-    `prior_balance` and `payments_credits` - so the distinction survives inside
-    the narrowed scope instead of being discarded with the derivation.
+    This used to read `derived.carried_balance`, back when the printed-fields-only
+    narrowing had unregistered the derivation that produces it. `carried_balance`
+    is produced again (Task 11), but this function still reads the two printed
+    amounts directly rather than the derived value - both inputs, `prior_balance`
+    and `payments_credits`, are ink on the page, so the distinction survives here
+    without depending on Stage 6's derivation order.
 
     The test is that the printed payment exactly offsets the printed prior:
 

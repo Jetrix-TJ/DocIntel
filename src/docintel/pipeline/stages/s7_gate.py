@@ -25,22 +25,22 @@ gives 0.90 x 0.60 = 0.54 on every field, and its gold expects `medium`. So `low`
 additionally requires most fields to be below `VERY_LOW_FLOOR` — genuinely
 collapsed, not merely penalized.
 
-**The gate may raise `review_flag` but never clears it.** That is a property of
-this stage and still holds — but the ops that used to raise it upstream do not
-run today.
+**The gate never raises `review_flag` itself, and never clears it.** That is a
+property of this stage. `review_flag` is raised upstream, by ops that run
+before this stage sees the context.
 
-**DEFERRED (printed-fields-only): nothing sets `review_flag` before this stage.**
-`derive_amount_payable` (on each of its three refusals) and
-`crosscheck_balance_composition` are in no persona's `adjust` list any more.
-`crosscheck_duplicate_anchor` never was, even at baseline — an earlier version of
-this docstring named all three as live and was wrong about that one twice over.
-Their implementations stay in the tree; see
-`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5.
+**`review_flag` is live again as of Task 11.** `derive_amount_payable`'s
+refusal path (`grammar/ops/derive.py::_refuse`) sets `review_flag = True` and
+emits `arith_balance_mismatch` whenever it cannot determine the payable — every
+persona in both packs calls the op. `crosscheck_balance_composition` and
+`crosscheck_duplicate_anchor` remain out of every persona's `adjust` list and
+still raise nothing upstream of this stage; their implementations stay in the
+tree, see `docs/superpowers/specs/2026-07-28-printed-fields-only-design.md`
+section 5.
 
-The same deferral makes `arith_balance_mismatch` in `FORCING_MODIFIERS` below
-declared-but-unreachable. Left in place deliberately: the entry is the
-specification of what forces review, and it is correct — nothing emits the
-modifier today.
+That makes `arith_balance_mismatch` in `FORCING_MODIFIERS` below live and
+reachable, not declared-but-unreachable: it is the exact mechanism that forces
+U-PAK and `northstar-edco-819387` into the `review` lane today.
 """
 
 from __future__ import annotations

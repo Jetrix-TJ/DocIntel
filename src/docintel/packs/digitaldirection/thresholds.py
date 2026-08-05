@@ -7,9 +7,9 @@ and the reason is one document: Centracom is a $20,123.80 error waiting to happe
 from __future__ import annotations
 
 THRESHOLDS: dict[str, float] = {
-    # Held at the top of the pack even with the payable deferred: on Centracom
-    # this is the figure the right answer is composed from, and a wrong one is a
-    # wrong payment however the payable is eventually reached.
+    # Held at the top of the pack: on Centracom this is the figure the right
+    # answer is composed from, and a wrong one is a wrong payment however the
+    # payable is reached.
     "current_charges": 0.95,
     # A missed prior balance silently reintroduces the F1 bug.
     "prior_balance": 0.95,

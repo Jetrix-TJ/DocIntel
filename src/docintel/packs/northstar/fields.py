@@ -38,7 +38,7 @@ _IDENTITY: frozenset[str] = frozenset({
 })
 
 # Amounts exactly as printed. No derivation: `amount_payable` and
-# `carried_balance` are DERIVED_ONLY and no longer registered anywhere.
+# `carried_balance` are DERIVED_ONLY — no selector may target them.
 _AMOUNTS: frozenset[str] = frozenset({
     "total_printed",
     "subtotal",

@@ -12,7 +12,7 @@ cross-checks that means double-counting a confidence boost.
 | `assignPageRoles` | `s2_filter` (C1b). Same. |
 | `northstarLadder` | **here**, at `classifySignals` |
 | `resolveVendorAlias` | **here**, at `beforePersonaLookup` |
-| `deriveAmountPayable` | deferred: no Northstar persona's `adjust` list calls it any more - `amount_payable` is DERIVED_ONLY and no longer registered. See the printed-fields-only spec. |
+| `deriveAmountPayable` | not a hook: it is a grammar op, registered directly in each Northstar persona's `adjust` list (Task 11) rather than at a pack socket here. |
 | `runArithmeticCrosschecks` | deferred: same reason - the crosscheck ops it named (`crosscheck_total_composition`, `crosscheck_balance_composition`, `crosscheck_line_sum`, `crosscheck_scanline`, `crosscheck_filename`) are gone from every persona's `adjust` list along with the arithmetic they scored. |
 | `inferCurrency` | deferred: supplied `currency`, which printed-fields-only drops entirely - it was never ink on the page. |
 | `collectReferences` | **here**, at `afterExtraction` |

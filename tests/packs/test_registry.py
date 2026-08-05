@@ -129,13 +129,12 @@ def test_pack_thresholds_cover_the_fields_that_decide_payment() -> None:
     deleting `"amount_payable"` from a pack that still derives it would silence
     this check instead of failing it.
 
-    As of the printed-fields-only narrowing NEITHER pack derives the field - no
-    persona in either one still calls `derive_amount_payable` - so both are
-    currently exempt and only the `total_printed` bar bites. That makes this a
-    dormant invariant rather than a dead one, and it is deliberately left live:
-    the day any persona reinstates the op, the pack it belongs to is held to the
-    full rule again, including the "the key must exist at all" half, without
-    anyone having to remember to re-enable this.
+    As of Task 11, every persona in both packs calls `derive_amount_payable`
+    again, so the invariant is live for both - not dormant. It was written to
+    reactivate automatically the moment any persona reinstated the op, without
+    anyone having to remember to re-enable it, and that is exactly what
+    happened: both packs are now held to the full rule, including the "the key
+    must exist at all" half.
     """
     for pack in load_packs():
         t = pack.thresholds

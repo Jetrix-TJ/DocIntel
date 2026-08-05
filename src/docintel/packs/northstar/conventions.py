@@ -1,10 +1,10 @@
 """Per-vendor billing conventions — facts about the VENDOR, not the document.
 
-**DEFERRED (printed-fields-only): nothing calls this.** `apply_billing_conventions`
-is registered at no socket in either pack, so every present-tense statement below
-describes what this module WOULD do, not what the pipeline does. Kept on disk
-because re-enabling is a wiring change; see
-`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5.
+**Registered again as of Task 11.** `apply_billing_conventions` is wired at
+`afterExtraction` in both packs (see `hooks.py`), so the present-tense
+statements below describe what the pipeline actually does. See
+`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` section 5
+for the history of the deferral this reverses.
 
 One entry so far, and it is the F1b keystone.
 
