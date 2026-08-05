@@ -30,7 +30,7 @@
       "field": "vendor_account_number",
       "anchor": "Account No.",
       "region": "same-row",
-      "pattern": "(1 -[0-9]{5} 1)",
+      "pattern": "account_number",
       "required": false
     },
     {
