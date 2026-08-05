@@ -43,10 +43,12 @@ VERDICT_PREFIXES = ("covered:", "wired:", "documentation", "deferred:")
 
 DEFERRED_REASON = "deferred:printed-fields-only"
 
-# Gold `derived` keys the printed-fields-only narrowing retired. Both are
-# DERIVED_ONLY names; the gold files still record their answers, so the evidence
-# for re-enabling stays on disk and this list is what points at it.
-DEFERRED_DERIVED_KEYS = frozenset({"amount_payable", "payable_basis"})
+# Gold `derived` keys the printed-fields-only narrowing retired. Empty since
+# Task 11 re-enabled both of DERIVED_ONLY's non-identity names. Kept as a
+# named, typed constant (rather than deleted) so a future deferral has an
+# obvious place to add a key, and so `test_the_deferred_derived_list_holds_only_derived_only_names`
+# keeps meaning something.
+DEFERRED_DERIVED_KEYS: frozenset[str] = frozenset()
 
 # Thirteen `CHECKED_FIELDS` names stopped being extractable when Tasks 3 and 4
 # narrowed the two packs. "No pack extracts it" is one fact with three quite
@@ -140,11 +142,13 @@ VACUOUS_BY_CONSTRUCTION: dict[str, str] = {
     # is `lane` - and `lane` is asserted and does fail on an empty record.
     "*:review_flag": "False is the gold expectation and the default",
     "*:regen_flag": "False is the gold expectation and the default",
-    # U-PAK's two entries left with the printed-fields-only narrowing. Its gold
-    # expects a null payable because refusing IS the right answer (F8) and an
-    # empty record matched that by coincidence — but `derived.amount_payable` and
-    # `derived.payable_basis` are no longer asserted at all, so there is nothing
-    # left to forgive. See test_upak_has_no_document_specific_vacuous_allowance.
+    # U-PAK's gold expects a null payable because refusing IS the right answer
+    # (F8). An empty record matches by coincidence. The non-vacuous gate on the
+    # same behaviour is its `confidence_modifiers` assertion, which requires
+    # `arith_balance_mismatch` and cannot be satisfied without the derivation
+    # actually running and refusing - see test_upak_cannot_go_green_on_its_vacuous_assertions_alone.
+    "northstar-upak-4378107:derived.amount_payable": "null IS the correct answer (F8)",
+    "northstar-upak-4378107:derived.payable_basis": "null IS the correct answer (F8)",
 }
 
 
@@ -191,16 +195,15 @@ def test_every_verdict_is_one_of_the_four_kinds(check: str) -> None:
 
 
 def test_no_derived_only_field_is_asserted_by_the_scorecard() -> None:
-    """The printed-fields-only rule, in machine-checkable form.
-
-    `document_identity` and `identity_basis` are the exception and stay: they are
-    Stage 8 contract keys carrying pipeline provenance, required to be PRESENT by
-    core/contract.py, and they live under `derived` rather than `fields` — which
-    is where the record already draws this line.
+    """`document_identity`/`identity_basis` are Stage 8 contract keys carrying
+    pipeline provenance, required to be PRESENT by core/contract.py.
+    `amount_payable`/`payable_basis` are the other two names DERIVED_ONLY has
+    ever held, and Task 11 wired them back into the scorecard on purpose -
+    both are exceptions for a reason, not by oversight.
     """
     from docintel.core.models import DERIVED_ONLY
 
-    retained = {"document_identity", "identity_basis"}
+    retained = {"document_identity", "identity_basis", "amount_payable", "payable_basis"}
     asserted = {a.name for gold in GOLD for a in assertions_for(gold)}
     for name in DERIVED_ONLY - retained:
         offenders = [a for a in asserted if a.endswith(f".{name}") or a == name]
@@ -451,6 +454,20 @@ def test_every_gold_derived_key_is_asserted_or_explicitly_deferred() -> None:
             assert name in CHECKED_DERIVED, f"gold derived.{name} is never asserted"
 
 
+def test_amount_payable_and_payable_basis_are_asserted() -> None:
+    """Task 11: the scorecard must actually measure the newly-wired capability.
+
+    Re-enabling derive_amount_payable without widening CHECKED_DERIVED would
+    make the pipeline compute the right answer while the scorecard kept
+    silently ignoring it - the exact class of blind spot this file exists to
+    catch (see the module docstring).
+    """
+    from docintel.scorecard import CHECKED_DERIVED
+
+    assert "amount_payable" in CHECKED_DERIVED
+    assert "payable_basis" in CHECKED_DERIVED
+
+
 def test_the_deferred_derived_list_holds_only_derived_only_names() -> None:
     """The deferral exists because these are computed, not because they are
     inconvenient. Anything not in DERIVED_ONLY has no business on this list."""
@@ -588,33 +605,18 @@ def test_the_vacuous_allowance_list_stays_honest() -> None:
     assert not stale, f"allowances for assertions that no longer exist: {stale}"
 
 
-def test_upak_has_no_document_specific_vacuous_allowance() -> None:
-    """What replaced the mitigation for U-PAK's two allowances.
+def test_upak_cannot_go_green_on_its_vacuous_assertions_alone() -> None:
+    """The mitigation that makes U-PAK's two allowances acceptable.
 
     Its gold expects `amount_payable: null` because refusing IS the right answer
     (F8: 14,789.77 printed against 14,740.85 payable, aging all zero, nothing
-    explaining the 48.92), and an empty record coincidentally matched that. Two
-    free passes, justified at the time by U-PAK's `confidence_modifiers`
-    assertion requiring `arith_balance_mismatch` — a modifier only the refusal
-    can emit.
-
-    The printed-fields-only narrowing deferred all three: the two payable
-    assertions, and the arithmetic modifier that was their non-vacuous gate. With
-    nothing left to forgive, the allowances went too, and U-PAK is now covered by
-    the general `test_no_assertion_passes_vacuously_on_an_empty_record` with no
-    DOCUMENT-SPECIFIC exceptions — strictly stronger than what it had.
-
-    Not "no exceptions at all", which an earlier version of this docstring
-    claimed and which is false: the `*:review_flag` and `*:regen_flag` wildcards
-    in `VACUOUS_BY_CONSTRUCTION` still apply to U-PAK exactly as they apply to
-    every other document.
-
-    The invariant worth keeping is that the free passes do not creep back under
-    another name.
+    explaining the 48.92). An empty record coincidentally matches that. What an
+    empty record CANNOT match is the modifier the refusal must emit, so U-PAK
+    still has a non-vacuous gate on the same behaviour.
     """
-    upak = "northstar-upak-4378107"
-    specific = sorted(k for k in VACUOUS_BY_CONSTRUCTION if k.startswith(f"{upak}:"))
-    assert not specific, f"U-PAK regained a document-specific free pass: {specific}"
-
-    assertions = assertions_for(next(g for g in GOLD if g["gold_id"] == upak))
-    assert assertions, "U-PAK must still be measured by something"
+    upak = next(g for g in GOLD if g["gold_id"] == "northstar-upak-4378107")
+    modifier_assertions = [
+        a for a in assertions_for(upak) if a.name == "confidence_modifiers"
+    ]
+    assert modifier_assertions, "U-PAK must assert the refusal's modifier"
+    assert "arith_balance_mismatch" in modifier_assertions[0].expected

@@ -231,20 +231,27 @@ CHECKED_FIELDS_BY_GOLD: dict[str, tuple[str, ...]] = {
 # change and not a re-labelling project.
 DEFERRED_REASON = "deferred:printed-fields-only"
 
-# `amount_payable` and `payable_basis` left with the printed-fields-only
-# narrowing. These two stay because core/contract.py requires their PRESENCE on
-# every processed record - they are provenance, not a claim about what the
-# document printed.
-CHECKED_DERIVED = ("document_identity", "identity_basis")
+# `document_identity`/`identity_basis` stay because core/contract.py requires
+# their PRESENCE on every processed record - they are provenance, not a claim
+# about what the document printed. `amount_payable`/`payable_basis` re-joined
+# this tuple in Task 11: both are now wired on every persona
+# (grammar/ops/derive.py::derive_amount_payable), and gold already carries the
+# expected answer for all 11 documents.
+CHECKED_DERIVED = ("document_identity", "identity_basis", "amount_payable", "payable_basis")
 
 # Confidence modifiers reporting an arithmetic cross-check. Each one is the ONLY
 # observable of a closure the printed-fields-only narrowing defers, so expecting
 # them would assert a capability that is on its way out. `filename_disagree` is
 # deliberately absent: it compares a printed invoice number against the
 # attachment name and is not arithmetic.
+#
+# `arith_balance_mismatch` left this set in Task 11: `derive_amount_payable`'s
+# own refusal path (`grammar/ops/derive.py::_refuse`) emits it unconditionally,
+# independent of the still-deferred `crosscheck_balance_composition` op that
+# also names it - so it is now a genuine, wired observable, not a stand-in for
+# a capability that doesn't exist yet.
 DEFERRED_ARITHMETIC_MODIFIERS: frozenset[str] = frozenset({
-    "arith_balance_mismatch", "arith_lines_mismatch", "arith_total_mismatch",
-    "scanline_mismatch",
+    "arith_lines_mismatch", "arith_total_mismatch", "scanline_mismatch",
 })
 
 # Every `check` name appearing in any gold file's `assertions` array, and what
@@ -265,23 +272,31 @@ DEFERRED_ARITHMETIC_MODIFIERS: frozenset[str] = frozenset({
 #                    individually, with no distinct observable on the record.
 #   deferred:<why>   needs a capability that does not exist yet.
 GOLD_ASSERTION_COVERAGE: dict[str, str] = {
-    # -- the payable, and the arithmetic behind it (F1, F1b, F8) -------------
-    # Every entry down to `prior_balance_is_net` asserts a DERIVED value or an
-    # arithmetic closure, so all of them are deferred together. The gold files
-    # still record the answers; only the expectation is retired.
-    "amount_payable": DEFERRED_REASON,
-    "amount_payable_is_null": DEFERRED_REASON,
-    "payable_basis": DEFERRED_REASON,
-    "payable_mismatch": DEFERRED_REASON,
-    "payable_composition": DEFERRED_REASON,
-    "balance_composition": DEFERRED_REASON,
+    # -- the payable (F1, F8) — wired in Task 11 -----------------------------
+    # All three check names are observations of the SAME record value,
+    # derived.amount_payable: a correct payable, a correctly-null payable
+    # (U-PAK's F8 refusal), and a mismatched pair that also produces a null
+    # payable. One assertion measures all three; nothing further to wire.
+    "amount_payable": "wired:derived.amount_payable",
+    "amount_payable_is_null": "wired:derived.amount_payable",
+    "payable_basis": "wired:derived.payable_basis",
+    "payable_mismatch": "wired:derived.amount_payable",
+    # Arithmetic compositions whose every input is independently asserted
+    # elsewhere (current_charges, prior_balance, total_printed all in
+    # CHECKED_FIELDS; amount_payable now in CHECKED_DERIVED) but whose
+    # composition itself has no separate observable on the record - same
+    # class as `every_line_qty_times_price` below.
+    "payable_composition": "documentation",
+    "balance_composition": "documentation",
+    # -- the arithmetic Task 11 does NOT wire (crosscheck_* ops, infer_currency,
+    # still deferred) ---------------------------------------------------------
     "prior_balance_found_and_cleared": DEFERRED_REASON,
     "total_composition": DEFERRED_REASON,
     "current_charges_composition": DEFERRED_REASON,
     "new_charges_composition": DEFERRED_REASON,
     "line_sum": DEFERRED_REASON,
     "line_extended": DEFERRED_REASON,
-    "arith_balance_mismatch_applied": DEFERRED_REASON,
+    "arith_balance_mismatch_applied": "wired:confidence_modifiers",
     # `prior_balance_basis` is a derived CLASSIFICATION of which label supplied
     # the balance (design section 2), supplied by the `apply_billing_conventions`
     # hook that section 5 unwires - now unregistered in both packs. The

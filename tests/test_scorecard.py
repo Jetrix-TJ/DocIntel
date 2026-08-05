@@ -61,28 +61,43 @@ def test_money_assertions_compare_by_value_not_by_string():
     assert matches(33876.4, "33876.40", kind="exact") is False
 
 
-def test_the_centracom_trap_is_deferred_rather_than_silently_dropped():
-    """The trap this used to assert, and where it went.
+def test_the_centracom_trap_is_caught_not_silently_dropped():
+    """The trap this used to assert as deferred, now caught for real.
 
-    Centracom prints 33,876.40 and owes 13,752.60, so the scorecard asserted the
-    derived payable: collapsing the derivation into "read the total" showed up as
-    a score drop. The printed-fields-only narrowing retires that expectation,
-    which makes the guard two-sided — the assertions must be gone, AND the gold
-    facts behind them must still be classified as deferred rather than forgotten.
+    Centracom prints 33,876.40 and owes 13,752.60. Before Task 11, the printed-
+    fields-only narrowing retired the derived-payable assertions entirely, so
+    collapsing the derivation into "read the total" would have shown up nowhere
+    - the guard was two-sided: the assertions gone, AND the gold facts behind
+    them classified as deferred rather than forgotten. Task 11 re-wires
+    derive_amount_payable and re-asserts both fields, so the trap is caught the
+    direct way again: a wrong derivation now fails `derived.amount_payable`
+    against gold's 13,752.60, not a deferral-table entry.
     """
-    from docintel.scorecard import DEFERRED_REASON, GOLD_ASSERTION_COVERAGE
+    from docintel.scorecard import GOLD_ASSERTION_COVERAGE
 
     card = replay_gold(runner_factory=_factory)
     doc = next(d for d in card["documents"] if "centracom" in d["gold_id"])
     names = {a["name"] for a in doc["assertions"]}
-    assert "derived.amount_payable" not in names
-    assert "derived.payable_basis" not in names
+    assert "derived.amount_payable" in names
+    assert "derived.payable_basis" in names
 
-    for check in ("amount_payable", "payable_basis", "payable_mismatch",
-                  "balance_composition"):
-        assert GOLD_ASSERTION_COVERAGE[check] == DEFERRED_REASON, (
-            f"{check} lost its deferral verdict — the gold answer is on disk but "
-            "nothing in the table points at it any more"
+    # Not asserting `passed is True` here: this file's `_factory()` builds a
+    # bare Runner with no packs/persona store (`PersonaLookup(store=None)` is a
+    # hard miss for every document), so no persona - and therefore no
+    # derivation - ever actually runs in this harness. The real derivation is
+    # exercised and asserted correct by `docintel.cli replay-gold`'s full
+    # pipeline (see the Task 11 commit's before/after numbers) and by
+    # `grammar/ops/derive.py`'s own unit tests. What this harness CAN prove is
+    # the scorecard wiring: the assertion exists and carries the right verdict.
+
+    for check, verdict in (
+        ("amount_payable", "wired:derived.amount_payable"),
+        ("payable_basis", "wired:derived.payable_basis"),
+        ("payable_mismatch", "wired:derived.amount_payable"),
+        ("balance_composition", "documentation"),
+    ):
+        assert GOLD_ASSERTION_COVERAGE[check] == verdict, (
+            f"{check} does not carry its Task 11 verdict — expected {verdict!r}"
         )
 
 
