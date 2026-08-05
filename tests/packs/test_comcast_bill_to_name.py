@@ -1,4 +1,8 @@
-"""Comcast is one of the 5 personas with no bill_to_name selector. Unlike
+"""Comcast was one of the 5 personas that shipped with no `bill_to_name`
+selector (STATUS-SUMMARY.md §4.1); this file is the selector that closed its
+share of that finding. All five - `comcast`, `windstream`, `edco`, `upak`,
+`veritiv` - carry one as of this branch, so the count of personas without a
+`bill_to_name` selector is now zero. Unlike
 Edco/Veritiv, its own letterhead is graphical (no extracted words compete for
 the top-left box), so a region-only match cleanly isolates the customer name
 - confirmed by reading the real sample's page-1 word coordinates: nothing

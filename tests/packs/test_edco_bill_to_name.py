@@ -1,5 +1,10 @@
-"""EDCO is one of the 5 personas that shipped with no `bill_to_name` selector,
-so `derived.bill_to_name` came from `resolve_bill_to_alias`'s rung 2 (a name on
+"""EDCO was one of the 5 personas that shipped with no `bill_to_name` selector
+(STATUS-SUMMARY.md §4.1); this file is the selector that closed its share of
+that finding, and all five - `comcast`, `windstream`, `edco`, `upak`,
+`veritiv` - carry one as of this branch, so the count is now zero.
+
+Before it,
+`derived.bill_to_name` came from `resolve_bill_to_alias`'s rung 2 (a name on
 the pack roster HEADS a line on the page) and `bill_to_basis` read
 `roster_page_text`. That rung can never disagree with the roster - it reads the
 answer OFF the roster - so `bill_to_mismatch` could not fire on an EDCO bill no

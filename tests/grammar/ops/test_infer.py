@@ -433,12 +433,15 @@ def test_a_mid_line_roster_mention_is_not_the_bill_to_party() -> None:
 
 
 def test_a_roster_name_heading_a_line_is_still_the_bill_to_party() -> None:
-    """The regression guard for the five personas that rely on this rung.
+    """The regression guard for the five personas that lean on this rung.
 
-    `comcast`, `windstream`, `edco`, `upak` and `veritiv` declare no
-    `bill_to_name` selector, so every one of their documents takes this rung -
-    and on all five the party genuinely heads its own line (measured against the
-    gold corpus). Narrowing the rung must not cost them their party.
+    `comcast`, `windstream`, `edco`, `upak` and `veritiv` shipped with no
+    `bill_to_name` selector, so every one of their documents took this rung; all
+    five carry one as of this branch, and the rung is now what answers whenever
+    that selector misses (which it does by design on a candidate whose shape is
+    not a clean party name). On all five the party genuinely heads its own line
+    (measured against the gold corpus). Narrowing the rung must not cost them
+    their party.
     """
     ctx = _ctx(_page(1, "Choctaw", "Travel", "Mart", "PO", "BOX", "1550"))
     ctx.pack = _RosterPack()
@@ -616,10 +619,13 @@ def test_a_roster_supplied_name_is_never_tagged() -> None:
     would need to check the name against - there is no printed value left to
     disagree with the roster once rung 2 has answered.
 
-    This is not a corner case: five of the ten corpus personas (`comcast`,
-    `windstream`, `edco`, `upak`, `veritiv`) declare no `bill_to_name`
-    selector at all, so `printed` is always `None` on their documents and
-    every one of them always takes this rung, with no wrong-inbox check behind it.
+    This was not a corner case: five of the ten corpus personas (`comcast`,
+    `windstream`, `edco`, `upak`, `veritiv`) declared no `bill_to_name` selector
+    at all, so `printed` was always `None` on their documents and every one of
+    them always took this rung, with no wrong-inbox check behind it. All five
+    carry a selector as of this branch, so `printed` now answers wherever the
+    selector matches - but a selector that misses still lands here, and the
+    limitation this test pins is unchanged for those documents.
 
     The head-of-line requirement `_roster_match` now applies (see
     `test_a_mid_line_roster_mention_is_not_the_bill_to_party`) narrowed the
@@ -627,9 +633,9 @@ def test_a_roster_supplied_name_is_never_tagged() -> None:
     mid-line no longer has that mention promoted to bill-to party - the rung
     returns nothing and `core.coverage` escalates the empty field instead. But
     when the rung does answer, it still answers off the roster, so it still
-    cannot contradict it. Closing the limitation itself needs a printed name to
-    compare against, i.e. a `bill_to_name` selector on each of the five personas;
-    there is nothing left to fix inside this rung.
+    cannot contradict it. Closing the limitation itself needed a printed name to
+    compare against, i.e. a `bill_to_name` selector on each of the five personas -
+    which this branch added; there is nothing left to fix inside this rung.
     """
     ctx = _ctx_with_pack_roster(("Northstar Recycling Company, LLC",))
     ctx = resolve_bill_to_alias(ctx)          # nothing extracted

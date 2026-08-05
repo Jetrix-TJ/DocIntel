@@ -14,14 +14,14 @@ revision), not read from project documentation or from `.loop/scorecard.json`
 >   bug), **§4.6** (OCR threshold calibrated on the wrong statistic), and both
 >   **§4.7** items (gate's wrong reason, identity captured pre-hook) are **fixed
 >   and committed** — verified below, not just claimed.
-> * **§4.1 (wrong-inbox guard) is narrowed, not closed.** The one reproduced
+> * **§4.1 (wrong-inbox guard) is closed structurally.** The one reproduced
 >   failure mode — a routing-line mention getting promoted to `bill_to_name` — is
->   fixed. But the same five personas (`comcast`, `windstream`, `edco`, `upak`,
->   `veritiv`) still declare **zero `bill_to_name` selectors** — confirmed
->   directly against the current persona files — so `bill_to_mismatch` still
->   cannot structurally fire for them. The fix's own commit message says this
->   outright, and a live Windstream test this week reproduced the gap again. See
->   §4.1.
+>   fixed, and the five personas that declared **zero `bill_to_name` selectors**
+>   (`comcast`, `windstream`, `edco`, `upak`, `veritiv`) now all declare one, so
+>   `bill_to_mismatch` can structurally fire for every persona in both packs —
+>   verified firing on real Windstream and real Edco second samples. Two
+>   selector-*quality* defects found by the whole-branch review remain open (U-Pak
+>   3/12, Edco 1/28); both fail safe. See §4.1.
 > * **The business delivered second-period samples**: 111 real documents across 7
 >   of 10 vendors, in `all-docs/second-samples/`. This is the #1 ask from the
 >   previous revision. Running a sample of them (not yet formal, no gold labels),
@@ -156,12 +156,13 @@ the one fully-correct document (DTSS) is still the least-measured one.
 
 ## 4. Outstanding risks
 
-Ordered by what they cost if the system runs on documents it has not seen. **Five
+Ordered by what they cost if the system runs on documents it has not seen. **Six
 of the nine items below are closed outright, including all of this revision's new
-second-sample findings (§4.9); one (§4.1) is meaningfully narrowed but still
-open.**
+second-sample findings (§4.9); §4.1 closed on branch
+`sdd/verified-findings-remediation` and carries two open selector-quality
+defects, both failing safe, recorded under it.**
 
-### 4.1 The wrong-inbox guard covering only half the corpus — **narrowed, not closed** (`fda882c`)
+### 4.1 The wrong-inbox guard covering only half the corpus — **closed** (`fda882c`, then Tasks 6–8 of `sdd/verified-findings-remediation`)
 
 Last revision: five personas with no `bill_to_name` selector (`comcast`,
 `windstream`, `edco`, `upak`, `veritiv`) resolved bill-to by searching the whole
@@ -180,21 +181,46 @@ field/tag/confidence/lane changes across 50 of the real second-sample documents*
 before vs after. This is the first fix in this project checked against
 unseen-vendor-style data before landing, not just the sample it was built against.
 
-**What it does not close — stated in the fix's own commit message, and confirmed
-directly against the current persona files:** those same five personas still
-declare **zero `bill_to_name` selectors**. The roster search is still the *only*
-mechanism resolving bill-to for these five vendors, so the value is still always
-read off the roster, never compared against a printed value, and
-`bill_to_mismatch` still cannot structurally fire for them. A live test this week
-on real second-sample Windstream invoices reproduced this exact gap: two invoices
-addressed to a different company than the roster never raised `bill_to_mismatch`,
-because Windstream has no `bill_to_name` selector to disagree with the roster in
-the first place — contrast **Lumen**, in the same test batch, which *does* have a
-`bill_to_name` selector and correctly raised `bill_to_mismatch` on both of its
-cross-customer invoices. **The most serious open item from the last revision is
-now a narrower, better-defended version of the same open item — not a closed
-one.** Writing a real `bill_to_name` selector for each of the five is the
-remaining fix (§5, priority 2).
+**What closed the rest of it (branch `sdd/verified-findings-remediation`,
+Tasks 6–8).** What `fda882c` left open was that those same five personas declared
+**zero `bill_to_name` selectors**, so the value was always read off the roster,
+never compared against a printed value, and `bill_to_mismatch` could not
+structurally fire for them — reproduced live at the time on two real
+second-sample Windstream invoices addressed to a different company, which raised
+nothing, against **Lumen** in the same batch, which *does* have a selector and
+correctly raised `bill_to_mismatch` on both of its cross-customer invoices.
+
+All five now declare one: U-Pak (Task 6), Comcast (Task 7), Edco, Veritiv and
+Windstream (Task 8). **The count of personas with no `bill_to_name` selector is
+zero.** The closing evidence is that `bill_to_mismatch` now fires on real
+documents that print a party the roster does not hold — measured in this
+branch's final whole-branch review by replaying every real second sample:
+`Windstream_216713099_08272025_BILL.pdf` reads its printed `GOLUB TOPs HQ` and
+raises `bill_to_mismatch` (it read nothing at all before Task 8), and Edco raises
+it on its own misprinted renderings (`NORTHSTRAY RECYCLING` on 823282AUG25 and
+823282SEP25, `NORTHSTART RECYCLING` on 176024OCT25) — the printed rung
+disagreeing with the roster, exactly as intended. Windstream's other four second
+samples are OCR-sourced, miss the anchor, and fall through to the roster rung
+unchanged. The roster rung remains behind every selector as the fallback when one
+misses, so a selector miss is not a regression to the old behaviour.
+
+**Two selector-quality defects remain open, both failing safe**, found by that
+same whole-branch replay and not by any single task's review:
+
+* **U-Pak, 3 of 12 real second samples.** The `text_block` capture takes the
+  whole `Bill To` block rather than the party line when the block carries an
+  `ATTN:`/email line above the name (invoices 4421470 and 4489932) or when OCR
+  garbles it, which also costs those records their `bill_to_address`.
+* **Edco, 1 of 28 real second samples.** Invoice 709223OCT25 prints the
+  service-at descriptor above the party name instead of below it — the reverse
+  of the other 27 — so the `same-row` selector reads `SYSCO FOODS-SAN DIEGO` and
+  raises a false `bill_to_mismatch` on a correctly-addressed bill.
+
+Neither can be fixed by tightening the selector's `pattern` inside the closed
+grammar (measured; the wrong values are well-formed party-name shapes in the
+right position). Both are flagged in the personas' own `notes` and are a
+selector-design decision, not an open safety hole: each routes its document to a
+human rather than auto-approving it.
 
 ### 4.2 Confidence does not track correctness — **still open, narrower**
 
@@ -414,7 +440,7 @@ Recommended order, updated:
 
 | Priority | Action | Why |
 |--:|---|---|
-| 1 | **Write a printed `bill_to_name` selector for the 5 vendors that still lack one** (`comcast`, `windstream`, `edco`, `upak`, `veritiv` — §4.1) | The only remaining path to a real printed-vs-roster mismatch check; today the roster search structurally cannot disagree with itself. |
+| 1 | **Settle the two open `bill_to_name` selector-quality defects** (U-Pak 3/12, Edco 1/28 — §4.1) | The selectors themselves are written (all 5 vendors, Tasks 6–8), so `bill_to_mismatch` can now fire; what is left is that two of them read the wrong line on a minority of real documents, and neither is fixable by tightening `pattern` inside the closed grammar. |
 | 2 | **Fix confidence calibration** (§4.2) | The item where the failure mode is real money misrouted despite correct-looking machinery — the U-Pak $6,621.41 error has now survived two revisions unfixed. |
 | 3 | **Finish labelling the second-sample backlog** (§4.8): 6 vendors with material and no formal gold label yet, 3 vendors with no second sample at all | Converts informal spot-checks into permanent regression coverage. Edco is the template. |
 | 4 | **Write the missing rules**, addresses first (§4.4) | Largest raw accuracy gain, ~48 assertions, growing as more vendors are added. Do this alongside item 3, on the *new* samples, so rules aren't fitted to single documents again. |
@@ -439,8 +465,8 @@ resolved (six fixed, one closed as not-a-bug). What's still missing:
 - If more periods exist for the 7 vendors already covered, useful too, but the
   priority now is breadth (the 3 missing vendors) over depth.
 
-No further business input is required to make progress on §4.1 (the bill-to
-selectors), §4.2 (confidence calibration), or §4.4/§4.8
+No further business input is required to make progress on §4.1 (the two open
+bill-to selector defects), §4.2 (confidence calibration), or §4.4/§4.8
 (rule authoring and labelling against material already delivered) — that is all
 engineering work against material already in hand.
 

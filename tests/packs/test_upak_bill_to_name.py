@@ -1,8 +1,18 @@
-"""U-Pak is one of the 5 personas with no bill_to_name selector at all
-(STATUS-SUMMARY.md §4.1), so `bill_to_mismatch` can never fire regardless of
-who a document is billed to. The real gold PDF prints `Bill To:` directly
-above the customer name, left-aligned - the same shape Lumen's shipped,
-working `bill_to_name` selector already handles."""
+"""U-Pak was one of the 5 personas that shipped with no `bill_to_name` selector
+at all (STATUS-SUMMARY.md §4.1), so `bill_to_mismatch` could never fire
+regardless of who a document was billed to. This file is the selector that
+closed its share of that finding; all five - `comcast`, `windstream`, `edco`,
+`upak`, `veritiv` - carry one as of this branch, so the count is now zero.
+
+The real gold PDF prints `Bill To:` directly above the customer name,
+left-aligned - the same shape Lumen's shipped, working `bill_to_name` selector
+already handles.
+
+KNOWN DEFECT, found by the whole-branch review that replayed all 12 real
+second-period samples (`all-docs/second-samples/u_pak/*.pdf`) and unresolved as
+of this commit: on 3 of those 12 the `text_block` capture is not the party name.
+See `src/docintel/packs/northstar/personas/upak.json`'s `notes` for the measured
+detail and why no in-vocabulary selector fixes it."""
 
 from __future__ import annotations
 

@@ -1,6 +1,9 @@
-"""Veritiv is one of the 5 personas that shipped with no `bill_to_name`
-selector, so the field came from `resolve_bill_to_alias`'s roster rung and
-`bill_to_mismatch` could never fire on a Veritiv invoice.
+"""Veritiv was one of the 5 personas that shipped with no `bill_to_name`
+selector (STATUS-SUMMARY.md §4.1), so the field came from
+`resolve_bill_to_alias`'s roster rung and `bill_to_mismatch` could never fire on
+a Veritiv invoice. This file is the selector that closed its share of that
+finding; all five - `comcast`, `windstream`, `edco`, `upak`, `veritiv` - carry
+one as of this branch, so the count is now zero.
 
 The remediation plan recorded "customer name with no label, and Veritiv's own
 header sits in the same box". Re-measured against all 7 real Veritiv PDFs, both
