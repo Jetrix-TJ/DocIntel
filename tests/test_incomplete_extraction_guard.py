@@ -141,28 +141,87 @@ def test_the_shipped_persona_still_reaches_the_fast_lane(shipped: dict) -> None:
 # -- mechanism 1: declared, required, produced nothing ------------------------
 
 
-def test_an_unseen_end_customer_does_not_auto_approve(monkeypatch) -> None:
-    """Digital Direction's bills are addressed to several managed clients, so the
-    bill-to varies per document. A client onboarded last week is exactly this
-    shape: one required field empty on an otherwise perfect document.
+def test_a_required_selector_producing_nothing_does_not_auto_approve() -> None:
+    """A required, declared selector that matches nothing on an otherwise
+    perfect document is the hardcoded-literal failure the module docstring
+    describes: a rule whose pattern stops matching after a template revision,
+    silently.
 
-    Simulated by emptying the pack's roster rather than by breaking a selector,
-    because that is now where the client list lives - Comcast's template prints no
-    bill-to label, so `resolve_bill_to_alias` reads it from `MANAGED_CLIENTS`. An
-    unrostered client is the production event this guards.
+    `account_number`'s selector is `required` (the schema default) and anchored
+    on the printed `Account number` label; only its PATTERN is defeated here, so
+    the anchor still resolves and `near-anchor` still has something to search -
+    the same reasoning `_break_all_but` documents below for the wholesale-
+    collapse test, applied to one field instead of "every field but two".
+
+    **Formerly demonstrated via `bill_to_name` with the pack's roster emptied
+    out**, because until Task 7 that was the only way to make a required field
+    on this document produce nothing: Comcast's template prints no bill-to
+    label at all, so `resolve_bill_to_alias`'s roster fallback was the SOLE
+    source of `bill_to_name`, and an unrostered client meant the field came back
+    empty - a real instance of this mechanism, just reached through the roster
+    rather than through a selector. Task 7 gave Comcast a real `bill_to_name`
+    selector (region `top-left`, no anchor - the printed name has none) that
+    reads the name directly off the page regardless of the roster, so an
+    unrostered client no longer leaves the field empty; it leaves it POPULATED
+    but disagreeing with the roster instead. That is a real behavior change,
+    not a test artifact - see `test_an_unrostered_bill_to_forces_review` below,
+    which pins the new shape. `account_number` has no roster involved at all,
+    so it stays a clean, roster-independent vehicle for THIS mechanism
+    regardless of what happens to any bill-to selector on any persona.
     """
-    monkeypatch.setattr(dd_aliases, "MANAGED_CLIENTS", ("Somebody Else Entirely",))
-    record = _run()
+    def defeat_account_number(raw: dict[str, Any]) -> None:
+        for selector in raw["field_selectors"]:
+            if selector.get("field") == "account_number":
+                selector["pattern"] = NO_MATCH
 
-    assert record["fields"].get("bill_to_name") is None, (
+    record = _run(defeat_account_number)
+
+    assert record["fields"].get("account_number") is None, (
         "the test did not achieve the condition it is asserting about"
     )
-    assert record["derived"].get("bill_to_name") is None
+    assert record["derived"].get("account_number") is None
     assert record["lane"] != "high", (
         "a required field extracted nothing and the document was auto-approved"
     )
     assert record["review_flag"] is True
-    assert "bill_to_name" in record["extraction_coverage"]["missing_required"]
+    assert "account_number" in record["extraction_coverage"]["missing_required"]
+
+
+# -- the wrong-inbox guard: since Task 7, an unrostered bill-to is CAPTURED, ---
+# -- not silently missing - and still forces review ----------------------------
+
+
+def test_an_unrostered_bill_to_forces_review(monkeypatch) -> None:
+    """Since Task 7, Comcast's `bill_to_name` is read directly off the printed
+    page (no label; isolated cleanly by the `top-left` region, which nothing
+    else in that box competes for) rather than being supplied only by the
+    pack's roster fallback. An unrostered / wrong-inbox client therefore no
+    longer shows up as a MISSING field (mechanism 1, above) - the printed name
+    is captured exactly as it appears - it shows up as a MISMATCHED one:
+    `resolve_bill_to_alias` compares the printed value against the pack's
+    roster (`MANAGED_CLIENTS`) and tags `bill_to_mismatch`, which
+    `s7_gate.DEFAULT_FORCED_REVIEW_TAGS` routes to `review` unconditionally -
+    the same outcome the old missing-field path produced, reached a different
+    way. This is what makes the wrong-inbox guard reachable for Comcast at
+    all: before Task 7, the roster fallback (`_roster_match`) could only ever
+    return a name already ON the roster, so it could never disagree with
+    itself and `bill_to_mismatch` was structurally unreachable for this
+    persona.
+    """
+    monkeypatch.setattr(dd_aliases, "MANAGED_CLIENTS", ("Somebody Else Entirely",))
+    record = _run()
+
+    assert record["fields"].get("bill_to_name") == "Clyde Administration Servi", (
+        "the test did not achieve the condition it is asserting about - the "
+        "printed name should still be captured even when it is not on the "
+        "roster"
+    )
+    assert "bill_to_mismatch" in record["tags"]
+    assert record["lane"] != "high", (
+        "an unrostered bill-to disagreed with the pack's roster and the "
+        "document was auto-approved anyway"
+    )
+    assert record["review_flag"] is True
 
 
 # -- mechanism 2: never declared at all ---------------------------------------
@@ -220,8 +279,9 @@ def test_a_wholesale_layout_change_asks_for_the_rules_to_be_regenerated() -> Non
 
 
 def test_one_missing_field_is_not_a_collapse(monkeypatch) -> None:
-    """`low` triggers a rule rewrite, so it must stay rare. A single missing field
-    is a gap in one rule, not a broken persona."""
+    """`low` triggers a rule rewrite, so it must stay rare. A single isolated
+    anomaly is a gap in one rule (or, since Task 7, one mismatched bill-to - see
+    `test_an_unrostered_bill_to_forces_review` above), not a broken persona."""
     monkeypatch.setattr(dd_aliases, "MANAGED_CLIENTS", ("Somebody Else Entirely",))
     record = _run()
     assert record["lane"] == "review"
