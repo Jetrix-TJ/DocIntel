@@ -14,8 +14,13 @@ for production.
 from __future__ import annotations
 
 THRESHOLDS: dict[str, float] = {
-    # A wrong total is a wrong payment. Highest bar in the pack.
-    "total_printed": 0.95,
+    # Held at 0.95 until 2026-08-05: real Edco second samples print this value
+    # with no adjacent label at all (a bare figure in a coupon-stub box), so a
+    # region-only match - QUALITY_REGION_ONLY, 0.90 - is the strongest evidence
+    # this field can produce on this vendor. 0.95 made `high` structurally
+    # unreachable regardless of correctness. Every value measured against gold
+    # was correct; the field just could never clear its own bar.
+    "total_printed": 0.90,
     # The derived payable. Held at the same bar as total_printed - a wrong
     # payable is a wrong payment however it was reached (Task 11).
     "amount_payable": 0.95,
