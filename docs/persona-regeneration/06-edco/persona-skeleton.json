@@ -1,0 +1,46 @@
+{
+  "sender_fingerprint": "<pack>|<vendor>",
+  "doc_type": "<one of the pack's declared doc types>",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "<one or two sentences: what this template looks like and why the selectors are shaped as they are>",
+  "field_selectors": [
+    {
+      "field": "<field name from the pack vocabulary>",
+      "anchor": "<the printed label to find first \u2014 omit if the region alone locates the value>",
+      "region": "<one of: any-page, first-page, header-block, label-block, last-page, last-table-row, line_items, near-anchor, remittance-block, same-cell, same-row, top-center, top-left, top-right, totals-block>",
+      "pattern": "<a named pattern kind, or a regex describing the SHAPE of the value>",
+      "adjust": [
+        "<zero or more adjust ops, in order>"
+      ],
+      "required": "<true if the pack cannot route this document without it; otherwise omit>"
+    },
+    {
+      "row_group": "line_items",
+      "table_anchor": "<the printed column header that starts the table>",
+      "columns": {
+        "<column name>": "<pattern kind>"
+      },
+      "column_headers": {
+        "<column name>": "<the printed header text>"
+      },
+      "row_count": {
+        "min": 1,
+        "max": 40
+      },
+      "allow_empty_cells": true
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 1,
+      "max": 1
+    },
+    "has_table": true,
+    "totals_page_role": "<first | last>",
+    "text_source": "<native | ocr>",
+    "column_signature": [
+      "<printed column headers, in order>"
+    ]
+  }
+}

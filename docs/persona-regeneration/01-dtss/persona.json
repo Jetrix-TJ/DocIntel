@@ -1,0 +1,110 @@
+{
+  "sender_fingerprint": "northstar|dtss",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Single-page QuickBooks-style service invoice: letterhead name and address flush top-left with no label of their own, a two-cell Date / Invoice # box top-right whose values print ~22pt BELOW their labels, a labelled 'Bill To' addressee block, a Description/Qty/Rate/Amount item table, and a Total / Payments-Credits / Balance Due ladder at the foot whose figures print ~6pt below and ~150pt right of each label. Every money and date selector is therefore anchored on its printed label and read with `near-anchor` or `totals-block` rather than `same-row`, because no value on this template shares a text line with the label that names it. `payment_terms` is deliberately absent: its value starts 1.8pt left of `near-anchor`'s left bound, so any anchored selector would silently return a truncated 'on receipt'.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "top-left",
+      "pattern": "text",
+      "adjust": ["resolve_vendor_alias"],
+      "required": false
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "D.T.S.S., Inc.",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false
+    },
+    {
+      "field": "invoice_number",
+      "anchor": "Invoice #",
+      "anchor_alts": ["Invoice No.", "Invoice Number"],
+      "region": "near-anchor",
+      "pattern": "integer",
+      "required": true
+    },
+    {
+      "field": "invoice_date",
+      "anchor": "Date",
+      "anchor_alts": ["Invoice Date"],
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"],
+      "required": true
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "Bill To",
+      "anchor_alts": ["SOLD TO"],
+      "region": "near-anchor",
+      "pattern": "text",
+      "adjust": ["resolve_bill_to_alias"],
+      "required": true
+    },
+    {
+      "field": "bill_to_address",
+      "anchor": "Bill To",
+      "anchor_alts": ["SOLD TO"],
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total",
+      "anchor_alts": ["Total Amount Due", "Total Invoice"],
+      "region": "totals-block",
+      "pattern": "currency",
+      "required": true
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments/Credits",
+      "anchor_alts": ["Payments"],
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": ["normalize_credit_sign"],
+      "required": false
+    },
+    {
+      "field": "balance_due",
+      "anchor": "Balance Due",
+      "anchor_alts": ["Amount Due"],
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "row_group": "line_items",
+      "table_anchor": "Description",
+      "columns": {
+        "description": "text",
+        "quantity": "integer",
+        "unit_price": "currency",
+        "amount": "currency"
+      },
+      "column_headers": {
+        "description": "Description",
+        "quantity": "Qty",
+        "unit_price": "Rate",
+        "amount": "Amount"
+      },
+      "row_count": { "min": 1, "max": 40 },
+      "allow_empty_cells": true,
+      "require_amount": true
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 2 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native",
+    "column_signature": ["Description", "Qty", "Rate", "Amount"]
+  }
+}

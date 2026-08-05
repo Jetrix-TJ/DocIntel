@@ -1,0 +1,349 @@
+> **Redacted copy.** Every value that appears as an expected answer in the
+> hand-labelled corpus has been replaced with `···`. The rules, the grammar and
+> the reasoning are intact; the answers are not. Source: `docs/packs/northstar-recycling.md`.
+
+# Pack: ··· — vendor AP invoices
+
+**Domain:** waste & recycling vendor invoices billed to ···
+(94 Maple St / ···).
+
+**Corpus evidence:** documents 1–6 in [`../corpus-analysis.md`](../corpus-analysis.md) —
+> *(lines discussing specific corpus documents removed)*
+
+**Defining characteristic:** commodity credits and service fees appear on the same invoice with
+opposite signs, and the match key back to Northstar's system of record is buried in free text under at
+least five different labels.
+
+---
+
+## 1. Document types
+
+Priority-ordered signal ladder for `classifySignals`. **First signal that fires wins**, then the ladder
+stops (spec Stage 3).
+
+| # | `doc_type` | Signal | Evidence |
+|---|---|---|---|
+| 1 | `credit_memo` | Title matches `credit memo` / `credit note` / `adjustment note` | — (not in corpus; keep above contra) |
+> *(lines discussing specific corpus documents removed)*
+| 4 | `statement_of_···` | No line-item table **and** title `statement of ···` | — |
+| 5 | `own_paperwork` | Letterhead is Northstar itself | — |
+> *(lines discussing specific corpus documents removed)*
+
+> **Ladder-order note.** `contra_invoice` must sit **above** `invoice_with_attachment`, because
+> *(lines discussing specific corpus documents removed)*
+> contains negative lines. Testing "has negatives" before "has attachments" would let a multi-page
+> invoice with a rebate line be misclassified as contra.
+
+### Tags (layered on, never change the type)
+
+| Tag | Trigger | Evidence |
+|---|---|---|
+> *(lines discussing specific corpus documents removed)*
+
+---
+
+## 2. Field set
+
+> **Narrowed to printed values.** Everything below is what the pack extracts
+> today, which is a strict subset of what this section originally specified. The
+> reason, the full list of what left, and how to bring it back are in
+> [`docs/superpowers/specs/2026-07-28-printed-fields-only-design.md`](../superpowers/specs/2026-07-28-printed-fields-only-design.md).
+> Anchors are unchanged — they were never the thing that was wrong.
+
+### `REQUIRED` is not a flat set
+
+The Required level says "**any** parseable date" and "**at least one** money
+amount", which V13 set-membership cannot express. `fields.py` encodes it as one
+unconditional name plus two any-of groups (spec §3):
+
+```python
+REQUIRED       = {"bill_to_name"}
+REQUIRED_ANY_OF = (
+    {"invoice_date", "bill_date"},                                        # any date
+    {"···", "balance_due", "please_pay",                        # >= 1 amount
+     "···", "subtotal"},
+)
+```
+
+`bill_to_name` is the only unconditional requirement because it carries the
+**guard** that the billed party resolves to Northstar. Requiring `invoice_date`
+> *(lines discussing specific corpus documents removed)*
+unwritable; requiring `···` outright would exclude every vendor that
+prints no total.
+
+`vendor_name` is deliberately *not* required. It stays in `FIELDS` (a readable
+letterhead is still captured) but the sender domain is the primary source; see
+`core/senders.py` and spec §4.
+
+### Printed — every `doc_type`
+
+| Field | Notes | Anchors observed |
+|---|---|---|
+| `vendor_name` | Letterhead; prefer remittance payee. Not required — see above | letterhead block |
+| `···` | | `Invoice #` · `Invoice No.` · `INVOICE #` · `No.` |
+| `invoice_date` | | `Date` · `Invoice Date` · `DATE` |
+> *(lines discussing specific corpus documents removed)*
+| `···` | The headline figure, **as printed** — never adjusted toward a payable | `Total` · `Balance Due` · `Total Amount Due` · `TOTAL` · `Amount Due` · `Total Invoice` |
+| `bill_to_name` | **Guard**: must resolve to Northstar | `Bill To` · `FOR` · `SOLD TO` |
+| `···_list[]` | Objects with provenance (F11) | see §3 |
+
+### Printed — commercial terms
+
+| Field | Anchors |
+|---|---|
+| `···` | `Due Date` · `DUE DATE` |
+| `payment_terms` | `Terms` · `PAYMENT TERMS` |
+| `prior_balance` *(optional)* | `···` · `Balance from last statement` · `Previous Balance` |
+| `···` *(optional)* | `···` · `Current Charges` |
+| `payments_credits` *(optional)* | `Payments` · `Payments/Credits` — stored negative |
+| `balance_due` `please_pay` | `Balance Due` · `Please Pay` |
+| `subtotal` | `Subtotal` · `Sub Total` |
+| `tax_amount` | `Total Tax` · `Taxes` · `···` · `G.S.T.` |
+| `charges[]` | `{label, amount}` pairs for surcharges (F14) |
+| `discount_date` `discount_amount` | `Discount Date` · `Discount Amount` |
+
+Every one of these is transcribed. No op reconciles them against each other and
+no op composes them into a figure to pay — that is `amount_payable`'s job and
+`amount_payable` is deferred, below.
+
+### Printed — allocation and addresses
+
+| Field | Anchors | Why |
+|---|---|---|
+| `service_location` | `SHIP TO` · `Location:` · `FOR SERVICE AT:` · `Service Address` | The end site the cost belongs to (F13) |
+| `···` `···` | `··· No.` · `···` | |
+| `bill_to_address` `bill_to_attention` `bill_to_email` | header addressee block | |
+| `remit_payee` `remit_address` `return_address` `vendor_address` | `Remit To` · `Make check payable to` · envelope block | |
+| `customer_po` `···_number` `bol_number` | see §3 | Match keys |
+> *(lines discussing specific corpus documents removed)*
+
+### Not in scope — deferred, not deleted
+
+Nothing here was removed from the gold files, and every module and unit test that
+produced it is still on disk. Re-enabling is a wiring change.
+
+| Field | Why it left |
+|---|---|
+| `amount_payable` `payable_basis` `carried_balance` | Derived. `DERIVED_ONLY` by construction (V10); guardrails 2 and 6 are `skip`ped with the reason as the message |
+> *(lines discussing specific corpus documents removed)*
+| `···_normalized` `···_normalized` | Computed forms of a printed value |
+| `vendor_legal_name` `vendor_phone` `vendor_email` `vendor_website` `billing_group` | Printed, and had working selectors. These left for deliverability, so this is the group that shrinks first when scope widens |
+> *(lines discussing specific corpus documents removed)*
+
+`document_identity` and `identity_basis` are derived and **retained**:
+`core/contract.py` requires their presence, so dropping them would break
+`count(intaken) == count(emitted)`. See spec §5.
+
+### Line items — `row_group`
+
+Columns matched by **header text** (F19). Union of headers seen across the corpus:
+
+```
+Date · Service Date · Mo/Day · Item · Product No. · Trans No. · ···
+Description · Description/···s · Qty · Quantity · Qty Ordered · Qty Shipped
+Weight · Unit Meas. · Rate · Price · Unit Price · Amount · Extended Price
+Charges · Payments · Balance · Total · GP
+```
+
+Per-row capture: `description` · `quantity` · `unit_price` · `amount` · `···?` ·
+`service_date?` · `item_code?` · `unit_of_measure?`
+
+> *(lines discussing specific corpus documents removed)*
+
+---
+
+## 3. ··· patterns
+
+Ordered alternatives, all captured, all with provenance (F11):
+
+| `pattern_id` | Pattern | Scope | Evidence |
+|---|---|---|---|
+> *(lines discussing specific corpus documents removed)*
+
+`···` is a bare 7-digit pattern and is therefore **only** legal scoped to a column
+(grammar V6) — unscoped it matches zip+4, phone fragments and ···s.
+
+Every hit emits:
+
+```jsonc
+{ "value": "···", "source_field": "···", "page": 1, "pattern_id": "···" }
+```
+
+> *(lines discussing specific corpus documents removed)*
+`2469435`, `2469427` — human corrections that OCR cannot distinguish from print (F3). Those hits are
+tagged `source_field: "annotation_overlay"` when the overlay detector fires, and the document is
+force-flagged for review. They are **never** silently merged with printed ···s.
+
+---
+
+## 4. Vendor alias table
+
+`beforePersonaLookup`. Small today; this is the file that grows.
+
+```
+d.t.s.s. | dtss | d t s s inc          → dtss
+··· | veritiv     → veritiv
+complete beverage destruction | cbd-usa → complete_beverage_destruction
+···
+  | federal international recycling
+  and waste solutions                   → federal_recycling
+u-pak disposals | ··· | u pak → upak
+··· | edco disposal → edco
+```
+
+> *(lines discussing specific corpus documents removed)*
+the check remittance says *"···"*. Prefer the
+payee (F5).
+
+---
+
+## 5. Hooks
+
+| Socket | Function | Purpose |
+|---|---|---|
+| `afterFilter` | `detectFlattenedAnnotations` | Colored-fill / overlapping-text detection → tag + force review (F3) |
+| `afterFilter` | `assignPageRoles` | `primary` / `supporting` classification (F10) |
+| `classifySignals` | `northstarLadder` | The §1 ladder |
+| `beforePersonaLookup` | `resolveVendorAlias` | §4 table, payee-preferred |
+> *(lines discussing specific corpus documents removed)*
+| `afterExtraction` | ~~`runArithmeticCrosschecks`~~ | **Deferred** — the three F8 checks |
+| `afterExtraction` | ~~`inferCurrency`~~ | **Deferred** — CAD from `···` + ON postal code (F14). `currency` was never ink on the page |
+| `afterExtraction` | `collect···s` | Ordered alternatives, provenance, dedupe |
+| `beforeConfidenceGate` | `northstarThresholds` | §6 |
+| `beforeEmit` | `attachAllocationMetadata` | `service_location`, `sub_···[]` |
+| `onRegenTrigger` | `excludeAnnotatedFromGold` | Annotated docs never enter the gold set (F3) |
+| — | ~~`applyBillingConventions`~~ | **Deferred** — supplies `prior_balance_basis`, a derived classification. `conventions.py` stays in the tree |
+
+Several rows in this table describe where the *spec* put a hook rather than where
+the implementation put it: `detectFlattenedAnnotations` and `assignPageRoles` are
+generic and live in `s2_filter`, `northstarThresholds` is `ConfidenceGate`
+reading `ctx.pack.thresholds`, and `attachAllocationMetadata` is already on the
+record. **`src/docintel/packs/northstar/hooks.py`'s module docstring is the
+authority** — it maps every spec row to where it actually lives, and it is
+maintained with the code.
+
+The four struck-through rows are deferred by the printed-fields-only narrowing
+(spec `docs/superpowers/specs/2026-07-28-printed-fields-only-design.md` §5). The
+implementations are all still in the tree; nothing calls them.
+
+---
+
+## 6. Confidence thresholds
+
+**Provisional — parked with the business per the spec's open questions.** Set here so the gate is
+testable from day one; expect these numbers to move.
+
+| Field | Threshold | Rationale |
+|---|--:|---|
+| `···` `please_pay` | 0.95 | A wrong total is a wrong payment |
+| `···` `prior_balance` | 0.95 | Both feed the payable a downstream consumer computes |
+| `···` | 0.92 | Dedup key |
+| `payments_credits` | 0.92 | |
+| `vendor_name` `remit_payee` `bill_to_name` | 0.90 | Downstream resolution can recover from near-misses |
+| `···` `···` | 0.90 | |
+| `invoice_date` `bill_date` `···` | 0.88 | |
+| `···_list[]` | 0.85 | A list; downstream matching tolerates extras |
+| `subtotal` `tax_amount` `discount_amount` `payment_terms` | 0.85 | |
+| match keys (`customer_po` `···_number` `bol_number`) | 0.85 | |
+| `service_location` `remit_address` `bill_to_address` | 0.80 | Allocation hint, human-correctable |
+| `vendor_address` | 0.75 | Lowest — the most layout-dependent block on the page |
+| line-item rows | 0.85 | |
+| ~~`amount_payable`~~ | ~~0.95~~ | **Deferred.** Nothing prices a value nothing produces; the row is out of `thresholds.py` |
+
+**Overrides**
+- `tags` contains `···` → **review flag regardless of confidence**.
+  Live, and the only forced-review tag: `s7_gate.DEFAULT_FORCED_REVIEW_TAGS`.
+- ~~`tags` contains `···` → require the line-sum check to pass, or review.~~
+  **Deferred.** The `···` tag is still emitted (`ladder.py`), but
+  `crosscheck_line_sum` is not in any persona's `adjust` list, so there is no
+  line-sum verdict to gate on. Re-enabling the crosschecks restores this.
+- `text_source == ocr` → apply `ocr_source ×0.90`; do not raise thresholds (that would double-count).
+
+`arith_balance_mismatch` is in `s7_gate.FORCING_MODIFIERS` and the gate machinery
+for it is intact and tested — but the only two ops that emit it
+(`grammar/ops/crosscheck.py`, `grammar/ops/derive.py`) are deferred, so **no
+> *(lines discussing specific corpus documents removed)*
+the `review` lane; it still routes to a human, see §7.
+
+### `(0.90, 0.99)` is currently a dead band
+
+**Every number in the table above was calibrated for a world with corroboration
+boosts, and that world is switched off.** The cross-check ops
+(`crosscheck_filename`, `crosscheck_scanline`, `crosscheck_total_composition`,
+`crosscheck_line_sum`) supplied per-field `ctx.boosts`, which is what used to
+lift a well-extracted field to the intermediate values these thresholds sit at.
+With those ops out of every persona's `adjust` list, measured per-field
+confidence across the whole corpus takes exactly **two** values on any document
+with no document-wide penalty: **0.90** (the base) and **0.99** (the cap reached
+another way). Measured 2026-07-29 over all ten documents: 27 fields at 0.90, 71
+at 0.99, and the only other values belong to the two documents carrying
+`ocr_source` / `flattened_annotations` multipliers, which push everything below
+0.70 at once.
+
+So a threshold strictly inside `(0.90, 0.99]` is no longer a graded bar. It is a
+binary one: reachable only by a field that hits 0.99, and failed by every field
+sitting at the base. In this pack that silently repriced `···` 0.95,
+`please_pay` 0.95, `···` 0.95, `prior_balance` 0.95,
+`···` 0.92 and `payments_credits` 0.92 into "0.99 or fail". The
+threshold edits made by the narrowing only deleted rows for deferred fields; no
+surviving number was revisited.
+
+That is what produces the §7 routing regression, and it is a **calibration**
+> *(lines discussing specific corpus documents removed)*
+number are both extracted correctly. Recalibration is deliberately not done
+here: it needs evidence gathered alongside the per-document persona work, not a
+number nudged until a lane matches.
+
+---
+
+## 7. Per-document expectations
+
+What each corpus document must produce. Full values in [`../corpus/gold/`](../corpus/gold/).
+
+**The `amount_payable` column below is the gold expectation, not current output.**
+No Northstar document emits a payable today — the derivation is deferred (§2).
+> *(lines discussing specific corpus documents removed)*
+those two numbers differ by $···.
+
+| Document | `doc_type` | `···` (emitted) | `amount_payable` (gold; **deferred**) | Gold routing | Measured lane |
+|---|---|--:|--:|---|---|
+> *(lines discussing specific corpus documents removed)*
+
+> *(lines discussing specific corpus documents removed)*
+carries the printed ···; the ··· that is actually payable is nowhere on it.
+The derivation that produced ··· is intact and its unit tests still pass — it
+is simply not registered, and GUARDRAIL 2 (`tests/test_f1_antiregression.py`) is
+`skip`ped with that as the reason. Extraction transcribes; interpreting the
+$··· gap is downstream's job under this design.
+
+### The routing regression: three documents, two different costs
+
+Measured 2026-07-29 against gold. Both costs are consequences of the §6 dead
+band, not gate bugs.
+
+| Document | Gold lane / `review_flag` | Measured lane / `review_flag` | Short field | Bar |
+|---|---|---|---|--:|
+> *(lines discussing specific corpus documents removed)*
+
+> *(lines discussing specific corpus documents removed)*
+version of this section said it "no longer routes to review", which is wrong:
+`s7_gate` sets `review_flag = True` on the `medium` lane too, so the document is
+still queued. It arrives in the wrong queue. §6's own argument for why `review`
+is a real lane rather than a synonym for `medium` is exactly that they are
+different queues with different fixes — "this document's numbers are shaky"
+> *(lines discussing specific corpus documents removed)*
+genuinely does not close (−48.92 unexplained), and it now presents as a
+confidence problem. A misroute, not an escape.
+
+> *(lines discussing specific corpus documents removed)*
+Both are documents gold calls clean — `review_flag: False`, `high` lane — and
+both now raise a review flag. Those are **two false-positive reviews**, human
+> *(lines discussing specific corpus documents removed)*
+··· are both extracted correctly and simply score 0.90 against bars
+of 0.95 and 0.92. Framing this as a benign "high → medium" confidence downgrade
+understates it: a downgrade that flags a clean document is a cost paid on every
+run.
+
+> *(lines discussing specific corpus documents removed)*
+`review` correctly, because flattened-annotation detection is generic and was
+never part of the narrowing.
