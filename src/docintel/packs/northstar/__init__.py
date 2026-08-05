@@ -33,6 +33,12 @@ BILL_TO_MARKERS: tuple[str, ...] = (
     "nsrecycle com",
     "po box 188 east longmeadow",
     "94 maple st east longmeadow",
+    # Real Edco second samples print the company name with OCR/print typos
+    # (NORTHSTART, NORTHSTAR RECY, NORTHSTRAY) that miss every marker above,
+    # but the state+zip prints correctly in all 4 confirmed cases, even the
+    # one where the city name is also garbled. Confirmed 2026-08-05 against
+    # all-docs/second-samples/edco/{176024OCT25,709223OCT25,823282AUG25,823282SEP25}.
+    "ma 01028",
 )
 
 
