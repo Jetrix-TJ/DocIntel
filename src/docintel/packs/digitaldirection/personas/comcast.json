@@ -111,6 +111,12 @@
       "anchor": "Make checks payable to"
     },
     {
+      "field": "bill_to_name",
+      "region": "top-left",
+      "pattern": "text",
+      "required": false
+    },
+    {
       "field": "bill_to_address",
       "anchor": "ATTN CLYDE COMPANIES-IT",
       "region": "label-block",
