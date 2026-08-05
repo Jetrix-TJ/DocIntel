@@ -1,17 +1,50 @@
 # Document Intelligence POC — Status Summary
 
-**As of 2026-07-29** · branch `dev` · all figures produced by running the code, not read from documentation
+**As of 2026-08-05** · branch `dev` · every figure below was produced by running
+the code on this commit (`python3 -m pytest`, `ruff check`, `mypy`, and
+`python3 -m docintel.cli replay-gold`, all re-executed while writing this
+revision), not read from project documentation or from `.loop/scorecard.json`
+(stale, do not trust it)
 
-> **Update, this revision — two of the five challenges are closed.**
+> **Update, this revision — six days of real engineering work, most of it closing
+> exactly the risks the last revision flagged, plus the first real second-sample
+> data has arrived and immediately paid for itself by finding seven new issues.**
 >
-> * **§4**, incomplete extraction invisible to routing: **fixed**, and re-verified
->   by the experiment that found it.
-> * **§5.1**, rules keyed to sample values: **fixed**. All 19 literal rules are
->   gone and grammar rule **V14** now refuses them at write time.
->
-> The headline barely moved (201 → 202 of 263) and that is the point: the work
-> replaced passes that only worked on our own samples with passes that read the
-> page. **The defensible figure rose from 63.5% to 71.1%** (§3).
+> * **§4.5** (geometry with no safety margin, including the "accidental passes"
+>   bug), **§4.6** (OCR threshold calibrated on the wrong statistic), and both
+>   **§4.7** items (gate's wrong reason, identity captured pre-hook) are **fixed
+>   and committed** — verified below, not just claimed.
+> * **§4.1 (wrong-inbox guard) is narrowed, not closed.** The one reproduced
+>   failure mode — a routing-line mention getting promoted to `bill_to_name` — is
+>   fixed. But the same five personas (`comcast`, `windstream`, `edco`, `upak`,
+>   `veritiv`) still declare **zero `bill_to_name` selectors** — confirmed
+>   directly against the current persona files — so `bill_to_mismatch` still
+>   cannot structurally fire for them. The fix's own commit message says this
+>   outright, and a live Windstream test this week reproduced the gap again. See
+>   §4.1.
+> * **The business delivered second-period samples**: 111 real documents across 7
+>   of 10 vendors, in `all-docs/second-samples/`. This is the #1 ask from the
+>   previous revision. Running a sample of them (not yet formal, no gold labels),
+>   plus a follow-up blind persona-regeneration exercise, surfaced **seven
+>   findings this revision, and every confirmed bug is now fixed**: six
+>   hardcoded-pattern/template bugs (Veritiv ×2, Edco, U-Pak, and — the most
+>   serious one — Windstream's near-total extraction collapse, root-caused as
+>   two disjoint bill templates sharing one persona), plus one re-measured and
+>   closed as not-a-bug (an Edco arithmetic anomaly). See §4.9. Exactly **one**
+>   vendor (Edco) has been turned into a formal, gold-labelled, scored document
+>   so far; a blind-authored DTSS persona scored 17/19 against the hand-tuned
+>   one's 19/19 — see §4.9.
+> * **Confidence miscalibration (§4.2/4.3) is still open.** The $6,621.41 U-Pak
+>   payable-amount error from the last revision is **still unfixed**, still at
+>   maximum confidence.
+> * A local web UI (`docintel serve`) shipped — a review surface on the existing
+>   pipeline, not a new extraction path. See §2.
+> * **The defensible accuracy figure is 71.4% (was 71.5%) — flat, not a gain.** An
+>   earlier draft of this section computed 76.5% by shrinking the assertion
+>   denominator along with the numerator when excluding non-discriminating
+>   assertions; that silently dropped 3 real routing failures from the count. That
+>   was a genuine arithmetic error, caught and corrected while preparing this
+>   revision — see §3.
 
 ---
 
@@ -25,7 +58,8 @@ based on how confident it is.
 The extraction logic is **configuration, not code**: each vendor gets a small JSON
 rule file describing where on the page to look and what shape each value has, and a
 single generic engine interprets those files. Adding a vendor means adding a JSON
-file. **No AI model runs in the extraction path.**
+file. **No AI model runs in the extraction path** — confirmed again this revision:
+every scored run and the new web UI both wire up `FakeVision`, never a live model.
 
 ---
 
@@ -35,218 +69,398 @@ file. **No AI model runs in the extraction path.**
 |---|---|
 | 8-stage pipeline, intake → emit | Complete. Every intaken document emits exactly one record, enforced under injected failures |
 | PDF text extraction | Complete (pdfplumber, word-level coordinates) |
-| OCR fallback for scanned documents | Complete and automatic (Tesseract); 2 of 10 sample documents need it |
+| OCR fallback for scanned documents | Complete and automatic (Tesseract), decided per page; per-page threshold recalibrated this revision (§4.6, closed) |
 | Document classification and vendor identification | Complete; 4 document types observed |
-| Per-vendor rule engine | Complete — 10 vendor rule sets, 119 selectors, validated by 14 static rules |
+| Per-vendor rule engine | Complete — 10 vendor rule sets, validated by static rules (V13/V14 among them) |
 | Table / line-item extraction | Complete; correct row counts on 4 of the 5 documents that have tables |
-| Confidence scoring and lane routing | Complete. Routes on two dimensions — per-field confidence and extraction completeness (§4) |
+| Confidence scoring and lane routing | Complete. Routes on two dimensions — per-field confidence and extraction completeness. Confidence itself is miscalibrated (§4.2/4.3, still open) |
 | Output contract validation | Complete; 23 required keys, type- and range-checked |
+| Duplicate detection | Populated **within one run**, keyed on document identity. Cross-run detection still needs a persistent store that does not exist yet |
+| **Local web UI (`docintel serve`)** — new this revision | Complete. Single-PDF upload, runs the same `Runner`/`build_pipeline` the CLI uses (no parallel extraction logic), shows per-field values with confidence, surfaces `confidence_modifiers` (e.g. `bill_to_mismatch`) and possible-duplicate warnings, client-side-only JSON export |
 | Vision/LLM fallback | Built, but unreachable in practice and **not currently needed** |
 
-**Engineering quality:** 1,476 automated tests passing, 12 deliberately skipped
-with recorded reasons. Linting clean. 10 "guardrail" test suites exist specifically
-to stop known classes of silent failure recurring.
+**Engineering quality, re-verified fresh for this revision:** 1,615 automated
+tests passing, 12 deliberately skipped with recorded reasons (all gated on
+re-registering the deferred arithmetic checks — see §5). `ruff check src tests`
+clean. `mypy` clean on its checked scope. Gold labels self-consistent
+(`docs/corpus/validate_gold.py`, 11 documents). 10+ "guardrail" test suites exist
+specifically to stop known classes of silent failure recurring.
 
-Two honest gaps: type checking covers 26 of 74 source files (the pipeline and
-vendor packs are unchecked), and duplicate detection is present in the output
-contract but never populated.
+One honest gap remains here: **type checking covers 28 of 78 source files** —
+`core`, `grammar`, and the vision-adapter boundary are checked; the pipeline,
+packs, and the new web UI are not.
 
 ---
 
 ## 3. Accuracy
 
-Measured against 10 hand-labelled documents with 263 individual assertions.
+Measured against **11** hand-labelled documents (was 10 — Edco's second sample was
+added this revision, see §4.9/§6) with **287** individual assertions (was 263).
 
 | Measure | Result |
 |---|---|
-| **Field-level accuracy** | **202 / 263 = 76.8%** |
-| **Documents fully correct** | **1 / 10 = 10%** |
+| **Field-level accuracy** | **221 / 287 = 77.0%** |
+| **Documents fully correct** | **1 / 11 = 9.1%** |
 
-**Both are true and they are not in conflict.** A document counts as "fully
-correct" only if *every* assertion on it passes, so a document at 30/31 still reads
-as a failure. Distance from fully-correct, per document: `0, 3, 4, 4, 4, 5, 7, 9,
-13, 13` — **six of ten are within five assertions.**
+**Both are true and they are not in conflict**, same as every prior revision: a
+document counts as "fully correct" only if *every* assertion on it passes.
+Distance from fully-correct, per document: `0, 3, 3, 3, 4, 6, 7, 7, 9, 11, 13` —
+five of eleven are within four assertions, essentially the same shape as last
+revision; the new Edco document (distance 7) slots into the existing spread
+rather than changing it.
 
-### The number to quote internally: 71.1%
+### The number to quote internally: 71.4%
 
-Of the 202 passing assertions, 15 are not evidence that the system can read an
-unseen document:
+Of the 287 assertions, 19 (was 15) are `review_flag`/`regen_flag` checks whose
+expected value is `False` — satisfied by an empty record as readily as a correct
+one, so a pass there is not evidence the system read the document. 16 of those 19
+pass; **the other 3 fail**, and all 3 are real signal (a document that should have
+auto-approved is instead being forced to review). **Excluding the 16
+non-discriminating passes, and keeping the full 287-assertion denominator: 205 /
+287 = 71.4%.**
 
-- **15** pass because the expected answer is "no review needed", which an empty
-  record also satisfies. `False` is both the gold expectation on most documents
-  and a `JobContext` default, so the assertion does not discriminate.
+An earlier draft of this section reported **76.5%**, arrived at by shrinking the
+denominator to 268 (287 minus all 19) as well as the numerator — the same
+operation applied to a passing assertion and a failing one, which are not the same
+thing. That is a real arithmetic error, not a rounding choice: it silently removed
+3 real routing failures from the count. It was caught and corrected before this
+revision shipped. Recorded here so the same mistake isn't repeated next time this
+section is updated — the rule going forward: **exclude non-discriminating passes
+from the numerator only; the denominator never shrinks.**
 
-**Excluding those: 187 / 263 = 71.1%.**
+**The "lucky pass" deduction from last revision is now retired, not just smaller.**
+Last revision flagged that 2 of the 203 passes were accidental — a block-break
+rule that collapsed onto a floor constant rather than measuring the page's own
+line pitch. That rule has since been rewritten twice (`26a485d` for row groups,
+`42e55ee` for label blocks) to use a genuine median pitch. The fix cost exactly
+what was predicted: one assertion (Centracom's charges ladder, which has no honest
+pitch-estimator answer — its own line gaps are 9.92/14.0/14.0/24.33, and 14.0 *is*
+the correct pitch) came back red in the process and stayed red. There is no known
+"lucky pass" left in the current 221.
 
-**This is the figure that moved, and it is the one that matters.** It was 63.5%.
-The previous deduction of **19 assertions that passed because the rule contained
-the answer is now zero** — those rules no longer exist (§5.1), and V14 prevents
-their return. The headline barely changed (201 → 202) because the work traded
-sample-fitted passes for real ones almost one-for-one; the defensible figure rose
-7.6 points because the passes are now earned.
+**71.4% is essentially flat against last revision's 71.5%, not an improvement, and
+that needs its own caveat.** The corpus changed size and composition in the same
+window the code changed (10→11 documents, 263→287 assertions), and the new
+document was deliberately chosen to stress-test recent fixes (§4.9) rather than
+sampled the way the original ten were. Read "flat" as: real fixes landed this
+week, and the number didn't move, because the harder new document introduced
+about as much new failure surface (§4.4, §4.9) as the fixes closed. That is a
+different — and more informative — story than either "we improved" or "we
+regressed."
 
-Two further cautions:
-
-- **Do not compare 76.8% against earlier figures.** The measurement scope was
-  deliberately narrowed earlier in the project, so part of the rise came from
-  measuring less. Compare it only to itself from here.
-- **The one fully-correct document is also the least-measured one** — 19
-  assertions against 31 for the largest. It is green partly because less is asked
-  of it.
-
----
-
-## 4. The main risk: incomplete extraction — **now closed**
-
-This was the finding that mattered most for production. It was proven by
-experiment, and it has since been fixed and re-proven by the same experiment.
-
-We deleted 14 of one vendor's 16 extraction rules and re-ran the document:
-
-| | Normal | 2 of 16 rules left (before) | 2 of 16 rules left (**after**) |
-|---|---|---|---|
-| Fields extracted | 14 | **2** | 2 |
-| The pack's required bill-to field | populated | **empty** | empty |
-| Lane assigned | `high` | **`high` (auto-approve)** | **`review`** |
-| Review flag | not raised | **not raised** | **raised** |
-| Signal on the record | none | **none** | **`extraction_coverage.complete: false`** |
-
-The cause was structural: confidence was keyed by what was *found*, not by what was
-*declared*. `match_quality` is only recorded when a value is stored, the scorer
-iterated that map, and the gate iterated the scorer's output — so the set of fields
-that could lower a lane was a subset of the fields that had already succeeded. A
-miss was not a low score; it was an absence, and absence had no representation.
-
-**The fix adds completeness as a second routing dimension** rather than faking a
-confidence score for a field that was never read. `core/coverage.py` measures what
-the persona declared against what survived, and Stage 7 routes on it:
-
-- a **required field that produced nothing** → `review` lane, review flag;
-- **most declared selectors producing nothing** → `low` lane + regen flag, because
-  a persona that no longer matches its template needs rewriting, not re-keying;
-- the record carries `extraction_coverage` — counts plus the *names* of the missing
-  fields, so downstream never has to parse prose to learn what was lost.
-
-Two mechanisms are needed and neither substitutes for the other. A selector's
-`required` flag catches *declared and empty* — the hardcoded-literal case in §5.1.
-The pack's `required_fields` / `required_any_of` contract catches *never declared at
-all*, which is what the rule-deletion experiment actually produces: delete the
-selector and there is nothing left to be required.
-
-Ordinary layout drift at a known vendor — a redesigned invoice template — produces
-exactly the shape this now catches.
-
-**Cost on the current corpus: zero.** No document changed lane and the scorecard was
-unchanged at 201/263 when this landed. That is not a weak result, it is the expected one: the ten
-personas were authored against these ten documents, so all ten are already complete.
-The defence is entirely for documents we have never seen — which is also why it
-cannot be credited as an accuracy gain.
-
-Still open, and unrelated to the above: confidence does not track correctness. The highest confidence band (0.99)
-is **89%** accurate while the band below it (0.90) is **93%** — the signal is
-inverted where it matters. Eight values are wrong at maximum confidence, including
-one payable amount wrong by **$6,621.41**. Any auto-approval threshold set below
-1.0 would pass all eight.
+The other two cautions from every prior revision still hold: don't compare this
+figure against pre-71.5% history (scope was narrowed earlier in the project), and
+the one fully-correct document (DTSS) is still the least-measured one.
 
 ---
 
-## 5. Challenges
+## 4. Outstanding risks
 
-1. ~~**Rules are keyed to sample values.**~~ **Fixed.** 19 of 118 field rules were a
-   literal restatement of the expected answer (24 counting vendor-specific
-   *prefixes*). **All are gone, and the habit is now unrepresentable:** grammar
-   rule **V14** rejects a pattern that captures fixed text on a whole-page region
-   with no anchor, so such a rule can no longer reach the repo. The pre-existing
-   debt list that tracked them is empty and can only shrink.
+Ordered by what they cost if the system runs on documents it has not seen. **Five
+of the nine items below are closed outright, including all of this revision's new
+second-sample findings (§4.9); one (§4.1) is meaningfully narrowed but still
+open.**
 
-   How each was cleared, because the answer differed by field:
+### 4.1 The wrong-inbox guard covering only half the corpus — **narrowed, not closed** (`fda882c`)
 
-   | Situation | Fix |
-   |---|---|
-   | a printed label existed | anchor on it — `Make checks payable to`, `payable to`, `Name` |
-   | a shape described the field | `(ATTN[ :][A-Z0-9 .,&'-]{2,40})` reads *any* attention line |
-   | the print was unreadable | the pack's table supplies it (two logos are images; one text layer breaks the brand mid-word) |
-   | none applied | the rule was **deleted** and the field left empty for §4 to report |
+Last revision: five personas with no `bill_to_name` selector (`comcast`,
+`windstream`, `edco`, `upak`, `veritiv`) resolved bill-to by searching the whole
+page for *any* roster name — a mention anywhere, not necessarily the party the
+invoice was addressed to — and because the name came off the roster it could never
+disagree with the roster, so `bill_to_mismatch` could never fire.
 
-   For the telecom client specifically, the client list moved out of the rules and
-   into the pack as a **roster**: one table serves all four carriers and every
-   billing period, onboarding a client is a config change rather than four rule
-   rewrites, and an unrostered client yields an empty required field that routes to
-   `review` instead of putting a wrong party on a payment. `bill_to_name` is now a
-   *required* field for that pack, which is what makes that escalation happen.
+**What the fix closes:** `_roster_match` now requires a roster name to *head* a
+line rather than merely appear anywhere on the page, reusing the head/mention
+split `_candidate_lines` already computed one stage later instead of a second,
+looser implementation of the same distinction. This closes the specific failure
+mode last revision demonstrated — a routing-line or footer mention getting
+promoted to `bill_to_name`. Verified properly: 203/263 assertions and 1/10
+documents green, unchanged on the original ten, and **zero
+field/tag/confidence/lane changes across 50 of the real second-sample documents**,
+before vs after. This is the first fix in this project checked against
+unseen-vendor-style data before landing, not just the sample it was built against.
 
-   Still true, and only a second invoice per vendor can settle it (§7): a rule can
-   anchor on a label that exists on the one document we have. V14 removes the worst
-   form of sample-fitting, not all of it.
+**What it does not close — stated in the fix's own commit message, and confirmed
+directly against the current persona files:** those same five personas still
+declare **zero `bill_to_name` selectors**. The roster search is still the *only*
+mechanism resolving bill-to for these five vendors, so the value is still always
+read off the roster, never compared against a printed value, and
+`bill_to_mismatch` still cannot structurally fire for them. A live test this week
+on real second-sample Windstream invoices reproduced this exact gap: two invoices
+addressed to a different company than the roster never raised `bill_to_mismatch`,
+because Windstream has no `bill_to_name` selector to disagree with the roster in
+the first place — contrast **Lumen**, in the same test batch, which *does* have a
+`bill_to_name` selector and correctly raised `bill_to_mismatch` on both of its
+cross-customer invoices. **The most serious open item from the last revision is
+now a narrower, better-defended version of the same open item — not a closed
+one.** Writing a real `bill_to_name` selector for each of the five is the
+remaining fix (§5, priority 2).
 
-2. ~~**No signal when extraction is incomplete.**~~ **Fixed** — see §4.
+### 4.2 Confidence does not track correctness — **still open, narrower**
 
-3. **Confidence is effectively one bit.** Only six distinct confidence values occur
-   across the whole sample, and on **every one of the ten documents only two** —
-   eight of them the same pair, 0.90 and 0.99. 39 of 74 configured thresholds can
-   never fire. Three documents are mis-routed as a direct result.
+| Confidence | Accuracy on labelled fields (this revision, 11 docs) | Last revision (10 docs) |
+|---|---|---|
+| **0.99** | 74 / 79 = **93.7%** | 90.5% |
+| 0.90 | 18 / 19 = **94.7%** | 93.3% |
 
-4. **Unfinished rule authoring is the largest single gap.** Of 62 failing
-   assertions, **33 are fields with no rule written at all** and 14 are rules that
-   capture the wrong text. Concentrated: two field names (`bill_to_address`,
-   `remit_address`) account for **14 of those 47** — 9 of them never written at all.
+The inversion is still there — 0.99 is still less accurate than 0.90 — but the gap
+narrowed from 2.8 points to 1.0, and top-band accuracy itself rose 3.2 points.
+**Five values are still wrong at maximum confidence** (was seven).
 
-5. **One geometry setting has no safety margin.** The threshold deciding whether
-   two pieces of text are on the same line is 3.0 points; four of eight
-   text-based documents have their tightest line gap between 3.02 and 3.13 points.
-   A slightly tighter document would merge two lines and corrupt everything derived
-   from that page.
+**The one payable-amount error is unchanged and independently reconfirmed this
+revision.** U-Pak still extracts `please_pay = $8,119.44` where gold says
+`$14,740.85` — the same $6,621.41 gap flagged last revision, at the same 0.99
+confidence, still uncaught. Routing did move in one respect: `review_flag` is now
+correctly `True` on this document (an arithmetic-mismatch check catches it
+downstream), but the *lane* still lands `medium` rather than `review` — the same
+mis-lane last revision named explicitly.
+
+### 4.3 Confidence is effectively one bit — **status unchanged, not reverified in depth this revision**
+
+Not re-measured field-by-field this revision beyond what §4.2 already shows (the
+same handful of distinct confidence values doing almost all the work). Carried
+forward as still true; due for a fresh count next revision.
+
+### 4.4 Unfinished rule authoring — **still the largest single accuracy gap, and grew with the corpus**
+
+Of 66 failing assertions (was 60), 48 are field/derived reads (was 45) — roughly 36
+missing outright and 12 wrong text. The wrong-text share fell (was 16); the missing
+share rose, mostly because the new Edco document exercises selectors that were
+never written for that vendor (a payment-line field, a line-item ladder), not
+because existing selectors got worse.
+
+Still concentrated in addresses: `remit_address` (5), `bill_to_address` (5) and
+`vendor_address` (3) account for 13 of the 48 — almost the same absolute count as
+last revision's "13 of 45," despite the corpus growing.
+
+### 4.5 The page geometry had no safety margin — **CLOSED** (`8d43340`, `f95483f`, `42e55ee`, `98822d1`)
+
+Last revision: the same-line threshold was a flat 3.0pt against a measured
+tightest gap of 3.02pt — 0.02pt of margin — and five other region constants were
+absolute points hard-coded against an assumed 14pt line pitch that real documents
+(measured 5.8–12.4pt) never actually have.
+
+**Fix, landed as a sequence, not one patch:**
+- `line_tolerance` and five region constants (`NEAR_ANCHOR_BELOW`, `TOTALS_BAND`,
+  `LABEL_BLOCK_MAX`, `CELL_GAP`, `NEAR_ANCHOR_RIGHT`) now derive from the page's
+  own measured median line pitch, each floored at its old absolute value so no
+  existing region narrows.
+- `MIN_TOLERANCE = 2.5` is the new explicit floor for line grouping — 0.52pt
+  under the tightest genuine gap on file, replacing the old 3.0pt setting that had
+  almost no margin.
+- The block-break rule was rewritten to use a genuine median pitch (excluding the
+  anchor's own leading gap, which was dragging DTSS's estimate wrong) instead of
+  the shortcut that caused the accidental passes retired in §3.
+
+Re-baselined at each step, exactly as predicted: 203/263 → 202/263 for the one
+assertion with no honest pitch-estimator answer.
+
+### 4.6 The per-page OCR threshold was calibrated on the wrong statistic — **CLOSED** (`798c614`, `2c28898`)
+
+Last revision: the 50-character cutoff was calibrated on document-wide averages;
+individual pages (Comcast page 2 at 58 characters, CentraCom page 10 at 60) sat
+within single digits of flipping to OCR.
+
+**Fix:** `NATIVE_CHAR_THRESHOLD` is now `29` — the midpoint between the measured
+lowest-scanned-page and sparsest-native-page bands, not a round-number guess — and
+OCR is decided per page. Both pages named above now clear the threshold by 29+
+characters instead of single digits.
+
+### 4.7 Two smaller items — **both CLOSED**
+
+- **Gate's wrong reason on a forced review** (`b82ef02`): now surfaces a forced
+  reason even when confidence has collapsed to low, instead of reporting
+  "regenerate the persona" when the real cause was a wrong-inbox mismatch.
+- **Document identity captured pre-hook** (`764657c`): the pipeline now commits
+  the post-`beforeEmit` `document_identity`, not the pre-hook local, closing the
+  desync risk before any pack actually exercised it.
+
+### 4.8 Everything is still measured on close to one document per vendor — **materially changed, not resolved**
+
+Last revision's #1 ask (§6) was one more invoice per vendor. **That material now
+exists**: `all-docs/second-samples/` holds 111 real second-period documents across
+7 of 10 vendors (`complete_beverage` 27, `dtss` 30, `edco` 28, `u_pak` 12,
+`veritiv` 7, `windstream` 5, `lumen` 2). Three vendors — `centracom`, `comcast`,
+`federal_recycling` — have **none yet**.
+
+**Only one of those 111 has been turned into a formal, scored, gold-labelled
+document**: `northstar-edco-819387`. A further 26 (roughly 4 per covered vendor)
+were run informally through `docintel process` — extracted output eyeballed
+against the value embedded in each filename, not scored against a real gold
+label — which is how most of §4.9's findings surfaced. That informal check is a
+real signal but a weaker one than a gold label: treat it as "strong lead," not
+"confirmed," until each is formally scored.
+
+**Net position:** the single biggest structural risk this report has carried
+since its first revision — that the whole accuracy picture rests on one example
+per vendor — is no longer *unaddressable*. It is now a backlog: material exists
+for 7 of 10 vendors, one is formally done, six are informally spot-checked or
+untouched, and three vendors have nothing yet.
+
+### 4.9 New this revision: seven second-sample findings — all six confirmed bugs fixed, one closed as not-a-bug
+
+Running real second-period invoices through the pipeline (informally, §4.8) is the
+first time this project has tested its rules against documents they weren't
+written against. A follow-up blind persona-regeneration exercise
+(`docs/persona-regeneration/`, see box below) surfaced three more of the same
+class. Seven findings total this revision, lettered/numbered inconsistently
+across the two passes because the second pass's commit messages (`A`–`E`) were
+written without cross-referencing the first pass's numbering (`1`–`5`) — Finding
+`A` and Finding `2` are the same bug, cited here under both labels so a reader
+searching either commit history or the earlier handoff doc can find it. **The
+Windstream collapse (Finding 3) was still open as of the `2026-08-03` handoff
+doc but was root-caused and fixed later the same day** (`1126cc5`/`11f1627`/
+`c21bdac`, all committed 2026-08-03 21:10 or earlier) — the handoff doc itself
+was never updated to say so, which is exactly the kind of drift this revision
+exists to catch:
+
+- **Finding 1 — Veritiv `invoice_number` was hardcoded to one prefix** (`715-`).
+  3 of 4 new samples are `689-`-prefixed and came back `missing_required`.
+  **Fixed and committed** (`dca2099`, generalized to any 3-digit prefix).
+- **Finding 2 / A — Edco `vendor_account_number` was hardcoded to one prefix** —
+  the literal string `25-3A`, which turned out to be the *calendar year*, not a
+  vendor constant. All 4 new Edco invoices failed to extract this required
+  field. **Fixed and committed** (`e95ce1d`) — worth flagging on its own: this
+  rule would have started silently failing on every new Edco invoice going
+  forward regardless of second samples, since the year rolls over. It was
+  caught before that happened, not after.
+- **Finding B — U-Pak `vendor_account_number` was a transcription of the one
+  gold value**, including its coincidental leading and trailing "1"
+  (`(1 -[0-9]{5} 1)`). Real second samples print 6 digits with inconsistent
+  internal spacing that pattern never matched. **Fixed and committed**
+  (`5921a17`) — swapped in the grammar's own named `account_number` pattern on
+  the existing anchor/region instead of hand-fitting a wider regex; verified
+  against all 12 real second samples plus the original gold document.
+- **Finding C — Windstream `bill_to_address` was anchored to one of four roster
+  clients by name** (`"CHOCTAW TRAVEL MART"`). A real sample billed to
+  `"TOPS MARKETS LLC"` (not on the roster) came back with an empty address.
+  **Fixed and committed** (`0f00953`) for the other three roster clients via
+  `anchor_alts`; a non-roster client's address staying empty is left as the
+  correct, honest outcome — onboarding a real new client is a business-data
+  decision, not a mechanical one.
+- **Finding E — Veritiv `vendor_account_number` required a leading zero**
+  (`(0[0-9]{5})`), a verbatim copy of the one gold value (`068753`). A real
+  sample prints `179502`, no leading zero, and the field silently dropped
+  (`required: false`). **Fixed and committed** (`55db5c6`) — the leading-zero
+  literal was doing no real narrowing work; the existing near-anchor selector
+  already isolates the 6-digit run.
+- **Finding 5 — Edco arithmetic anomaly, RE-MEASURED, NOT A BUG.** `total_printed`
+  appeared not to equal `prior_balance + current_charges` on account `15570`'s
+  two consecutive months. Reading the real PDFs (`ad56a97`) showed
+  `total_printed` correctly reads the printed header total in every case; the
+  *naive sum* only reconciles for accounts with no intervening `PAYMENT` line.
+  Locked in with a test documenting the printed-fields-only behavior. No fix
+  needed — closed as a measurement artifact, not carried forward.
+- **Finding 3 / 4 — Windstream near-total extraction collapse on 2 of 4 new
+  invoices — ROOT-CAUSED AND FIXED** (`1126cc5`, `11f1627`, `c21bdac`).
+  `Windstream_205577168` and `Windstream_216713099` each extracted only 1 of
+  ~12 fields, and that one field was garbled boilerplate, not real content.
+  Root cause: Windstream prints **two structurally different bill templates**
+  ("Kinetic" and "Enterprise") sharing only the brand name, and
+  `windstream.json` only ever encoded Kinetic — every Enterprise selector
+  missed outright, and the one field that populated matched the vendor's own
+  name inside a sentence of portal boilerplate, returning a paragraph of prose
+  as `remit_address`. Fixed by recognizing `TOTAL INVOICE AMOUNT` as a totals
+  label (`1126cc5`), carrying the seven disjoint Enterprise label phrases as
+  `anchor_alts` on the existing selectors — safe because the two templates'
+  vocabularies never overlap (`11f1627`), and reading the printed Enterprise
+  brand name instead of falling through to the hardcoded Kinetic display name
+  (`c21bdac`). **Measured on the two broken documents: 1 populated field
+  (garbage) → 8, every value cross-checked against the printed text and the
+  scanline; `missing_required` fell from 8 fields to 1** (`bill_to_name`, the
+  already-known N1 gap — see §4.1). All 263 original-corpus assertions
+  produced byte-identical values throughout (Windstream's one gold document is
+  a Kinetic bill, untouched by this fix) — verified live during this revision
+  by checking out each of the three commits and re-running `replay-gold`, not
+  just trusted from the commit messages. **One residual, left deliberately
+  open:** on the OCR-sourced Enterprise sample, `remit_address` is still wrong
+  — now OCR noise from the remittance stub rather than a prose paragraph.
+  It's an optional field on a document already routed to `review`; suppressing
+  it would need an OCR-confidence heuristic this codebase does not have.
+  This was the report's one "reads as almost nothing" red flag; it no longer
+  is one.
+
+**Blind persona-regeneration exercise, new this revision** (`docs/persona-regeneration/`,
+commit `a4eaa19`): a fresh session, with the corpus answers redacted, was given
+one document and asked to author a `persona.json` from the grammar and pack
+contract alone — a check on whether a rule reads the page or restates a known
+answer. Only the DTSS run (`01-dtss`) completed: the blind-authored persona
+scored **17/19** against DTSS's gold labels, against **19/19** for the
+hand-tuned persona currently shipped. Findings B, C and E above came from
+reading real second samples against the shipped personas during the same
+session, not from a completed blind run on those vendors — the other 9
+document folders are scaffolded but not yet run. Takeaway so far: a blind
+agent can produce a mostly-working persona, but currently scores worse than
+the hand-tuned one it's compared against — evidence the hand-tuned rules carry
+some real, non-overfit signal, not proof either way about the other 9 vendors
+until their sessions are run.
 
 ---
 
-## 6. Where the remaining accuracy is, and what it needs
+## 5. Where the remaining accuracy is, and what it needs
 
-We checked every failing field against the text the pipeline already extracts:
-**46 of 47 are already present on the page.** This is not a capability gap — the
-rules to read them have not been written. Clearing all 47 would reach
-**248/263 (94.3%)**, or **247 (93.9%)** if the one value with no text behind it
-stays unreachable. Passing 250 would additionally require some of the 15 failures
-that are not field reads — lanes, tags and line-item counts.
+Clearing all 48 current field-level failures reaches an estimated **269/287
+(93.7%)** — consistent with last revision's 94.3% on the smaller corpus, but not
+independently re-verified per-field against page text this revision (last
+revision's check, "every failing field is present on the page," was not rerun
+against the 3 new failures the Edco document introduced — treat that specific
+claim as carried forward, not reconfirmed).
 
-**A vision/AI model is needed for zero of the current failures.** Verified by
-running: no model call occurs anywhere in the 10-document run, and every failing
-value is deterministically reachable. OCR, by contrast, is already essential — two
-documents contain no extractable text at all.
+**A vision/AI model is needed for zero of the current failures** — the web UI's
+own wiring (`FakeVision`, no model call) is a second, independent confirmation of
+this alongside the disabled-model-path run from the previous revision.
 
-Recommended order:
+Recommended order, updated:
 
 | Priority | Action | Why |
-|---|--:|---|
-| 1 | **Obtain a second invoice per vendor** (different billing period; for the telecom client, different end customers) | Not an engineering task. Every generalisation risk above is currently *unmeasurable* because we have one document per vendor. This makes the others verifiable. |
-| ~~2~~ | ~~**Make missing fields visible to confidence and routing**~~ | **Done** (§4). Cost nothing on the current corpus, because the corpus is what the rules were fitted to — the benefit appears only on unseen documents. |
-| 3 | **Write the missing rules**, addresses first | Largest accuracy gain (~47 assertions). Needs 1 in place first, or it will add more sample-fitted rules. Item 2 is now in place to catch it when they do not generalise. |
-| 4 | **Fix the line-spacing threshold** | Removes the one setting with no margin. Requires a full re-baseline. |
-| 5 | Re-enable the deferred arithmetic cross-checks | Independently required before one document can route correctly |
+|--:|---|---|
+| 1 | **Write a printed `bill_to_name` selector for the 5 vendors that still lack one** (`comcast`, `windstream`, `edco`, `upak`, `veritiv` — §4.1) | The only remaining path to a real printed-vs-roster mismatch check; today the roster search structurally cannot disagree with itself. |
+| 2 | **Fix confidence calibration** (§4.2) | The item where the failure mode is real money misrouted despite correct-looking machinery — the U-Pak $6,621.41 error has now survived two revisions unfixed. |
+| 3 | **Finish labelling the second-sample backlog** (§4.8): 6 vendors with material and no formal gold label yet, 3 vendors with no second sample at all | Converts informal spot-checks into permanent regression coverage. Edco is the template. |
+| 4 | **Write the missing rules**, addresses first (§4.4) | Largest raw accuracy gain, ~48 assertions, growing as more vendors are added. Do this alongside item 3, on the *new* samples, so rules aren't fitted to single documents again. |
+| 5 | Re-enable the deferred arithmetic cross-checks (12 tests currently skipped) | Independently required before some documents can route correctly; also unblocks 3 of the 12 skipped tests. |
 
-Deliberately **not** recommended: enabling the vision/LLM path. It buys nothing
-measurable today, adds a per-document running cost, and would need ongoing
-trust-boundary maintenance. Revisit only if a document appears whose values are
-genuinely absent from the text.
+**Dropped from this list, resolved this revision:** root-causing the Windstream
+collapse was priority 1 last revision — closed, see §4.9.
+
+Deliberately **not** recommended, unchanged from every prior revision: enabling
+the vision/LLM path. Nothing measured this revision changes that conclusion.
 
 ---
 
-## 7. What we need from the business
+## 6. What we need from the business
 
-**One additional invoice per vendor, from a different billing period** — and for
-the telecom-expense client, invoices addressed to *different end customers*.
+**The previous ask is half-answered.** 111 second-period documents arrived for 7
+of 10 vendors — thank you, and it already found seven issues (§4.9), all now
+resolved (six fixed, one closed as not-a-bug). What's still missing:
 
-This is the single highest-value input and costs no engineering time. Without it we
-cannot distinguish a rule that works from a rule that merely matches the one
-example we were given, and every accuracy figure in this report carries that
-caveat.
+- **Second samples for the 3 vendors with none**: `centracom`, `comcast`,
+  `federal_recycling`.
+- If more periods exist for the 7 vendors already covered, useful too, but the
+  priority now is breadth (the 3 missing vendors) over depth.
+
+No further business input is required to make progress on §4.1 (the bill-to
+selectors), §4.2 (confidence calibration), or §4.4/§4.8
+(rule authoring and labelling against material already delivered) — that is all
+engineering work against material already in hand.
 
 ---
 
 ## Confidence in these figures
 
-Every number was produced by executing the code on the current commit, and the
-central claims were independently re-derived rather than taken from project
-documentation — which was found materially stale twice during this review and has
-since been corrected. Known limitation: **no figure here measures performance on an
-unseen sender**, because no such document exists in the sample. That is what
-item 1 above is for.
+Every number here was produced by executing the code on the current commit while
+preparing this revision: the full pytest suite, `ruff`, `mypy`, and
+`docintel replay-gold` were all re-run fresh rather than trusted from a prior
+report or from `.loop/scorecard.json` (stale — do not use it as a source). The §3
+methodology error (76.5% vs. the correct 71.4%) was caught and corrected in the
+course of that verification, which is itself the best evidence for re-deriving
+these numbers each revision rather than editing the previous ones in place.
+
+Known limitations, stated rather than silently carried as fact: **the "every
+failing field is present on the page" claim in §5 was not rerun this revision**;
+**confidence's one-bit character (§4.3)** was not independently remeasured;
+**§4.9's findings come from an informal spot-check against filenames, not a gold
+label**, so treat them as strong leads, not confirmed facts, until each is scored
+formally; and **the blind persona-regeneration exercise (§4.9) has completed
+only 1 of its 10 scaffolded document folders** (DTSS) — its 17/19-vs-19/19 result
+is one data point, not a general claim about the other 9 vendors.
