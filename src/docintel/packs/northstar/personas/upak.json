@@ -36,6 +36,7 @@
     },
     {
       "field": "total_printed",
+      "anchor": "Total Invoice",
       "region": "totals-block",
       "pattern": "currency",
       "adjust": [
