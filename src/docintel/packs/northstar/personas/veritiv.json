@@ -7,7 +7,8 @@
   "field_selectors": [
     {
       "field": "invoice_number",
-      "region": "header-block",
+      "anchor": "Invoice No.",
+      "region": "near-anchor",
       "pattern": "([0-9]{3}-[0-9]{8})"
     },
     {

@@ -20,7 +20,7 @@ pass this by accident the way it could pass a corpus-only check.
 from __future__ import annotations
 
 from docintel.core.models import JobContext, PageMeta, PageText, Word
-from docintel.grammar.executor import Executor
+from docintel.grammar.executor import QUALITY_ANCHORED, Executor
 from docintel.grammar.schema import parse_persona
 from docintel.packs.registry import load_packs
 
@@ -110,3 +110,25 @@ def test_does_not_bleed_into_the_neighbouring_account_number() -> None:
     widened past `[0-9]{3}-[0-9]{8}` (e.g. dropped the dash or the digit
     counts) would be the first place that showed up."""
     assert _extract_invoice_number("689-37525600") != "179502"
+
+
+def _extract_with_quality(invoice_no: str) -> tuple[str | None, float | None]:
+    persona = parse_persona(
+        {
+            "sender_fingerprint": "x|y", "doc_type": "standard_invoice",
+            "rule_version": "v1", "status": "draft",
+            "field_selectors": [_veritiv_invoice_number_selector()],
+            "layout_fingerprint": {},
+        }
+    )
+    ctx = Executor(persona).apply(_ctx(_header_page(invoice_no)))
+    return ctx.extracted.get("invoice_number"), ctx.extracted.match_quality.get("invoice_number")
+
+
+def test_invoice_number_is_anchored_not_region_only() -> None:
+    """The bug this fixes: region-only match_quality (0.90) sits under Veritiv's
+    own 0.92 invoice_number threshold, so this field alone forces every Veritiv
+    document to `medium` even when the value is correct. An anchored match
+    (1.0) clears it."""
+    _, quality = _extract_with_quality("689-37525600")
+    assert quality == QUALITY_ANCHORED
