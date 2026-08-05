@@ -234,6 +234,24 @@ ENTERPRISE_LINES: list[Line] = [
         101.7,
         [("77170792", 351, 391), ("Sep", 426, 442), ("10,", 445, 457), ("2025", 460, 480)],
     ),
+    # The Enterprise `bill_to_name` anchor and the customer block under it
+    # (Task 8's selector; real coordinates from the same PDF - the anchor at
+    # top=110.25 x0=47.00, the name at top=144.66, the street at top=156.70).
+    # Present so `test_the_two_templates_label_vocabularies_are_disjoint` is
+    # actually checking a phrase this fixture prints: without it the invariant
+    # held vacuously for `bill_to_name`, which is the one selector whose two
+    # phrases were added last and never represented here.
+    (
+        110.25,
+        [
+            ("Check", 47.0, 75.0), ("here", 76.94, 99.34), ("for", 101.28, 118.08),
+            ("change", 120.02, 153.62), ("of", 155.56, 166.76),
+            ("address(note", 168.7, 235.9), ("changes", 237.84, 277.04),
+            ("below)", 278.98, 312.58),
+        ],
+    ),
+    (144.66, [("GOLUB", 47.0, 75.0), ("TOPs", 77.5, 99.9), ("HQ", 102.4, 113.6)]),
+    (156.7, [("501", 47.0, 63.8), ("DUANESBURG", 66.0, 122.0), ("RD", 124.2, 135.4)]),
     (162.9, [("Remit", 376, 402), ("Payment", 405, 444), ("To:", 447, 462)]),
     (174.9, [("Windstream", 376, 429)]),
     (186.9, [("P.O.", 376, 396), ("Box", 399, 416), ("9001013", 419, 458)]),
@@ -309,6 +327,21 @@ KINETIC_LINES: list[Line] = [
             ("July", 493, 506), ("22,", 508, 519), ("2025", 522, 539),
         ],
     ),
+    # The Kinetic `bill_to_name` anchor and the customer block under it, the
+    # mirror of the Enterprise rows above and present for the same reason. The
+    # anchor is the WHOLE line: `kineticbusiness.com` is at x0=470.88 on the
+    # anchor's own row (real top=104.59, inside the 3pt line tolerance), and
+    # anchoring on `Website:` alone would leave it as the region's first
+    # candidate.
+    (
+        107.26,
+        [("Website:", 326.88, 358.0), ("kineticbusiness.com", 470.88, 542.46)],
+    ),
+    (
+        127.14,
+        [("CHOCTAW", 327.6, 366.8), ("TRAVEL", 369.0, 402.6), ("MART", 404.8, 427.2)],
+    ),
+    (136.79, [("PO", 327.6, 338.8), ("BOX", 341.0, 357.8), ("1550", 360.0, 382.4)]),
     (243.2, [("Previous", 328, 363), ("Bill", 365, 377), ("$1,231.74", 534, 574)]),
     (
         254.1,
@@ -655,4 +688,33 @@ def test_the_two_templates_label_vocabularies_are_disjoint() -> None:
     # unnecessary and should be reconsidered rather than left as folklore.
     assert all(occurs(page, "WINDSTREAM") for page in pages.values())
 
+    # NON-VACUITY. `len(present) <= 1` passes trivially on a page that prints
+    # NEITHER of a selector's phrases, so the invariant only says something
+    # about the selectors these fixtures actually carry. `bill_to_name` was
+    # added (Task 8) after this file was written, and until its two rows were
+    # added to `ENTERPRISE_LINES`/`KINETIC_LINES` it was being "checked" against
+    # pages that could not have violated it either way. Pinned explicitly so
+    # that removing those rows fails here, with a reason, rather than quietly
+    # returning this selector to the vacuous set.
+    bill_to = next(
+        s for s in persona.field_selectors if getattr(s, "field", None) == "bill_to_name"
+    )
+    (alt,) = bill_to.anchor_alts
+    assert occurs(pages["Kinetic"], bill_to.anchor)
+    assert not occurs(pages["Enterprise"], bill_to.anchor)
+    assert occurs(pages["Enterprise"], alt)
+    assert not occurs(pages["Kinetic"], alt)
+
     assert checked >= 14, f"only {checked} phrases checked - the persona lost its alts"
+
+
+def test_bill_to_name_reads_each_template_from_its_own_anchor() -> None:
+    """The other half of the same fixture change: the two rows are not decoration.
+
+    With them present, the shipped selector reads the real customer name on both
+    templates through `anchor_alts`, off page geometry copied from the two real
+    PDFs - which is what makes the disjointness invariant above worth asserting
+    for this selector at all.
+    """
+    assert _extract(_page(KINETIC_LINES))["bill_to_name"] == "CHOCTAW TRAVEL MART"
+    assert _extract(_page(ENTERPRISE_LINES))["bill_to_name"] == "GOLUB TOPs HQ"

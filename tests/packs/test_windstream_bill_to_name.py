@@ -1,6 +1,9 @@
-"""Windstream is one of the 5 personas that shipped with no `bill_to_name`
-selector, so the field came from `resolve_bill_to_alias`'s roster rung and
-`bill_to_mismatch` could never fire on a Windstream bill.
+"""Windstream was one of the 5 personas that shipped with no `bill_to_name`
+selector (STATUS-SUMMARY.md §4.1), so the field came from
+`resolve_bill_to_alias`'s roster rung and `bill_to_mismatch` could never fire on
+a Windstream bill. This file is the selector that closed its share of that
+finding; all five - `comcast`, `windstream`, `edco`, `upak`, `veritiv` - carry
+one as of this branch, so the count is now zero.
 
 It is also the persona that carries TWO structurally different templates with
 completely disjoint label vocabularies (see `test_windstream_enterprise_template.py`
@@ -64,9 +67,17 @@ rather than cosmetic:
     substring test, a generic fragment like `COMPANY` matches most roster
     entries - so a genuinely misdirected bill would have SUPPRESSED
     `bill_to_mismatch` rather than raising it. Anchoring makes the capture
-    all-or-nothing; a name this shape cannot express misses and falls through
-    to the roster rung, which is the answer this persona gave before the
-    selector existed.
+    all-or-nothing.
+
+    What rejection then does is NOT "fall through to the roster rung", which is
+    what this file and the persona's `notes` both claimed until the whole-branch
+    review measured it. `near-anchor`'s span keeps offering candidates after the
+    shape rejects the first one, so on the Kinetic template an unexpressible
+    name is skipped and the ADDRESS LINE BELOW IT is captured instead - see
+    `test_an_unmatchable_kinetic_name_falls_through_to_the_address_line`. It
+    fails safe (a PO box line is not a bidirectional substring of any roster
+    entry, so `bill_to_mismatch` still fires) but the value is wrong, and no
+    in-vocabulary pattern separates `PO BOX 1550` from a real two-token name.
   * **A required internal space.** Anchoring alone is not enough, because
     `_candidates` offers every word of a row on its own after the cells, so
     `COMPANY` would still be reachable as its own candidate. Requiring a space
@@ -292,3 +303,61 @@ def test_a_single_generic_word_can_never_be_captured() -> None:
         assert match(lone) is None, lone
     # ...while the same words inside a real two-token name still read whole.
     assert match("3M COMPANY") == "3M COMPANY"
+
+
+# --------------------------------------------------------------------------
+# What rejection actually does (whole-branch review, 2026-08-06)
+# --------------------------------------------------------------------------
+
+# Names the shape cannot express, because they are a single token. The
+# guard-suppression fix above is what makes them unmatchable; this block is
+# about what the executor does NEXT, which is not what the persona's `notes`
+# and this file's own docstring claimed until it was measured.
+UNMATCHABLE_SINGLE_TOKEN_NAMES = ("SYSCO", "3M", "ACME")
+
+
+def test_an_unmatchable_kinetic_name_falls_through_to_the_address_line() -> None:
+    """NOT a clean miss, and NOT a fall-through to the roster rung.
+
+    `_apply_field` walks every candidate the region offers and stops at the
+    first the pattern accepts. `near-anchor` reaches 40pt below the anchor, and
+    on Kinetic the customer's own street line sits 9.65pt below the name
+    (`PO BOX 1550`, top=136.79, well inside), so rejecting the name only moves
+    the read down one line - it does not end it.
+
+    This FAILS SAFE, which is why it is pinned rather than re-engineered:
+    `bill_to_matches_roster` is a bidirectional normalized substring test and
+    `PO BOX 1550` is not a substring of any Digital Direction roster entry, nor
+    any of them of it, so `bill_to_mismatch` still fires. But the value on the
+    record is an address line rather than a party, and no pattern in the closed
+    vocabulary can tell `PO BOX 1550` from a real two-token company name.
+    """
+    for name in UNMATCHABLE_SINGLE_TOKEN_NAMES:
+        assert _extract(_kinetic_page1(name)) == "PO BOX 1550", name
+
+
+def test_an_unmatchable_enterprise_name_does_miss_cleanly() -> None:
+    """The Enterprise half of the same measurement, and it only differs by
+    geometry: `501 DUANESBURG RD` is 46.45pt below the anchor, past
+    `NEAR_ANCHOR_BELOW`'s 40pt floor, so there is no next candidate to fall to.
+    Asserting it here keeps the two templates' different behaviour visible
+    instead of letting one stand in for the other."""
+    for name in UNMATCHABLE_SINGLE_TOKEN_NAMES:
+        assert _extract(_enterprise_page1(name)) is None, name
+
+
+def test_the_captured_address_line_still_raises_bill_to_mismatch() -> None:
+    """The safety half of the finding, asserted rather than argued: whatever
+    the fall-through captures must still disagree with the roster, or the wrong
+    value would also suppress the guard - the exact failure the anchored shape
+    was introduced to close."""
+    from docintel.core.senders import bill_to_matches_roster
+
+    for pack in load_packs():
+        if pack.name == "digitaldirection":
+            roster = pack.bill_to_roster
+            break
+    else:  # pragma: no cover - the pack is always present
+        raise AssertionError("digitaldirection pack not found")
+    assert roster, "an empty roster would make this test vacuous"
+    assert not bill_to_matches_roster("PO BOX 1550", roster)
