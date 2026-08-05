@@ -24,8 +24,10 @@ var/
 .DS_Store
 
 # Raw sample drops (4GB+ scratch pool, not curated source) - the curated
-# subset that matters lives in docs/ and docs/persona-regeneration/
-all-docs/
+# subset that matters lives in docs/ and docs/persona-regeneration/. No
+# trailing slash: matches both a real directory and the read-only symlink
+# SDD worktrees use to reach the main checkout's copy without duplicating it.
+all-docs
 
 # Local git worktrees used for isolated plan execution
 .worktrees/
