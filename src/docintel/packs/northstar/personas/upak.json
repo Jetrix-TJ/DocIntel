@@ -48,7 +48,7 @@
     {
       "field": "please_pay",
       "anchor": "Please Pay",
-      "region": "last-page",
+      "region": "totals-block",
       "pattern": "currency",
       "required": false
     },
