@@ -64,6 +64,16 @@
       "required": false
     },
     {
+      "field": "bill_to_address",
+      "anchor": "LLC",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
       "row_group": "sub_account",
       "table_anchor": "SUB ACCT:",
       "columns": {

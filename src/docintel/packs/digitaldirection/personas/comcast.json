@@ -111,6 +111,17 @@
       "anchor": "Make checks payable to"
     },
     {
+      "field": "remit_address",
+      "anchor": "COMCAST",
+      "anchor_occurrence": "last",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
       "field": "bill_to_name",
       "region": "top-left",
       "pattern": "text",
