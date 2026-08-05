@@ -161,15 +161,23 @@ def test_does_not_return_the_payee_name_sharing_the_row() -> None:
     """`same-row` is a full-page-width band, so the payee name is inside the
     span. It is excluded only because `_apply_field` puts the anchor's words in
     `skip` - which is also why the anchor has to be the payee and not, say, a
-    label above the name."""
+    label above the name.
+
+    The equality assertion is deliberate: `"EDCO" not in None` is vacuously
+    true, so a bare negative check here would pass against an empty record and
+    report coverage it does not have."""
     value = _extract_bill_to_name("NORTHSTAR RECYCLING")
-    assert "EDCO" not in (value or "")
+    assert value == "NORTHSTAR RECYCLING"
+    assert "EDCO" not in value
 
 
 def test_does_not_return_the_letterhead() -> None:
     """The measured failure of the region-only alternative: `top-left` (and
-    every other top region) returns EDCO's own letterhead at top=33.30 first."""
+    every other top region) returns EDCO's own letterhead at top=33.30 first.
+
+    Equality first, for the same reason as above: a lone `!=` passes on a miss."""
     value = _extract_bill_to_name("NORTHSTAR RECYCLING")
+    assert value == "NORTHSTAR RECYCLING"
     assert value != "EDCO WASTE & RECYCLING SERVICE"
 
 

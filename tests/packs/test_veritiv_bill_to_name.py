@@ -149,15 +149,21 @@ def test_reads_a_party_that_is_not_on_the_roster() -> None:
 
 
 def test_does_not_return_the_payee_name_sharing_the_row() -> None:
+    """The equality assertion is deliberate: `"VERITIV" not in None` is
+    vacuously true, so a bare negative check would pass against an empty
+    record and report coverage it does not have."""
     value = _extract_bill_to_name("NORTHSTAR RECYCLING COMPANY LLC")
-    assert "VERITIV" not in (value or "")
+    assert value == "NORTHSTAR RECYCLING COMPANY LLC"
+    assert "VERITIV" not in value
 
 
 def test_does_not_return_the_letterhead() -> None:
-    """What `top-left`, `header-block` and `first-page` all return instead."""
-    assert _extract_bill_to_name("NORTHSTAR RECYCLING COMPANY LLC") != (
-        "VERITIV OPERATING COMPANY"
-    )
+    """What `top-left`, `header-block` and `first-page` all return instead.
+
+    Equality first, for the same reason as above: a lone `!=` passes on a miss."""
+    value = _extract_bill_to_name("NORTHSTAR RECYCLING COMPANY LLC")
+    assert value == "NORTHSTAR RECYCLING COMPANY LLC"
+    assert value != "VERITIV OPERATING COMPANY"
 
 
 def test_mid_line_is_what_reaches_the_stub_row() -> None:
