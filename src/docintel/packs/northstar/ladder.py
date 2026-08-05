@@ -116,7 +116,7 @@ def doc_type_for(ctx: JobContext) -> tuple[str, str]:
         return "contra_invoice", "all_commodity_rates_negative"
 
     primary, supporting = _roles(ctx)
-    if primary == 1 and supporting >= 1:
+    if primary == 1 and supporting >= 1 and not _is_paginated_continuation(ctx):
         return "invoice_with_attachment", "one_primary_plus_supporting"
 
     if _STATEMENT.search(text) and not _has_table(ctx):
@@ -126,6 +126,37 @@ def doc_type_for(ctx: JobContext) -> tuple[str, str]:
         return "own_paperwork", "northstar_letterhead"
 
     return "standard_invoice", "default"
+
+
+_PAGE_OF_RE = re.compile(r"\b(\d+)\s+OF\s+(\d+)\b")
+
+
+def _is_paginated_continuation(ctx: JobContext) -> bool:
+    """True if every page carries a `N OF M` footer with M == len(ctx.pages).
+
+    A real attachment (a Bill of Lading stapled behind an invoice) has no
+    reason to share the invoice's own pagination sequence. A genuine
+    multi-page invoice whose totals label overflowed onto a later page - the
+    same (primary=1, supporting>=1) role shape the ladder otherwise reads as
+    "invoice plus attachment" - does. Reading the real printed footer, not
+    guessing from role counts, is what tells the two apart.
+    """
+    total_pages = len(ctx.pages)
+    if total_pages < 2:
+        return False
+    seen_numbers: set[int] = set()
+    for page in ctx.pages:
+        found = False
+        for line in page.lines():
+            text = " ".join(w.text for w in line).upper()
+            match = _PAGE_OF_RE.search(text)
+            if match and int(match.group(2)) == total_pages:
+                seen_numbers.add(int(match.group(1)))
+                found = True
+                break
+        if not found:
+            return False
+    return seen_numbers == set(range(1, total_pages + 1))
 
 
 def _has_table(ctx: JobContext) -> bool:

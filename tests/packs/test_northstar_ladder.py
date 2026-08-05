@@ -100,6 +100,31 @@ def test_one_primary_plus_a_supporting_page_is_an_attachment_case() -> None:
     assert doc_type_for(ctx)[0] == "invoice_with_attachment"
 
 
+def test_a_paginated_continuation_is_not_invoice_with_attachment() -> None:
+    """823283AUG25/823283SEP25: a genuine 2-page Edco invoice whose line items
+    overflow onto page 2, pushing the totals label off page 1. Both pages repeat
+    the same identity header and both print a footer pagination marker
+    (`1 OF 2` / `2 OF 2`) - real evidence this is one paginated invoice, not an
+    attachment. Confirmed by reading both pages of the real source PDF:
+    `pageroles.assign` correctly marks page 2 primary / page 1 supporting (the
+    totals label only appears on page 2), which is the exact (primary=1,
+    supporting>=1) shape the ladder's `invoice_with_attachment` rule otherwise
+    treats as an attachment pair - indistinguishable by role count alone."""
+    ctx = _ctx(
+        _page(
+            "EDCO WASTE|25-5R 823283|HAUL 225.10|000000-001 MD9-M 1 OF 2",
+            number=1,
+        ),
+        _page(
+            "EDCO WASTE|25-5R 823283|CURRENT CHARGES: 3267.54 2479.01|"
+            "000000-001 MD9-M 2 OF 2",
+            number=2,
+        ),
+        roles=("supporting", "primary"),
+    )
+    assert doc_type_for(ctx)[0] != "invoice_with_attachment"
+
+
 def test_a_credit_memo_title_wins_over_everything() -> None:
     ctx = _ctx(_page("CREDIT MEMO occ 2.495 ST -40.00/ST -99.80"))
     assert doc_type_for(ctx)[0] == "credit_memo"
