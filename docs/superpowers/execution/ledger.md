@@ -1742,3 +1742,107 @@ was built for exactly the payee-printed-3x case, shipped unused, and its first r
 trailing colon but not a comma — the rung-2 mention gap, the per-page threshold
 recalibration, the gate's ordering of forced review versus confidence collapse, and the
 identity-capture point relative to `beforeEmit`.
+
+---
+
+## Wave 2 of the weakness-remediation plan — VERIFICATION BACKFILL (2026-08-05)
+
+**Why this entry exists, written after the fact.** Wave 2 (Tasks 7, 8, 2, 8c, N1, N2, N3,
+N4) landed as commits `98822d1..2ee9d17` on 2026-08-03, each with a rich commit message,
+but **no ledger entry was ever written for any of them** — this repo's own standing
+practice, followed for every task in Part A/B and Wave 1, was skipped. Found while
+auditing what "Wave 2 done" actually means for the current status revision. Backfilled by
+re-deriving the record from commit messages plus **live re-verification**, not by trusting
+the messages alone: every commit below was checked out in a detached HEAD on the ORIGINAL
+263-assertion/10-document corpus (these commits all predate `a1277e4`, which grew the
+corpus, so the historical 263-assertion baseline is still the right corpus to check them
+against) and `python3 -m docintel.cli replay-gold` was re-run fresh. Method: `git stash`
+the in-flight STATUS-SUMMARY.md edit, walk each commit in commit order, record the
+scorecard line, `git checkout dev` at the end, `git stash pop`, confirm `git status`
+clean and the full suite still 1615/1615. No source file was modified by this process.
+
+**Net result, live-verified: 203/263 → 204/263 assertions, 1/10 → 1/10 documents green.**
+A net *gain* of one assertion, not the loss the plan's own deferral banner worried Task 2
+might quietly cause.
+
+Per-commit, in landing order:
+
+- **Task 7** (`98822d1`, `refactor(geometry): one line-grouping implementation, tolerance
+  from pitch`) — VERIFIED live: **203/263, 1/10 green, zero assertions flipped** from the
+  Wave 1 baseline. Matches the commit's own claim exactly.
+- **Task 8** (`8d43340`, `fix(grammar): scale five absolute point constants to line
+  pitch`) — VERIFIED live: **203/263, 1/10 green, zero flipped**. Matches the commit's own
+  claim exactly.
+- `ec4adb5` (`docs(grammar): document the vertical-pitch-as-horizontal-proxy caveat...`) —
+  docs only, no code, not re-verified.
+- **Task 2** (`42e55ee`, `fix(grammar): median pitch in _label_block, excluding the
+  anchor's leading gap`) — VERIFIED live: **202/263, 1/10 green**. The regression is
+  exactly one assertion, `digitaldirection-centracom-0384043574` (26/29 → 25/29) — the
+  charges-ladder assertion the plan's own deferral banner named as having "no honest
+  pitch-estimator answer." **This answers the open question the current status revision
+  flagged: Task 2 cost exactly the one assertion the plan pre-accepted, not the two the
+  deferral banner worried might quietly happen.**
+- **`6f68088`** (`fix(grammar): _ROLLUP_LABEL now actually matches Previous Balance`) —
+  **not one of the plan's named Wave 2 tasks**, landed the same session as a direct
+  follow-up once Task 2's fix exposed it (raising the block-break threshold let
+  `Previous Balance $20,123.80` reach `_ROLLUP_LABEL` for the first time, and the regex
+  never actually matched `Previous Balance`, only `balance` — a pre-existing gap Task 2's
+  own fix was the first thing to expose). VERIFIED live: **203/263, 1/10 green** —
+  recovers Task 2's Centracom regression via a different root cause, same assertion.
+  **Confirms the plan's Task-2 deferral banner and the current corpus baseline can both be
+  true at once: the regression happened exactly as predicted, and it didn't survive to
+  become the final state.**
+- **N1** (`fda882c`, `fix(infer): require a roster match to head a line, not merely appear
+  on the page`) — VERIFIED live: **203/263, 1/10 green, unchanged**. Matches the commit's
+  own claim ("Verified: 203/263 assertions and 1/10 documents green, unchanged").
+- **N2** (`798c614`, `fix(extract): recentre NATIVE_CHAR_THRESHOLD in the measured band,
+  50 -> 29`) — VERIFIED live: **203/263, 1/10 green, unchanged**. Matches the commit's own
+  claim exactly.
+- **Task 8c** (`727b25c`, `feat(grammar): add anchor_occurrence "mid_line" and clear
+  EDCO's anchor-in-value debt`) — VERIFIED live: **204/263, 1/10 green, +1**. The gain is
+  `northstar-edco-077087` (16/26 → 17/26), clearing the `ANCHOR_IN_VALUE_DEBT` entry the
+  Wave 1 handoff named for EDCO's remit-payee address (payee name prints three times with
+  no distinguishing feature; `mid_line` reaches the middle occurrence the old
+  `first`/`last`-only primitive structurally could not). **This commit's own message does
+  not state a re-baseline number at all — the exact gap this backfill exists to close.**
+- `1f68f63` (`fix(grammar): withhold mid_line on OCR-sourced documents at run time`) — the
+  safety guard for 8c (mid_line's OCR-noise risk). VERIFIED live: **204/263, 1/10 green,
+  unchanged** — inert on this corpus by design, since EDCO's gold document is native-text,
+  not OCR-sourced; the guard exists for a document this corpus does not contain.
+- **N3** (`b82ef02`, `fix(gate): surface a forced reason even when confidence collapses to
+  low`) — VERIFIED live: **204/263, 1/10 green, unchanged**. A routing-signal correctness
+  fix, not expected to move a gold assertion; confirmed rather than assumed. STATUS-SUMMARY
+  §4.7 already called this CLOSED — the ledger simply never recorded it until now.
+- **N4** (`764657c`, `fix(pipeline): commit the post-beforeEmit document_identity, not the
+  pre-hook local`) — VERIFIED live: **204/263, 1/10 green, unchanged**. Inert on this
+  corpus by design (no pack registers a `beforeEmit` hook yet); same status as N3.
+- `f95483f` (`fix(geometry): floor line_tolerance so a fragmented scan cannot shatter a
+  page`) — a Task-7 hardening follow-up (adds `MIN_TOLERANCE = 2.5`, discovered against
+  Complete Beverage's degraded-OCR page 2). VERIFIED live: **204/263, 1/10 green,
+  unchanged**. Matches the commit's own claim ("`replay-gold --json` and its stderr are
+  byte-identical with and without the floor").
+- `2ee9d17` (`docs(grammar): document anchor_occurrence in the closed selector grammar`) —
+  docs only, no code, not re-verified.
+
+**One more thing this backfill surfaced, outside Wave 2's named tasks but landed in the
+same session immediately after:** `1126cc5`, `11f1627` and `c21bdac` (2026-08-03,
+20:38–21:10) root-cause and fix the Windstream near-total-collapse finding that the
+2026-08-03 generalization-findings handoff doc still describes as unrooted — the handoff
+doc's *content* was evidently drafted earlier the same day and never updated after the fix
+landed a few hours later, even though both were committed to git together on 2026-08-05
+via `a4eaa19`. Detail and live verification of that specific fix are recorded directly in
+`docs/STATUS-SUMMARY.md` §4.9 (also corrected in this pass — it initially inherited the
+handoff doc's stale "not yet root-caused" framing before this same investigation caught
+the discrepancy). All three commits VERIFIED live at **204/263, 1/10 green, byte-identical**
+— expected, since the fix is scoped to Windstream's Enterprise template on the
+second-sample documents, not to the corpus's one (Kinetic-template) Windstream gold
+document.
+
+**Standing gap this backfill does not close:** `ad56a97` (`test(edco): lock in
+total_printed's printed-fields-only behavior on account 15570` — the Finding 5
+re-measurement) was not re-verified live in this pass; its own commit message is
+detailed enough (re-reads the real PDFs, explains the naive-sum mismatch) that it was
+accepted as self-evidently correct rather than re-run. Flagged here rather than silently
+assumed, consistent with standing rule 7 (a guardrail/verification nobody has watched
+fail is reporting coverage it does not have) — a live re-check would be cheap if anyone
+doubts it.
