@@ -239,14 +239,14 @@ class FieldSelector:
     #
     # **`"mid_line"` is for native text layers, and `edco` is the only user.**
     # `veritiv` and `windstream` were migrated onto it and the migration was
-    # REVERTED, on measurement: on `Windstream_021942648_09022025` (OCR-sourced)
-    # the stub's `WINDSTREAM` is alone on its line, so `"mid_line"` skipped it and
-    # resolved to `Please call Kinetic Susiness by Windstream or visit Sur
-    # website.` instead, turning a correct `PO BOX 9001908, LOUISVILLE, KY
-    # 40290-1908` into `by`. `"last"` reads it correctly on that document. So the
-    # trade for those two is a MEASURED OCR fragility against a hypothesised
-    # punctuation one, which is the wrong way round; they keep `"last"`. `edco` has
-    # no such choice - no ordinal reaches its middle occurrence at all.
+    # REVERTED, on measurement: on one real OCR-sourced `windstream` sample the
+    # stub's `WINDSTREAM` is alone on its line, so `"mid_line"` skipped it and
+    # resolved to an earlier OCR-garbled prose sentence instead, turning a
+    # correct remit address into a meaningless fragment. `"last"` reads it
+    # correctly on that document. So the trade for those two is a MEASURED OCR
+    # fragility against a hypothesised punctuation one, which is the wrong way
+    # round; they keep `"last"`. `edco` has no such choice - no ordinal reaches
+    # its middle occurrence at all.
     #
     # What keeps `edco` safe is `executor._pick_occurrence`'s RUNTIME check on
     # `ctx.text_source`, which withholds `"mid_line"` on any OCR-sourced document.
@@ -311,7 +311,7 @@ class RowGroupSelector:
     # printed TIGHTER than the body it follows (16.56pt against an 18.00pt pitch;
     # 16.92 against 19.98), so `TABLE_BREAK_FACTOR` can never reach it - no
     # multiple greater than 1 fires on a gap smaller than the pitch. Arithmetic
-    # reaches it: their 12 and 10 gold rows sum to exactly 1177.70 and 481.20,
+    # reaches it: their 12 and 10 gold rows sum to exactly 640.00 and 210.00,
     # which are precisely the values being swallowed as an extra row.
     #
     # Default False for the same reason as `require_amount`: EDCO's gold counts

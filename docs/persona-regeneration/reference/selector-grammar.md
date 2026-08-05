@@ -129,13 +129,13 @@ A pattern is **either** a named pattern **or** a restricted regex.
 | `currency_signed` | as `currency`, but requires an explicit sign | |
 | `integer` | `···` · `···` | |
 | `decimal` | `2.495` · `···00` | |
-| `date` | `9/15/2025` · `08/14/2025` · `Dec 09, 2025` · `September 01, 2025` · `03/31/25` · `January 01, 2026` | Normalized to ISO. Ambiguous 2-digit years → confidence penalty. |
+| `date` | `1/1/2030` · `02/02/2030` · `Dec 09, 2025` · `September 01, 2025` · `03/31/25` · `January 01, 2026` | Normalized to ISO. Ambiguous 2-digit years → confidence penalty. |
 | `date_loose` | as `date`, plus `···`, `···` → unparsed passthrough | |
 | `text` | any non-empty run on one line | |
 | `text_block` | multi-line run within the region | For addresses. |
 | `···` | alphanumeric with internal spaces/dashes preserved **and** a normalized form | `···` → `···` (F6) |
 | `phone` | `···` · `···` | |
-| `postal_code` | `45887` · `01028-2744` · `M9W 7E9` · `N1G 4N4` | CA postal codes matter for currency inference (F14) |
+| `postal_code` | `99999` · `00000-0000` · `M9W 7E9` · `N1G 4N4` | CA postal codes matter for currency inference (F14) |
 | `tax_id` | `···` | Must **not** satisfy `currency` — guards the ··· anchor hazard (F14) |
 | `digits_run` | `≥10` consecutive digits, spaces allowed | For `scanline` |
 

@@ -108,8 +108,8 @@ HEADER_BAND_MIN = 12.0
 MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
 
 # A roll-up row inside a label/amount ladder is not a member of the list it sums.
-# Centracom prints `Subtotal Current Charges $13,752.60` and `Previous Balance
-# $20,123.80` inside the same block as its three real charges, and its gold
+# Centracom prints `Subtotal Current Charges $700.00` and `Previous Balance
+# $1,000.00` inside the same block as its three real charges, and its gold
 # `charges` label correctly contains only the three. This is a property of ladders
 # in general rather than of one vendor, which is why it lives here.
 #
@@ -119,7 +119,7 @@ MONEY_PATTERNS: frozenset[str] = frozenset({"currency", "currency_signed"})
 # alternatives, only "balance" was. `_label_block`'s old `min`-based pitch bug
 # floor-clamped the block's break threshold low enough that `Previous Balance`
 # never entered the ladder's window at all, so this gap was silent. Fixing that
-# bug (task-5) raised the threshold and exposed it: `Previous Balance $20,123.80`
+# bug (task-5) raised the threshold and exposed it: `Previous Balance $1,000.00`
 # started reaching this filter and falling through unmatched. Added as its own
 # alternative rather than loosening `balance` to match mid-string, which would
 # risk matching a genuine charge whose label happens to contain the word "balance".
@@ -296,11 +296,11 @@ class Executor:
 
         **`mid_line` is withheld entirely on an OCR-sourced document.** It reads a
         fact about visual line bands, and OCR line-grouping does not preserve that
-        fact: measured on the real OCR-sourced `Windstream_021942648_09022025`, the
-        stub's payee came back alone on its line, so `mid_line` skipped it and
-        resolved to an earlier prose mention - a wrong remit address on a payment,
-        arriving silently. The two ordinal modes read nothing about line bands and
-        are deliberately not withheld.
+        fact: measured on a real OCR-sourced `windstream` sample, the stub's payee
+        came back alone on its line, so `mid_line` skipped it and resolved to an
+        earlier prose mention - a wrong remit address on a payment, arriving
+        silently. The two ordinal modes read nothing about line bands and are
+        deliberately not withheld.
 
         `ctx.text_source` and not the persona's `layout_fingerprint.text_source`,
         because the fingerprint is validated at write time and then never consulted
@@ -358,7 +358,7 @@ class Executor:
         """Strings to try the pattern against, most specific first.
 
         Cells before individual words before the whole line: a totals line reads
-        `Total Amount Due   367.96`, which splits into two cells and matches on
+        `Total Amount Due   250.00`, which splits into two cells and matches on
         the second, but when the gap is tight enough that it stays one cell the
         per-word pass still finds the figure.
 
@@ -505,7 +505,7 @@ class Executor:
 
         A header-less row group must declare exactly two columns, one of them with
         a money pattern. That is not an arbitrary restriction - it is the whole
-        shape: `Internet Charges 140.90` has a name and a number and nothing else,
+        shape: `Internet Charges 45.00` has a name and a number and nothing else,
         so a third column would have nothing to read.
         """
         if len(selector.columns) != 2:
@@ -528,14 +528,14 @@ class Executor:
         Used when a row group declares no `column_headers` and the table prints no
         header row - the shape Centracom and Comcast both use for their charges:
 
-            Internet Charges                              140.90
-            Internet Taxes, Surcharges, & Fees              0.20
-            Comcast Business services                    217.89
+            Internet Charges                               45.00
+            Internet Taxes, Surcharges, & Fees               0.75
+            Comcast Business services                      100.00
 
         **This relies on the region being column-bounded.** On a two-column layout
         flattened into one line stream, a full-width region would put the other
         column's text into the label - `For All Billing Inquiries, call
-        435-427-3331 Internet Taxes, Surcharges, & Fees`. `label-block` is the
+        555-000-1234 Internet Taxes, Surcharges, & Fees`. `label-block` is the
         region that makes this honest.
         """
         names = self._headerless_columns(selector)

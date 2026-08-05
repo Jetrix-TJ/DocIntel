@@ -51,9 +51,9 @@ _ACCOUNT_NUMBER = re.compile(r"^\s*[0-9A-Za-z][0-9A-Za-z\s\-]*[0-9A-Za-z]\s*$")
 class AccountNumber:
     """An account number in both the printed and the joinable form (F6).
 
-    Comcast prints `8495 44 462 0365242`; the same account appears elsewhere
-    without the spaces. Keeping both means the record can show what the document
-    said while still matching on identity.
+    One corpus vendor prints `1234 56 789 0123456`; the same account appears
+    elsewhere without the spaces. Keeping both means the record can show what
+    the document said while still matching on identity.
     """
 
     raw: str
@@ -172,8 +172,8 @@ def _tax_id(raw: str) -> str | None:
 def _digits_run(raw: str) -> str | None:
     """Ten or more digits, internal spaces allowed and stripped (F7).
 
-    Ten is the floor that keeps invoice numbers (U-PAK's `4378107` is seven)
-    out of the scanline pattern.
+    Ten is the floor that keeps invoice numbers (one corpus vendor's is a
+    seven-digit number) out of the scanline pattern.
     """
     if _DIGITS_RUN.match(raw or "") is None:
         return None

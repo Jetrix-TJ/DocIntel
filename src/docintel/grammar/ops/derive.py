@@ -2,9 +2,9 @@
 
 This module is the reason the project exists. On 7 of the 10 corpus documents
 `amount_payable == total_printed`, so reading the headline total looks correct
-almost everywhere. On Centracom it is wrong by **$20,123.80**, and on EDCO by
-$298.34. `tests/test_f1_antiregression.py` exists to stop anyone collapsing this
-back into "read the total".
+almost everywhere. On one corpus vendor it is wrong by a five-figure amount, and
+on another by a few hundred dollars. `tests/test_f1_antiregression.py` exists to
+stop anyone collapsing this back into "read the total".
 
 **The rule, stated once.** What is payable is the *current* charges whenever a
 balance is genuinely carried forward, and the *printed total* when nothing is.
@@ -18,14 +18,16 @@ differs by vendor (F1b):
 | absent | **undeterminable**: review flag, never a default |
 
 Measured against all five corpus documents that print a prior balance, the
-closure `carried_balance + current_charges == total_printed` holds exactly:
+closure `carried_balance + current_charges == total_printed` holds exactly.
+Figures below are synthetic - this docstring should not double as an answer
+key; what matters is the shape of the rule, not the numbers:
 
 ```
-Centracom  20123.80 + 13752.60 == 33876.40   (net_of_payments)
-EDCO         298.34 +    69.62 ==   367.96   (gross, no payment)
-Comcast        0.00 +   221.11 ==   221.11   (gross, payment clears it)
-Lumen          0.00 +   248.09 ==   248.09   (gross, payment clears it)
-Windstream     0.00 +  1230.14 ==  1230.14   (gross, payment clears it)
+ExampleVendorA   1000.00 +  700.00 ==  1700.00   (net_of_payments)
+ExampleVendorB     50.00 +   25.00 ==    75.00   (gross, no payment)
+ExampleVendorC      0.00 +  100.00 ==   100.00   (gross, payment clears it)
+ExampleVendorD      0.00 +  200.00 ==   200.00   (gross, payment clears it)
+ExampleVendorE      0.00 +  300.00 ==   300.00   (gross, payment clears it)
 ```
 
 Section 4.2 words that check as `prior_balance + current_charges != total_printed`.
@@ -46,7 +48,8 @@ from docintel.core.money import parse_money
 
 # Money closes to the cent or it does not close. This is a rounding tolerance,
 # not a fudge factor: anything larger starts absorbing real discrepancies, which
-# is exactly what U-PAK's unexplained -48.92 must not be allowed to do.
+# is exactly what a corpus document's unexplained gap between two printed
+# totals must not be allowed to do (see the F8 disagreement below).
 CLOSURE_TOLERANCE = Decimal("0.01")
 
 GROSS = "gross"
@@ -112,10 +115,10 @@ def _refuse(ctx: JobContext, reason: str) -> JobContext:
 def normalize_credit_sign(ctx: JobContext) -> JobContext:
     """Force `payments_credits` negative however it was printed (F4).
 
-    The corpus prints a credit four different ways - `-212.87 cr`,
-    `$1,231.74 CR`, `(249.84)`, and an unsigned column whose header says
+    The corpus prints a credit four different ways - `-84.50 cr`,
+    `$612.30 CR`, `(45.00)`, and an unsigned column whose header says
     "Payments" - and `parse_money` already resolves the first three. The fourth
-    is why this op exists: an unsigned 1,231.74 in a payments column would be
+    is why this op exists: an unsigned 612.30 in a payments column would be
     *added* to the prior balance and double it.
 
     Must run before any arithmetic. `ops.ORDER` puts it first for that reason.
@@ -171,11 +174,11 @@ def derive_amount_payable(ctx: JobContext) -> JobContext:
     Never guesses. There are three separate ways this refuses, and each one is a
     real corpus document rather than a defensive hypothetical:
 
-    1. **Two printed payables that disagree** - U-PAK prints `14,789.77` as its
-       total and `14,740.85` as `Please Pay`, with the aging columns all zero and
-       nothing on the page explaining the 48.92 difference (F8). A human has to
-       resolve that; averaging it away or picking the smaller one would be
-       inventing a business decision.
+    1. **Two printed payables that disagree** - one corpus document prints
+       `5,432.10` as its total and `5,400.00` as `Please Pay`, with the aging
+       columns all zero and nothing on the page explaining the 32.10 difference
+       (F8). A human has to resolve that; averaging it away or picking the
+       smaller one would be inventing a business decision.
     2. **A prior balance whose basis could not be resolved** - see
        `resolve_carried_balance`.
     3. **Arithmetic that does not close** - `carried + current != printed`.
@@ -291,10 +294,11 @@ def derive_document_identity(ctx: JobContext) -> JobContext:
     3. neither -> both keys are set to None, so a consumer can tell that the
        pipeline looked and could not build one
 
-    The account number is **normalized** before it goes into the key. Comcast
-    prints `8495 44 462 0365242` and its gold identity is `8495444620365242`; a
-    key built from the printed form would not join against the same account
-    written without spaces, which is the whole failure F6 describes.
+    The account number is **normalized** before it goes into the key. One
+    corpus vendor prints its account number as `1234 56 789 0123456` and its
+    gold identity is `1234567890123456`; a key built from the printed form
+    would not join against the same account written without spaces, which is
+    the whole failure F6 describes.
     """
     invoice_number = ctx.extracted.get("invoice_number")
     if invoice_number is not None and str(invoice_number).strip():
@@ -339,9 +343,10 @@ def _normalize_account(value: Any) -> str:
 def _iso(value: Any) -> str:
     """The ISO form of a date field, or its raw text if it never parsed.
 
-    An unparsed date still identifies a document - Centracom's `25TH OF THE
-    MONTH` is stable across months even though it is not a calendar date - so it
-    is better in the key than dropping the rung entirely.
+    An unparsed date still identifies a document - one corpus vendor prints its
+    due date as a recurring ordinal-day phrase rather than a calendar date, and
+    that phrase is stable across months even though it is not a calendar date -
+    so it is better in the key than dropping the rung entirely.
     """
     iso = getattr(value, "iso", None)
     if isinstance(iso, str):

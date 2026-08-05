@@ -13,12 +13,13 @@ corroboration is not proof: three agreeing renderings of an OCR'd number can
 still all be wrong the same way.
 
 **Measured composition facts.** The two corpus documents that print a subtotal
-compose their totals differently, and no single formula covers both:
+compose their totals differently, and no single formula covers both. Figures
+below are synthetic - this docstring should not double as an answer key:
 
 ```
-U-PAK    subtotal 8119.44 + charges 6670.33                     == 14789.77
-         (its 2325.69 H.S.T. is already inside those parts)
-Veritiv  subtotal 4608.45 +                    tax 299.55       ==  4908.00
+ExampleVendorF  subtotal 2000.00 + charges 1500.00                  ==  3500.00
+                (its 480.00 sales tax is already inside those parts)
+ExampleVendorG  subtotal 1000.00 +                  tax  80.00      ==  1080.00
 ```
 
 So `crosscheck_total_composition` tries every plausible decomposition and boosts
@@ -49,12 +50,13 @@ _MIN_FILENAME_DIGITS = 3
 # What a human might have named the file after, most specific first.
 #
 # `amount_payable` and `account_number` were missing and their absence was
-# expensive. Two corpus filenames name exactly those:
+# expensive. Two corpus filenames name exactly those, in the pattern below
+# (values changed; the structure is what mattered):
 #
-#   EDCO 77087APR25 current charges can be misleading, paying $69.62.pdf
-#        ^ vendor account                                     ^ the PAYABLE, 69.62
-#   Centracom_0384043574_01012026_BILL.pdf
-#             ^ the account number
+#   VendorX 55219MAY25 current charges can be misleading, paying $84.17.pdf
+#           ^ vendor account                                     ^ the PAYABLE, 84.17
+#   VendorY_1122334455_06152026_BILL.pdf
+#           ^ the account number
 #
 # Checking only `invoice_number` and `total_printed` reported `disagree` on both -
 # and since `filename_disagree` is a document-wide modifier, that x0.95 dragged
@@ -76,9 +78,9 @@ def _plain(value: Any) -> str:
 
     An `AccountNumber` reaches here whenever a persona used the `account_number`
     pattern, and `str()` on it yields the dataclass repr - so its digits came back
-    DOUBLED (raw and normalized concatenated) and never matched a filename.
-    Comcast's `Comcast_8495 44 462 0365242_...pdf` was reported as a disagreement
-    with its own account number in the name.
+    DOUBLED (raw and normalized concatenated) and never matched a filename. One
+    corpus vendor's `VendorX_1234 56 789 0123456_...pdf` was reported as a
+    disagreement with its own account number in the name.
     """
     for attribute in ("normalized", "raw"):
         text = getattr(value, attribute, None)
@@ -115,14 +117,15 @@ def _closes(left: Decimal, right: Decimal) -> bool:
 def crosscheck_line_sum(ctx: JobContext) -> JobContext:
     """Sum of the line items against the printed subtotal (F8).
 
-    Requires a printed `subtotal`. Only two corpus documents print one and only
-    Veritiv also has transcribable line items, where 4608.45 closes exactly.
+    Requires a printed `subtotal`. Only two corpus documents print one, and only
+    one of those two also has transcribable line items, where its subtotal
+    closes exactly against their sum.
 
-    That requirement is what keeps EDCO out of this check. EDCO's statement table
-    prints its own `CURRENT CHARGES:` summary row *inside* the table body, so its
-    amount columns sum to 805.54 against a printed total of 367.96 - faithfully
-    transcribed and not an error. EDCO prints no subtotal, so the op skips it
-    rather than flagging a document that is entirely correct.
+    That requirement is what keeps a third corpus vendor out of this check: its
+    statement table prints its own `CURRENT CHARGES:` summary row *inside* the
+    table body, so its amount columns sum to more than the printed total -
+    faithfully transcribed and not an error. That vendor prints no subtotal, so
+    the op skips it rather than flagging a document that is entirely correct.
     """
     subtotal = _field(ctx, "subtotal")
     line_sum = _row_sum(ctx.row_groups.get("line_items"))
@@ -238,11 +241,11 @@ def _declared_asserts(ctx: JobContext) -> set[str]:
 
     **The persona decides, not this op.** An earlier version looped over all of
     `scanline.CORROBORATABLE_FIELDS`, which overrode the persona's own declaration
-    and produced a false mismatch on Windstream: its scan line embeds `250719`, a
-    BILLING CYCLE date matching neither its bill date (07-22) nor its due date
-    (08-11), and its persona correctly asserts only `total_printed` and
-    `account_number`. Checking `due_date` anyway applied `scanline_mismatch` to a
-    correctly-extracted field and cost the document its lane.
+    and produced a false mismatch on one corpus vendor: its scan line embeds a
+    BILLING CYCLE date matching neither its bill date nor its due date, and its
+    persona correctly asserts only `total_printed` and `account_number`. Checking
+    `due_date` anyway applied `scanline_mismatch` to a correctly-extracted field
+    and cost the document its lane.
 
     Section 1.3's permitted set is still the ceiling - the validator enforces it at
     write time (V7). This is the persona choosing from within it.
@@ -284,7 +287,7 @@ def crosscheck_filename(ctx: JobContext) -> JobContext:
     Records `filename_crosscheck` as `agree`, `disagree` or `absent` rather than
     only a boolean, because the three states mean genuinely different things to a
     reviewer. This corpus is the reason it matters: one file is literally named
-    *"current charges can be misleading, paying $69.62"*, and a human's filename
+    *"current charges can be misleading, paying $84.17"*, and a human's filename
     is real evidence about intent.
 
     Never authoritative. A filename is a human note, so a disagreement lowers
@@ -293,10 +296,11 @@ def crosscheck_filename(ctx: JobContext) -> JobContext:
     filename = (ctx.source_path or "").rsplit("/", 1)[-1]
     haystack = "".join(ch for ch in filename if ch.isdigit())
 
-    # A filename with almost no digits can neither agree nor disagree. Lumen's is
-    # `Lumen - 5-QXH7QKM7.pdf`, whose only digit is the `5` in its account key -
-    # calling that a disagreement applied a document-wide x0.95 to every field and
-    # cost the document its lane. Same principle as `scanline.is_corroboratable`.
+    # A filename with almost no digits can neither agree nor disagree. One
+    # corpus vendor's is `Vendor - 5-ABCD1234.pdf`, whose only digit is the `5`
+    # in its account key - calling that a disagreement applied a document-wide
+    # x0.95 to every field and cost the document its lane. Same principle as
+    # `scanline.is_corroboratable`.
     if len(haystack) < _MIN_FILENAME_DIGITS:
         ctx.derived.set("filename_crosscheck", "absent")
         return ctx

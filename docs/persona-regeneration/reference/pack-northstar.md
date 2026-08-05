@@ -5,7 +5,7 @@
 # Pack: ··· — vendor AP invoices
 
 **Domain:** waste & recycling vendor invoices billed to ···
-(94 Maple St / ···).
+(··· / ···).
 
 **Corpus evidence:** documents 1–6 in [`../corpus-analysis.md`](../corpus-analysis.md) —
 > *(lines discussing specific corpus documents removed)*
@@ -170,7 +170,7 @@ Every hit emits:
 ```
 
 > *(lines discussing specific corpus documents removed)*
-`2469435`, `2469427` — human corrections that OCR cannot distinguish from print (F3). Those hits are
+`···`, `···` — human corrections that OCR cannot distinguish from print (F3). Those hits are
 tagged `source_field: "annotation_overlay"` when the overlay detector fires, and the document is
 force-flagged for review. They are **never** silently merged with printed ···s.
 
@@ -332,7 +332,7 @@ still queued. It arrives in the wrong queue. §6's own argument for why `review`
 is a real lane rather than a synonym for `medium` is exactly that they are
 different queues with different fixes — "this document's numbers are shaky"
 > *(lines discussing specific corpus documents removed)*
-genuinely does not close (−48.92 unexplained), and it now presents as a
+genuinely does not close ($··· unexplained), and it now presents as a
 confidence problem. A misroute, not an escape.
 
 > *(lines discussing specific corpus documents removed)*

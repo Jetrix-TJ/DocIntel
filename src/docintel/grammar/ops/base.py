@@ -45,7 +45,7 @@ def _as_money_or_text(text: str) -> Any:
 
 
 def strip_internal_whitespace(value: Any) -> Any:
-    """`8495 44 462 0365242` -> `8495444620365242` (F6)."""
+    """`1234 56 789 0123456` -> `1234567890123456` (F6)."""
     if not isinstance(value, str):
         return value
     return _WHITESPACE.sub("", value)
@@ -59,7 +59,7 @@ def collapse_internal_spaces(value: Any) -> Any:
 
 
 def strip_currency_symbols(value: Any) -> Any:
-    """`$1,177.70` -> `1177.70`. A Decimal never carried a symbol, so it passes through."""
+    """`$2,340.15` -> `2340.15`. A Decimal never carried a symbol, so it passes through."""
     if not isinstance(value, str):
         return value
     cleaned = _CURRENCY_SYMBOLS.sub("", value).strip()
@@ -67,11 +67,11 @@ def strip_currency_symbols(value: Any) -> Any:
 
 
 def parens_to_negative(value: Any) -> Any:
-    """`(249.84)` -> `-249.84`. Lumen's "Payment Received" notation.
+    """`(45.00)` -> `-45.00`. One corpus vendor's "Payment Received" notation.
 
     A value that is already a negative Decimal is returned unchanged - which is
     the common case, because `patterns.currency` resolves parentheses itself.
-    Re-negating here would turn Lumen's credit back into a charge.
+    Re-negating here would turn that vendor's credit back into a charge.
     """
     if isinstance(value, Decimal):
         return value
@@ -84,7 +84,7 @@ def parens_to_negative(value: Any) -> Any:
 
 
 def trailing_cr_to_negative(value: Any) -> Any:
-    """`212.87 cr` -> `-212.87`. Comcast's credit-card payment notation."""
+    """`84.50 cr` -> `-84.50`. One corpus vendor's credit-card payment notation."""
     if isinstance(value, Decimal):
         return value
     if not isinstance(value, str):
@@ -101,9 +101,10 @@ def trailing_cr_to_negative(value: Any) -> Any:
 def normalize_date_iso(value: Any) -> Any:
     """Reduce a date to `YYYY-MM-DD`, or leave it exactly as it was.
 
-    An unparseable date is returned untouched, never blanked. Centracom prints
-    `25TH OF THE MONTH` (F9); losing that text would destroy the only record of
-    what the document actually said.
+    An unparseable date is returned untouched, never blanked. One corpus vendor
+    prints a due date as an ordinal day-of-month phrase rather than a calendar
+    date (F9); losing that text would destroy the only record of what the
+    document actually said.
     """
     iso = getattr(value, "iso", None)
     if isinstance(iso, str):
@@ -127,7 +128,7 @@ def trim(value: Any) -> Any:
 
 
 def join_lines_comma(value: Any) -> Any:
-    """`500 North Defiance Trail\nSpencerville, OH 45887` -> the two joined by `, `.
+    """`123 Example Lane\nSampletown, ZZ 00000` -> the two joined by `, `.
 
     GRAMMAR EXTENSION, added deliberately in C5a. Section 4.1 had no way to turn a
     `text_block` capture into the single comma-joined string every gold label uses

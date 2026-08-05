@@ -110,8 +110,8 @@ CELL_GAP_PITCHES = CELL_GAP / _ASSUMED_PITCH   # ~0.9 lines
 # telecom bill in the corpus is a two-column layout flattened into one
 # interleaved line stream - so a full-width region picks up the other column:
 #
-#     To log in or register, go to https://www.lumen.com/login/. Balance 0.00
-#     131 W MATTHEWS ST. Amount Due $1,230.14
+#     To log in or register, go to https://www.example-vendor.com/login/. Balance 0.00
+#     123 Example Lane. Amount Due $250.00
 #
 # So this region is x-bounded like `near-anchor` (it stays in the column) and
 # y-unbounded until the block genuinely ends (it reaches the whole address).
@@ -124,7 +124,7 @@ LABEL_BLOCK_MAX_PITCHES = LABEL_BLOCK_MAX / _ASSUMED_PITCH   # == 10.0, matching
 #
 # `LABEL_BLOCK_RIGHT = 300.0` is a guess, and on Centracom it guesses through
 # 224pt of empty space into the next column: `vendor_address` came back as
-# `Balance, PO BOX 7, Payments, FAIRVIEW UT 84629, Previous, Please, ...`.
+# `Balance, PO BOX 99, Payments, SAMPLETOWN ZZ 00000, Previous, Please, ...`.
 #
 # 24.0 is twice `CELL_GAP` - this file already calls 12pt "a column's worth" of
 # horizontal whitespace when splitting a line into cells - and it sits below the
@@ -141,9 +141,9 @@ LABEL_BLOCK_GAP_FLOOR = 24.0  # keeps a tight-leaded block from breaking early
 # content beside it, so the charges ladder reads
 #
 #     New charges
-#     Comcast Business services            217.89
+#     Comcast Business services            100.00
 #     <- nothing in the right column on this row
-#     Taxes and fees                         3.22
+#     Taxes and fees                         5.00
 #
 # and a zero-tolerance rule stopped after the first charge. Two consecutive empty
 # rows is the end. Over-reach is still bounded by the gap rule and the max cap.
@@ -649,7 +649,7 @@ def _same_cell(
     Without a real table model, a cell is approximated as the contiguous run on
     the anchor's line: walk outward from the anchor and stop at the first gap
     wider than `CELL_GAP`. That is what separates `BALANCE FORWARD` (a 5pt
-    inter-word gap) from the `298.34` sitting in the next column.
+    inter-word gap) from the `75.00` sitting in the next column.
     """
     a = _require(anchor, "same-cell")
     page = _page_of(pages, a)
