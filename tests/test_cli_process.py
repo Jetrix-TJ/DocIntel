@@ -12,9 +12,16 @@ def test_process_prints_a_valid_record(capsys):
 
 
 def test_process_reports_the_invariant(capsys):
+    from docintel.adapters.intake.filesystem import FilesystemIntake
+
+    # docs/ is a live, growing pool of real samples, not a fixed-size fixture —
+    # assert against whatever it currently contains, not a stale literal count.
+    expected = len(list(FilesystemIntake(["docs"]).items()))
+    assert expected > 0, "docs/ should contain at least one real PDF to exercise"
+
     assert main(["process", "docs", "--json"]) == 0
     out = capsys.readouterr().out.strip().splitlines()
-    assert len(out) == 10          # one record per document, none dropped
+    assert len(out) == expected    # one record per document, none dropped
 
 
 def test_missing_file_is_a_skip_not_a_crash(capsys):

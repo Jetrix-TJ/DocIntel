@@ -12,8 +12,13 @@ def _factory():
     return Runner(stages=build_default_stages(vision=FakeVision()), hooks=HookRegistry())
 
 
-def test_loads_all_ten_gold_documents():
-    assert len(load_gold()) == 10
+def test_loads_every_gold_document():
+    # The gold corpus is a growing set, not a fixed size - assert load_gold()
+    # reads everything on disk, independently globbed, rather than pin a count
+    # that goes stale the next time a document is added.
+    on_disk = len(list(GOLD_DIR.glob("*.json")))
+    assert on_disk > 0
+    assert len(load_gold()) == on_disk
 
 
 def test_every_gold_source_file_exists():
@@ -23,7 +28,7 @@ def test_every_gold_source_file_exists():
 
 def test_scorecard_shape():
     card = replay_gold(runner_factory=_factory)
-    assert card["summary"]["total"] == 10
+    assert card["summary"]["total"] == len(load_gold())
     assert set(card["summary"]) == {"total", "passed", "failed", "assertions_passed",
                                     "assertions_total"}
     for doc in card["documents"]:
@@ -39,7 +44,7 @@ def test_scorecard_actually_evaluates_assertions():
     """
     card = replay_gold(runner_factory=_factory)
     assert card["summary"]["assertions_total"] > 50
-    assert card["summary"]["passed"] + card["summary"]["failed"] == 10
+    assert card["summary"]["passed"] + card["summary"]["failed"] == len(load_gold())
     assert all("passed" in a for d in card["documents"] for a in d["assertions"])
 
 

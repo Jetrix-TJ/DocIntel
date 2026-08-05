@@ -100,9 +100,17 @@ def test_baseexception_escapes_by_design_and_the_counters_report_the_gap():
 
 
 def test_invariant_holds_across_the_whole_corpus():
+    """CORPUS_DIR is a live, growing pool of real samples, not a fixed-size
+
+    fixture — new real documents land here over time (see docs/superpowers/plans/
+    2026-08-03-generalization-findings-and-next-tasks.md). The invariant this test
+    protects is relative (intaken == emitted == what's really there), not that the
+    pool happens to be any particular size.
+    """
     runner = Runner(stages=build_default_stages(vision=FakeVision()), hooks=HookRegistry())
     from docintel.adapters.intake.filesystem import FilesystemIntake
     items = list(FilesystemIntake([CORPUS_DIR]).items())
+    assert len(items) > 0, "corpus directory should not be empty"
     for item in items:
         runner.process(item.document_id, item.source_path)
-    assert runner.stats["intaken"] == runner.stats["emitted"] == len(items) == 10
+    assert runner.stats["intaken"] == runner.stats["emitted"] == len(items)

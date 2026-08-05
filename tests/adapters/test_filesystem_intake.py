@@ -56,6 +56,9 @@ def test_traversal_order_is_deterministic(tmp_path):
     assert first == second == sorted(first)
 
 
-def test_directory_expands_to_its_pdfs():
-    items = list(FilesystemIntake(["docs"]).items())
-    assert len(items) == 10
+def test_directory_expands_to_its_pdfs(tmp_path):
+    for name in ("a.pdf", "b.pdf", "c.pdf"):
+        (tmp_path / name).write_bytes(b"%PDF-1.4")
+    (tmp_path / "not-a-pdf.txt").write_text("ignore me")
+    items = list(FilesystemIntake([str(tmp_path)]).items())
+    assert len(items) == 3
