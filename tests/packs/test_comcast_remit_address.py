@@ -28,9 +28,24 @@ on page 1, all ABOVE the target block, in reading order:
 The real block at top=694.5 is the LAST occurrence of the word on the page,
 so `anchor_occurrence: "last"` is required - the default ("first") would
 resolve to the "New charges" table row instead and either capture nothing
-useful or the wrong block entirely. This mirrors the exact pattern already
-shipped for Windstream's and Veritiv's `remit_address` (anchor on the payee's
-own printed name, `anchor_occurrence: "last"`, `region: "label-block"`).
+useful or the wrong block entirely. This follows the same SHAPE already
+shipped for Windstream's and Veritiv's `remit_address` (anchor on the
+payee's own printed name, `anchor_occurrence: "last"`, `region:
+"label-block"`) - but it is NOT an equally-qualified instance of that
+pattern: Windstream's primary anchor is the real label `"Remit Payment To"`
+(bare `"WINDSTREAM"` is only a fallback `anchor_alts` entry), and Veritiv
+anchors the full legal name `"VERITIV OPERATING COMPANY"`, not a bare brand
+word. This selector's anchor is the single most generic string available -
+plain `"COMCAST"`, no qualifying words - because no more specific real label
+exists anywhere on the one known Comcast document.
+
+**DISCLOSED RISK (found by second-round review): this is currently
+unverifiable.** There are zero second-period Comcast samples anywhere in the
+corpus. If some other real Comcast layout prints a 5th occurrence of the
+word `Comcast`/`COMCAST` below this target block, `anchor_occurrence: "last"`
+would silently resolve to that occurrence instead, with nothing in today's
+corpus able to catch it. This risk is real and unmitigated as of this
+writing - re-verify the moment any second Comcast sample becomes available.
 
 This fixture reproduces all four real occurrences (not just the target one),
 so a selector that reverted to the default occurrence, or that widened

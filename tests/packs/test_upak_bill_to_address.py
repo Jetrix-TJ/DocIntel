@@ -41,6 +41,23 @@ Verified directly against the real PDF via `docintel.extract.pdf.read_pages`
 before this test was written: the real document returns
 `'94 MAPLE ST\\nEAST LONGMEADOW MA 01028'` (raw, pre-`join_lines_comma`) for
 this exact selector.
+
+**DISCLOSED GAP (found by second-round review, not caught before this test
+was first written): the `LLC` anchor is GOLD-DOCUMENT-SPECIFIC and does not
+generalize to any of the 12 real second-period U-Pak samples.** Checked all
+12 PDFs in `all-docs/second-samples/u_pak/*.pdf` for the literal word `LLC` -
+zero matches in any of them. One inspected in detail
+(`_AP Invoice 4421470 U-Pak 1360.60000.pdf`) prints its Bill To block as
+`ATTN: SEAN LEES / NORTHSTAR RECYCLING / 94 MAPLE ST / EAST LONGMEADOW MA
+01028 / USA` - no `LLC` line at all, and the extra `ATTN:` line shifts the
+whole block up one row versus the gold document's layout tested below. This
+selector is a verified fix for the ONE gold document it targets and adds NO
+coverage on any of the 12 known real second samples - it fails safe there
+(the pre-existing `ops.infer.resolve_bill_to_alias` `_block_under` fallback
+still runs unchanged when this selector's anchor does not match, so those 12
+documents are unaffected, not regressed). A general fix - e.g. an anchor that
+survives the `ATTN:`-shifted layout, or a different anchoring strategy
+entirely - is still open work.
 """
 
 from __future__ import annotations
