@@ -10,16 +10,8 @@ If this test is failing, DO NOT relax it. Read docs/corpus-analysis.md section F
 
 from decimal import Decimal
 
-import pytest
-
 from docintel.core.models import new_context
 from docintel.grammar.ops.derive import derive_amount_payable, resolve_carried_balance
-
-pytestmark = pytest.mark.skip(
-    reason="printed-fields-only: derive_amount_payable is deferred, not deleted. "
-    "See docs/superpowers/specs/2026-07-28-printed-fields-only-design.md. "
-    "Re-enable this guardrail in the same change that re-registers the op."
-)
 
 CENTRACOM_PRINTED = Decimal("33876.40")
 CENTRACOM_PAYABLE = Decimal("13752.60")

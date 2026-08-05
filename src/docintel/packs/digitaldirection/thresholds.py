@@ -15,6 +15,11 @@ THRESHOLDS: dict[str, float] = {
     "prior_balance": 0.95,
     # Scanline-corroborated on all four bills (F7).
     "total_printed": 0.93,
+    # The derived payable. Held higher than total_printed on purpose: this is
+    # the pack where a wrong payable is a $20,123.80 error (Centracom), so the
+    # derivation is trusted no less than the total it is composed from plus
+    # the arithmetic itself (Task 11).
+    "amount_payable": 0.95,
     # The identity key when there is no invoice number (F6).
     "account_number": 0.95,
     # Also part of the identity key, so a weak date makes the key weak.

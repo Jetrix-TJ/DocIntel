@@ -43,7 +43,9 @@
       "pattern": "currency",
       "adjust": [
         "resolve_vendor_alias",
-        "resolve_bill_to_alias"
+        "resolve_bill_to_alias",
+        "resolve_carried_balance",
+        "derive_amount_payable"
       ]
     },
     {

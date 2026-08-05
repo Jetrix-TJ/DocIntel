@@ -40,7 +40,7 @@ DIGITALDIRECTION_GOLD = "digitaldirection-centracom-0384043574"
 # `derive_document_identity` runs unconditionally and stays out of the narrowing:
 # `core/contract.py` requires the PRESENCE of both keys, so dropping them would
 # break `count(intaken) == count(emitted)`.
-RETAINED_DERIVED = {"document_identity", "identity_basis"}
+RETAINED_DERIVED = {"document_identity", "identity_basis", "amount_payable", "payable_basis", "carried_balance"}
 
 
 def _run(gold_id: str) -> dict:
@@ -103,25 +103,22 @@ def test_northstar_total_is_the_printed_figure(northstar_record: dict) -> None:
     assert northstar_record["fields"]["total_printed"] == "699.00"
 
 
-def test_centracom_emits_the_printed_total_not_the_payable(
-    centracom_record: dict,
-) -> None:
-    """The consequence this design accepts, asserted so it cannot drift silently.
+def test_centracom_emits_the_derived_payable(centracom_record: dict) -> None:
+    """Task 11: the printed total and the derived payable now BOTH appear.
 
-    This test is pinning a DECISION, not a bug. Centracom prints 33,876.40 and is
-    payable 13,752.60. Under printed-fields-only the pipeline transcribes the
-    printed figure faithfully and says nothing at all about the payable - the
-    $20,123.80 gap is downstream's to catch, and extraction refusing to guess at
-    it is the intended behaviour.
+    Centracom prints 33,876.40 and is payable 13,752.60. Before Task 11 the
+    pipeline transcribed the printed figure and said nothing about the
+    payable; the derivation is now wired, so both are on the record and they
+    legitimately disagree - that disagreement is the whole point of F1.
 
-    If this ever starts returning 13,752.60, derivation has been re-enabled
-    without re-enabling GUARDRAIL 2 (`test_f1_antiregression.py`) and GUARDRAIL 6
-    (`test_f1_centracom_trap.py`), which are the two tests that keep the
-    derivation honest. Both are `skip`ped with that reason as the message; the
-    correct fix is to un-skip them in the same change, not to relax this.
+    If this ever starts asserting `"amount_payable" not in centracom_record["derived"]`
+    again, derivation was un-wired without reverting GUARDRAIL 2
+    (`test_f1_antiregression.py`) and GUARDRAIL 6 (`test_f1_centracom_trap.py`)
+    back to skipped - do that together, not this test alone.
     """
     assert centracom_record["fields"]["total_printed"] == "33876.40"
-    assert "amount_payable" not in centracom_record.get("derived", {})
+    assert centracom_record["derived"]["amount_payable"] == "13752.60"
+    assert centracom_record["derived"]["payable_basis"] == "current_charges"
 
 
 def test_centracom_prior_balance_tag_matches_gold_exactly(

@@ -181,7 +181,17 @@ def test_a_persona_stripped_of_its_rules_does_not_auto_approve() -> None:
 
     record = _run(strip)
 
-    assert len(record["confidence"]) == 2, (
+    # Task 11: derive_amount_payable is now wired on total_printed's adjust
+    # list for every persona, and it is a DOCUMENT-level op - it fires
+    # whenever total_printed survives, regardless of whether please_pay/
+    # current_charges/prior_balance have selectors at all. A persona
+    # stripped to {account_number, total_printed} now legitimately produces
+    # THREE confidence entries: the two surviving selectors plus the
+    # derived amount_payable that total_printed's adjust list always
+    # carries. Not a guardrail weakening - account_number/total_printed
+    # are still the only SELECTOR-sourced entries, and the actual guard
+    # (lane, review_flag, extraction_coverage below) is untouched.
+    assert len(record["confidence"]) == 3, (
         "the test did not achieve the condition it is asserting about"
     )
     assert all(score >= 0.90 for score in record["confidence"].values()), (

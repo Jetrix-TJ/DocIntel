@@ -16,6 +16,9 @@ from __future__ import annotations
 THRESHOLDS: dict[str, float] = {
     # A wrong total is a wrong payment. Highest bar in the pack.
     "total_printed": 0.95,
+    # The derived payable. Held at the same bar as total_printed - a wrong
+    # payable is a wrong payment however it was reached (Task 11).
+    "amount_payable": 0.95,
     # The dedup key. A wrong one merges two invoices or splits one.
     "invoice_number": 0.92,
     # Downstream vendor resolution can recover from a near-miss.
