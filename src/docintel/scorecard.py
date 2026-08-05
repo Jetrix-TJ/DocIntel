@@ -281,6 +281,11 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "amount_payable_is_null": "wired:derived.amount_payable",
     "payable_basis": "wired:derived.payable_basis",
     "payable_mismatch": "wired:derived.amount_payable",
+    # `derive_amount_payable`'s own refusal path emits this modifier
+    # unconditionally (independent of the still-deferred crosscheck op that
+    # also names it), so U-PAK's `confidence_modifiers` assertion is a genuine
+    # observable of the same refusal, not a stand-in for a missing capability.
+    "arith_balance_mismatch_applied": "wired:confidence_modifiers",
     # Arithmetic compositions whose every input is independently asserted
     # elsewhere (current_charges, prior_balance, total_printed all in
     # CHECKED_FIELDS; amount_payable now in CHECKED_DERIVED) but whose
@@ -296,7 +301,6 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     "new_charges_composition": DEFERRED_REASON,
     "line_sum": DEFERRED_REASON,
     "line_extended": DEFERRED_REASON,
-    "arith_balance_mismatch_applied": "wired:confidence_modifiers",
     # `prior_balance_basis` is a derived CLASSIFICATION of which label supplied
     # the balance (design section 2), supplied by the `apply_billing_conventions`
     # hook that section 5 unwires - now unregistered in both packs. The
@@ -508,10 +512,13 @@ def _expected_modifiers(gold: dict[str, Any]) -> list[str]:
 
     `DEFERRED_ARITHMETIC_MODIFIERS` are filtered out by the printed-fields-only
     narrowing. A cross-check modifier is the sole observable of an arithmetic
-    closure, so expecting one asserts a capability the narrowing defers. This
-    removes exactly one expectation - U-PAK's `arith_balance_mismatch`, which was
-    its whole modifier set. The mechanism itself is still measured on the two OCR
-    documents, so `test_the_modifier_mechanism_is_measured_somewhere` still bites.
+    closure, so expecting one asserts a capability the narrowing defers. Task 11
+    un-deferred `arith_balance_mismatch` (it's now genuinely emitted by
+    `derive_amount_payable`'s own refusal path, independent of the still-deferred
+    crosscheck op that also names it) - so filtering now removes only
+    `arith_lines_mismatch`, `arith_total_mismatch`, and `scanline_mismatch`. The
+    mechanism itself is still measured on the two OCR documents, so
+    `test_the_modifier_mechanism_is_measured_somewhere` still bites.
     """
     cls = gold["classification"]
     tags = set(cls.get("tags", []))
