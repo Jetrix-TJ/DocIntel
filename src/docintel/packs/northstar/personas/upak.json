@@ -54,6 +54,16 @@
       "required": false
     },
     {
+      "field": "bill_to_name",
+      "anchor": "Bill To",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": [
+        "join_lines_comma"
+      ],
+      "required": false
+    },
+    {
       "row_group": "sub_account",
       "table_anchor": "SUB ACCT:",
       "columns": {
