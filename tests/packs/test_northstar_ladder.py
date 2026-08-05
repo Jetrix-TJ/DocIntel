@@ -105,11 +105,19 @@ def test_a_paginated_continuation_is_not_invoice_with_attachment() -> None:
     overflow onto page 2, pushing the totals label off page 1. Both pages repeat
     the same identity header and both print a footer pagination marker
     (`1 OF 2` / `2 OF 2`) - real evidence this is one paginated invoice, not an
-    attachment. Confirmed by reading both pages of the real source PDF:
-    `pageroles.assign` correctly marks page 2 primary / page 1 supporting (the
-    totals label only appears on page 2), which is the exact (primary=1,
-    supporting>=1) shape the ladder's `invoice_with_attachment` rule otherwise
-    treats as an attachment pair - indistinguishable by role count alone."""
+    attachment.
+
+    The roles below model what `pageroles.assign` actually resolves on the real
+    source PDF, confirmed by reading both pages: `_TOTALS_RE` deliberately
+    excludes bare `CURRENT CHARGES` (see that module's own docstring), so
+    neither page trips the anchor+totals tier and `assign` falls through to its
+    tier-2 last-resort fallback - page 1 `primary`, page 2 `supporting`. That is
+    still the exact (primary=1, supporting>=1) shape the ladder's
+    `invoice_with_attachment` rule otherwise treats as an attachment pair, and
+    the fix's correctness does not depend on which page lands which role -
+    `_is_paginated_continuation` reads the printed footer, never `page_meta`, so
+    only the (1 primary, >=1 supporting) *count* matters here, not which page
+    holds which role."""
     ctx = _ctx(
         _page(
             "EDCO WASTE|25-5R 823283|HAUL 225.10|000000-001 MD9-M 1 OF 2",
@@ -120,7 +128,7 @@ def test_a_paginated_continuation_is_not_invoice_with_attachment() -> None:
             "000000-001 MD9-M 2 OF 2",
             number=2,
         ),
-        roles=("supporting", "primary"),
+        roles=("primary", "supporting"),
     )
     assert doc_type_for(ctx)[0] != "invoice_with_attachment"
 
