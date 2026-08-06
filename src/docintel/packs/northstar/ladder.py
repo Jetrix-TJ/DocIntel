@@ -49,6 +49,7 @@ _MAX_CREDIT_MEMO_LINE_WORDS = 7
 _TAX_LINE = re.compile(r"\b(total tax|taxes|h\.?\s?s\.?\s?t\.?|g\.?\s?s\.?\s?t\.?)\b", re.I)
 _SUB_ACCT = re.compile(r"\*\*?\s*SUB\s*ACCT", re.I)
 _DISCOUNT = re.compile(r"\bdiscount\b", re.I)
+_MONEY_RE = re.compile(r"\d[\d,]*\.\d{2}")
 
 # OCR noise above which a page is taken to be handwriting rather than print.
 # Measured on the corpus: Complete Beverage's handwritten Bill of Lading pages
@@ -94,6 +95,105 @@ def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -
                 continue
             if pattern.search(" ".join(w.text for w in line)):
                 return True
+    return False
+
+
+def _line_has_nonzero_money(text: str) -> bool:
+    """Whether `text` carries at least one money token that isn't 0.00 (or
+    a purely-zero variant like 0,00.00). Used to corroborate a label match
+    against the value it labels, rather than trusting the label alone."""
+    for token in _MONEY_RE.findall(text):
+        cleaned = token.replace(",", "")
+        try:
+            if float(cleaned) != 0.0:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _aging_buckets_nonzero(text: str) -> bool:
+    """Nonzero among the 30/60/90-day bucket columns only - the money
+    tokens strictly between the first (CURRENT) and last (Please Pay) on
+    the row. Both ends are deliberately excluded: CURRENT and Please Pay
+    are nonzero on every real U-PAK invoice carrying any balance at all,
+    aged or not - `_line_has_nonzero_money` on the raw row would therefore
+    still fire on the exact all-buckets-empty documents this corroboration
+    exists to catch (verified: `AMOUNT 6763.96 0.00 0.00 0.00 $6763.96` has
+    a nonzero CURRENT/Please Pay with nothing actually aged). Requiring a
+    real 30/60/90 figure is what a genuinely overdue account has that a
+    current-only one does not - confirmed against real U-PAK second
+    samples that DO carry one (`... 0.01 0.00 0.00 ...`, `... 0.00 4476.34
+    0.02 ...`)."""
+    tokens = _MONEY_RE.findall(text)
+    middle = tokens[1:-1] if len(tokens) > 2 else []
+    for token in middle:
+        cleaned = token.replace(",", "")
+        try:
+            if float(cleaned) != 0.0:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _aging_table_has_balance(ctx: JobContext) -> bool:
+    """`_AGING_HEADER` finds the column-header row; this corroborates it
+    against the value row, which in every corpus/second-sample document is
+    either the same visual line (rare) or the next one."""
+    everything = "\n".join(p.text for p in ctx.pages)
+    if not _AGING_HEADER.search(everything):
+        return False
+    for page in ctx.pages:
+        lines = page.lines()
+        for i, line in enumerate(lines):
+            text = " ".join(w.text for w in line)
+            if not _AGING_HEADER.search(text):
+                continue
+            if _aging_buckets_nonzero(text):
+                return True
+            if i + 1 < len(lines):
+                next_text = " ".join(w.text for w in lines[i + 1])
+                if _aging_buckets_nonzero(next_text):
+                    return True
+    return False
+
+
+def _tax_value_nonzero(text: str) -> bool:
+    """The tax amount in a column-header table (Veritiv's discount/weight/
+    subtotal/'Total Tax'/'Amount Due' row) is the second-to-last money token
+    on the data row, immediately before the trailing grand total - NOT just
+    'any nonzero token on the line', because Subtotal (and this vendor's
+    discount columns) are nonzero on every real invoice and would otherwise
+    make the check trivially true on exactly the $0.00-tax documents it
+    exists to catch. Verified against all 7 real Veritiv second samples:
+    taxed invoices read '...0.00 0.00 299.55 4,908.00' (2nd-to-last
+    nonzero); untaxed ones (non-taxable items) read '...0.00 0.00 0.00
+    625.00' (2nd-to-last zero, only the trailing total is nonzero)."""
+    tokens = _MONEY_RE.findall(text)
+    if not tokens:
+        return False
+    candidate = tokens[-2] if len(tokens) >= 2 else tokens[-1]
+    cleaned = candidate.replace(",", "")
+    try:
+        return float(cleaned) != 0.0
+    except ValueError:
+        return False
+
+
+def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
+    for page in ctx.pages:
+        lines = page.lines()
+        for i, line in enumerate(lines):
+            text = " ".join(w.text for w in line)
+            if not _TAX_LINE.search(text):
+                continue
+            if _line_has_nonzero_money(text):
+                return True
+            if i + 1 < len(lines):
+                next_text = " ".join(w.text for w in lines[i + 1])
+                if _tax_value_nonzero(next_text):
+                    return True
     return False
 
 
@@ -177,12 +277,10 @@ def tags_for(ctx: JobContext) -> list[str]:
     if _NEGATIVE_MONEY.search(text):
         tags.append("mixed_sign")
 
-    if _short_line_has(ctx, _PAST_DUE, _MAX_PAST_DUE_LINE_WORDS) or _AGING_HEADER.search(
-        everything
-    ):
+    if _short_line_has(ctx, _PAST_DUE, _MAX_PAST_DUE_LINE_WORDS) or _aging_table_has_balance(ctx):
         tags.append("past_due")
 
-    if _TAX_LINE.search(text):
+    if _short_line_has_nonzero_tax(ctx):
         tags.append("has_tax")
 
     if _SUB_ACCT.search(everything):

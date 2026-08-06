@@ -221,13 +221,65 @@ def test_past_due_boilerplate_in_prose_does_not_tag() -> None:
 
 
 def test_aging_buckets_tag_past_due() -> None:
-    """U-PAK prints no banner, only an aging table."""
-    ctx = _ctx(_page("AGE CURRENT 30 DAYS 60 DAYS 90 DAYS Please Pay"))
+    """U-PAK prints no banner, only an aging table, with a genuinely nonzero
+    bucket in the data row beneath the header."""
+    ctx = _ctx(_page("AGE CURRENT 30 DAYS 60 DAYS 90 DAYS Please Pay|0.00 0.00 4476.34 0.00 4476.34"))
+    assert "past_due" in tags_for(ctx)
+
+
+def test_aging_header_with_all_zero_buckets_does_not_tag_past_due() -> None:
+    """Real U-Pak bug: 'AGE CURRENT 30 DAYS 60 DAYS 90 DAYS Please Pay' is a
+    column-header row; the data row beneath it is all $0.00. Must not fire."""
+    ctx = _ctx(_page(
+        "U-PAK DISPOSALS|AGE CURRENT 30 DAYS 60 DAYS 90 DAYS Please Pay|"
+        "0.00 0.00 0.00 0.00 4915.80"
+    ))
+    assert "past_due" not in tags_for(ctx)
+
+
+def test_aging_header_with_a_real_60_day_balance_still_tags_past_due() -> None:
+    """No regression: a genuinely nonzero aging bucket must still tag."""
+    ctx = _ctx(_page(
+        "U-PAK DISPOSALS|AGE CURRENT 30 DAYS 60 DAYS 90 DAYS Please Pay|"
+        "0.00 0.00 4476.34 0.00 4476.34"
+    ))
     assert "past_due" in tags_for(ctx)
 
 
 def test_a_tax_line_tags_has_tax() -> None:
     assert "has_tax" in tags_for(_ctx(_page("Sub Total 54.50 Taxes 7.09 Total 61.59")))
+
+
+def test_zero_total_tax_does_not_tag_has_tax() -> None:
+    """Real Veritiv bug: 'Total Tax' is a column-header label; the actual
+    tax charged is $0.00 (items marked non-taxable). Must not fire.
+
+    Row shape is the real one (verified against all 7 Veritiv second
+    samples, e.g. `_AP Invoice 689-37584900`): Discount Allowed/On Date/
+    Amount, Shipment Date/Time, Total Weight, Subtotal, Total Tax, Amount
+    Due - nine columns, with Subtotal always nonzero for any real charge.
+    A same-line-only or any-token-on-the-line check would misfire on
+    Subtotal; only the token second-to-last (Total Tax, just before the
+    trailing Amount Due) tells taxed from non-taxable."""
+    ctx = _ctx(_page(
+        "VERITIV OPERATING COMPANY|"
+        "Allowed On Date Amount Date Time Total Weight Subtotal Total Tax|"
+        "11/19/2025 6.25 00:00:00 27.10 625.00 0.00 0.00 0.00 625.00"
+    ))
+    assert "has_tax" not in tags_for(ctx)
+
+
+def test_nonzero_total_tax_still_tags_has_tax() -> None:
+    """No regression: a genuinely nonzero tax line must still tag.
+
+    Real row from `_AP Invoice 715-33905296` (the gold Veritiv document):
+    Total Tax = 299.55, second-to-last before Amount Due = 4,908.00."""
+    ctx = _ctx(_page(
+        "VERITIV OPERATING COMPANY|"
+        "Allowed On Date Amount Date Time Total Weight Subtotal Total Tax|"
+        "09/13/2025 46.08 00:00:00 2,568.49 4,608.45 0.00 0.00 299.55 4,908.00"
+    ))
+    assert "has_tax" in tags_for(ctx)
 
 
 def test_sub_acct_markers_tag_sub_accounts() -> None:
