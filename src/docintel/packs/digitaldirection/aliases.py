@@ -179,4 +179,7 @@ MANAGED_CLIENTS: tuple[str, ...] = (
     "Clyde Companies",
     "City of Dublin",
     "Choctaw Travel Mart",
+    "THE GOLUB CORPORATION",
+    "TOPS MARKETS LLC",
+    "GOLUB TOPs HQ",
 )

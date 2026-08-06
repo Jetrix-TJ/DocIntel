@@ -100,3 +100,32 @@ def test_the_two_unreadable_letterheads_have_display_names() -> None:
 
     assert DISPLAY_NAMES["lumen"] == "Lumen"
     assert DISPLAY_NAMES["windstream"] == "Kinetic Business by Windstream"
+
+
+# --------------------------------------------------------------------------
+# Managed clients — the bill-to roster
+# --------------------------------------------------------------------------
+
+
+def test_golub_corporation_is_a_recognized_managed_client() -> None:
+    """The exact printed text from Lumen_5-2N8BFFLC_09012025_BILL.pdf."""
+    from docintel.core.senders import bill_to_matches_roster
+    from docintel.packs.digitaldirection.aliases import MANAGED_CLIENTS
+
+    assert bill_to_matches_roster("THE GOLUB CORPORATION", MANAGED_CLIENTS)
+
+
+def test_tops_markets_is_a_recognized_managed_client() -> None:
+    """The exact printed text from Lumen_5-DK176HGT_09012025_BILL.pdf."""
+    from docintel.core.senders import bill_to_matches_roster
+    from docintel.packs.digitaldirection.aliases import MANAGED_CLIENTS
+
+    assert bill_to_matches_roster("TOPS MARKETS LLC", MANAGED_CLIENTS)
+
+
+def test_golub_tops_hq_is_a_recognized_managed_client() -> None:
+    """The exact printed text from Windstream_216713099_08272025_BILL.pdf."""
+    from docintel.core.senders import bill_to_matches_roster
+    from docintel.packs.digitaldirection.aliases import MANAGED_CLIENTS
+
+    assert bill_to_matches_roster("GOLUB TOPs HQ", MANAGED_CLIENTS)
