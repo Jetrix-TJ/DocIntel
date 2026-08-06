@@ -64,6 +64,15 @@ def test_a_prior_balance_anchor_alone_claims_present_not_cleared() -> None:
     ]
 
 
+def test_previous_total_phrase_tags_prior_balance_present() -> None:
+    """Real Windstream Enterprise template bug: prints 'Previous Total' (not
+    any of the five phrases already covered), with a genuine unresolved
+    carryover. Missing this tag is a silent-overpayment risk (same class as
+    F1) — the printed prior balance would never be checked."""
+    ctx = _ctx("WINDSTREAM ENTERPRISE|Previous Total $2.99|New Charges $116.00")
+    assert "prior_balance_present" in tags_for(ctx)
+
+
 def test_a_payment_anchor_does_not_make_classification_claim_cleared() -> None:
     """The exact shape of the C1 regression.
 

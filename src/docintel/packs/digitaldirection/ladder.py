@@ -48,7 +48,7 @@ _CURRENT_CHARGES = re.compile(
 # silent overpayment.
 PRIOR_BALANCE_ANCHORS = re.compile(
     r"\b(previous balance|previous bill|previous statement balance|"
-    r"balance from last statement|previous balance due)\b", re.I
+    r"balance from last statement|previous balance due|previous total)\b", re.I
 )
 _AGING = re.compile(r"\b(past due|amount past due|30 days\b.*\b60 days)\b", re.I)
 _MAX_PAST_DUE_LINE_WORDS = 8
