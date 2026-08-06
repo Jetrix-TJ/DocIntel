@@ -431,3 +431,40 @@ def test_other_corpus_documents_do_not_carry_the_fallback_tag(path):
     ctx = JobContext(document_id="d1", source_path=path)
     s2_filter.AttachmentFilter().run(ctx)
     assert "page_role_fallback" not in ctx.tags
+
+
+# ---------------------------------------------------------------------------
+# Fix round 3: a per-section usage subtotal row ("GRAND TOTAL 113 72.6
+# $2.6400") must not be mistaken for the document's own totals block just
+# because it also shares a page with a routine running-header anchor. See
+# Windstream_2389882_08272025_BILL.pdf (real 472-page second-sample).
+# ---------------------------------------------------------------------------
+
+
+def test_totals_only_page_1_wins_over_a_usage_detail_page_with_a_coincidental_grand_total() -> None:
+    """Reproduces the real Windstream_2389882 bug: page 1 has a totals-only
+    line (split-anchor template, tier-1 candidate) but a later page has BOTH
+    an anchor (routine running-header) and a `GRAND TOTAL` match that is
+    really a per-section usage subtotal row (extra bare numeric tokens beside
+    the money value, not a label/value pair). Before the fix, the later
+    page's coincidental both-signal match makes `primary_idx` non-empty and
+    tier-1 never runs, so page 1 loses primary status."""
+    page1 = _page(1, [["TOTAL", "INVOICE", "AMOUNT", "$116,258.78"]])
+    page2 = _page(2, [
+        ["INVOICE", "NUMBER", "77178223"],
+        ["GRAND", "TOTAL", "113", "72.6", "$2.6400"],
+    ])
+    meta, used_last_resort = pageroles.assign((page1, page2), _meta([page1, page2]))
+    assert meta[0].role == "primary"
+    assert used_last_resort is False
+
+
+def test_grand_total_with_exactly_one_money_token_still_qualifies_as_primary() -> None:
+    """Guard against over-correcting: a genuine `GRAND TOTAL $500.00` label/value
+    line, alone with its own anchor, must still qualify a page as primary on
+    its own (no fallback needed) — this is the ordinary case the regex exists
+    to catch."""
+    page = _page(1, [ANCHOR_LINE, ["GRAND", "TOTAL", "$500.00"]])
+    meta, used_last_resort = pageroles.assign((page,), _meta([page]))
+    assert meta[0].role == "primary"
+    assert used_last_resort is False

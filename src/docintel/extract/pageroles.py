@@ -144,11 +144,34 @@ _MAX_ANCHOR_LINE_WORDS = 8
 # is a reasoned inference from a signal that IS present, so it carries no tag.
 # What that leaves is the honest outcome - these pages resolve via tier 1,
 # not via a blind page-1 guess.
-_TOTALS_RE = re.compile(
+#
+# Matched separately from the rest of the enumeration: "GRAND TOTAL" and
+# "TOTAL AMT" are the only two phrases here that also appear, in the wild, as
+# a per-section usage/call-detail subtotal row rather than the document's own
+# payable total (Windstream_2389882's page 145: "GRAND TOTAL 113 72.6
+# $2.6400" — a call count, a minute count, and a money value, not a
+# label/value pair). The other phrases never appear in that shape in the
+# corpus or second-samples, so they are matched unconditionally.
+_AMBIGUOUS_TOTALS_RE = re.compile(r"\b(GRAND TOTAL|TOTAL AMT)\b")
+_UNAMBIGUOUS_TOTALS_RE = re.compile(
     r"\b(TOTAL AMOUNT DUE|PLEASE PAY|BALANCE DUE|BALANCE PAYABLE|TOTAL DUE|"
-    r"NOW DUE|GRAND TOTAL|TOTAL AMT|TOTAL INVOICE AMOUNT)\b"
+    r"NOW DUE|TOTAL INVOICE AMOUNT|TOTAL CREDIT)\b"
 )
+_MONEY_TOKEN_RE = re.compile(r"^\$?\d[\d,]*\.\d{2}$")
 _MAX_TOTALS_LINE_WORDS = 12
+
+
+def _line_is_totals_block(text: str, tokens: list[str]) -> bool:
+    if _UNAMBIGUOUS_TOTALS_RE.search(text):
+        return True
+    if not _AMBIGUOUS_TOTALS_RE.search(text):
+        return False
+    # A genuine totals cell is a label plus exactly one money value. A
+    # per-section usage subtotal row (Windstream's "GRAND TOTAL 113 72.6
+    # $2.6400") carries extra bare numeric tokens beside the money amount.
+    numeric_tokens = [t for t in tokens if re.fullmatch(r"[\d,.]+", t.strip("$"))]
+    money_tokens = [t for t in numeric_tokens if _MONEY_TOKEN_RE.match(t)]
+    return len(numeric_tokens) == len(money_tokens) == 1
 
 
 def _page_signals(page: PageText) -> tuple[bool, bool]:
@@ -157,14 +180,15 @@ def _page_signals(page: PageText) -> tuple[bool, bool]:
     has_totals = False
     for line in page.lines():
         n_words = len(line)
+        tokens = [w.text for w in line]
         text: str | None = None
         if not has_anchor and n_words <= _MAX_ANCHOR_LINE_WORDS:
-            text = " ".join(w.text for w in line).upper()
+            text = " ".join(tokens).upper()
             if _ANCHOR_RE.search(text):
                 has_anchor = True
         if not has_totals and n_words <= _MAX_TOTALS_LINE_WORDS:
-            text = text or " ".join(w.text for w in line).upper()
-            if _TOTALS_RE.search(text):
+            text = text or " ".join(tokens).upper()
+            if _line_is_totals_block(text, tokens):
                 has_totals = True
         if has_anchor and has_totals:
             break
