@@ -117,17 +117,59 @@ def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -
     return False
 
 
-def _has_promo_block(ctx: JobContext) -> bool:
-    """A large image or advertising block on page 1 (F9, Windstream).
+_PROMO_MARKERS = re.compile(
+    r"go kinetic business|gokineticbusiness\.com|scan the qr code|"
+    r"mybusiness\.gokinetic\.com|google play or the app store",
+    re.I,
+)
+"""A closed enumeration of the "Kinetic Business by Windstream" promotional
+insert's own wording, cited to two real documents:
 
-    Read from `PageMeta.image_count`, which Stage 2 already records. Two or more
-    images on page 1 is an advertising block rather than a logo - a carrier
-    letterhead is one image.
+- `Windstream_021942648_09022025_BILL.pdf` (second-samples): page 1 is a
+  genuine full-page "Go Kinetic Business" ad, OCR'd to one raster. Carries
+  "Go Kinetic Business", "my.gokineticbusiness.com", "scan the QR code",
+  "mybusiness.gokinetic.com", and "Google Play or the App Store".
+- The gold corpus's own `promo_content` document, account `041069076`
+  ("Half of page 1 is an advertisement" per its gold note): a different,
+  milder instance of the same template that carries only the shared
+  boilerplate footer - "Go to mybusiness.gokinetic.com or download our
+  mobile app by visiting Google Play or the App Store" - not the QR/download
+  preamble the other document has. Both real documents are covered only
+  because the enumeration keys on the footer they share, not the fuller
+  block that just one of them prints.
+
+Grepped every second-sample page 1 (Windstream, Lumen, Comcast, Centracom)
+plus the gold PDF: these phrases appear on exactly the two documents above
+and nowhere else in the corpus.
+"""
+
+
+def _has_promo_block(ctx: JobContext) -> bool:
+    """A dominant advertising block on page 1 (F9, Windstream).
+
+    Not `image_count`. Two real documents disprove any threshold built on
+    it, image count or char count alike:
+
+    - The genuine ad (`021942648`) OCR's down to a SINGLE collapsed raster
+      (`image_count == 1`) - the old `image_count >= 2` test missed it
+      entirely. Fixing that by adding a low-`char_count` branch does not
+      work either: a real, ordinary bill scanned the same way
+      (`Windstream_205577168`, and both real Lumen invoices) reads the
+      IDENTICAL `image_count == 1, char_count == 0` (`PageMeta.char_count`
+      is the pre-OCR structural text-layer count, which is 0 for any
+      full-page raster regardless of what is actually on it) - there is no
+      cutoff that tells the ad apart from a real bill scanned the same way.
+    - A normal native-PDF bill can carry several small incidental
+      logo/header images with nothing promotional on the page at all -
+      `Windstream_216713099` prints 5 and `image_count >= 2` alone
+      false-fired on it.
+
+    What the real ad DOES carry, on both real instances of it, and no real
+    non-ad document in the corpus does, is its own marketing copy - see
+    `_PROMO_MARKERS`.
     """
-    for meta in ctx.page_meta:
-        if meta.page_number == 1 and meta.image_count >= 2:
-            return True
-    return False
+    page_text = next((p.text for p in ctx.pages if p.page_number == 1), "")
+    return bool(_PROMO_MARKERS.search(page_text))
 
 
 def retag_prior_balance(ctx: JobContext) -> JobContext:

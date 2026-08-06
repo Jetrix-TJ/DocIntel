@@ -207,3 +207,85 @@ def test_an_account_summary_naming_statements_is_still_a_bill() -> None:
     ctx = _ctx("CENTRACOM|Account Summary|Balance from last statement 1,204.00|"
                "Current Charges 412.00|Billing Account Number 8495")
     assert doc_type_for(ctx) == ("telecom_bill", "default")
+
+
+# --------------------------------------------------------------------------
+# `_has_promo_block` - content, not image_count/char_count. Three real
+# Windstream/Lumen documents proved neither signal can carry this alone:
+# `021942648` and `205577168` are identical on both (image_count=1,
+# char_count=0 - a raw scan has no native text layer regardless of content),
+# and `216713099` false-fires on `image_count>=2` with 5 ordinary logo images
+# and nothing promotional on the page.
+# --------------------------------------------------------------------------
+
+
+def test_full_page_ocr_ad_with_one_collapsed_image_still_tags_promo_content() -> None:
+    """Real Windstream bug (`021942648`): a genuine full-page ad, OCR'd,
+    collapses to `image_count=1, char_count=0` - identical, on both of the old
+    signals, to a real scanned bill (see the third test below). Only the
+    page's own marketing copy - "Go Kinetic Business", the QR/download
+    preamble, and the "mybusiness.gokinetic.com ... Google Play or the App
+    Store" footer - actually identifies it.
+    """
+    ctx = _ctx(
+        "kinetic business by windstream|Account Summary|"
+        "Do More with Go Kinetic Business|"
+        "Now you can enjoy all the benefits of Go Kinetic Business|"
+        "Visit my.gokineticbusiness.com or scan the QR code to download the mobile app|"
+        "Go to mybusiness.gokinetic.com or download our mobile app by visiting Google Play or the App Store|"
+        "Current Charges Due 09/25/25 279.52|Total Amount Due 279.52"
+    )
+    ctx.page_meta = (PageMeta(1, 0, 1, 0, "primary"),)
+    assert "promo_content" in tags_for(ctx)
+
+
+def test_the_shared_kinetic_footer_alone_tags_promo_content_gold_041069076() -> None:
+    """The gold corpus's own `promo_content` document (`041069076`, "Half of
+    page 1 is an advertisement" per its gold note) does not carry the QR-code
+    preamble `021942648` has - only the shared "download the mobile app ...
+    Google Play or the App Store" footer block. That alone must be enough:
+    this document is the reason the tag exists, and it was silently missing
+    it (26/29 on `replay-gold`) before this fix, because `image_count == 1`
+    on this native, high-char_count page could never have satisfied any
+    image_count/char_count threshold.
+    """
+    ctx = _ctx(
+        "kinetic business by windstream|Account Summary|"
+        "Current Charges Due 08/11/25 1230.14|Total Amount Due 1230.14|"
+        "Go to mybusiness.gokinetic.com or download our mobile app by visiting Google Play or the App Store"
+    )
+    ctx.page_meta = (PageMeta(1, 2180, 1, 0, "primary"),)
+    assert "promo_content" in tags_for(ctx)
+
+
+def test_ordinary_page_with_several_small_logo_images_does_not_tag_promo_content() -> None:
+    """Real Windstream bug (`216713099`): 5 incidental small header/logo
+    images plus normal invoice content, no ad copy anywhere on the page -
+    `image_count >= 2` alone used to false-fire on exactly this document.
+    """
+    ctx = _ctx(
+        "WINDSTREAM ENTERPRISE|Account Summary Invoice 77176782|"
+        "Previous Total 646.69|Payments Applied Thank You -646.69|"
+        "Monthly Charges 575.00|New Charges Due by Sep 15 2025 647.01|"
+        "Windstream Portal|Manage your Windstream services directly|"
+        "Total Invoice Amount 647.01"
+    )
+    ctx.page_meta = (PageMeta(1, 2990, 5, 0, "primary"),)
+    assert "promo_content" not in tags_for(ctx)
+
+
+def test_a_scanned_single_image_ordinary_bill_does_not_tag_promo_content() -> None:
+    """Real Windstream bug (`205577168`) and both real Lumen invoices: a
+    genuine bill scanned as ONE full-page raster reads `image_count=1,
+    char_count=0` - identical to the real ad on both of the old signals.
+    Only the marketing copy tells them apart, and an ordinary bill page
+    prints none of it.
+    """
+    ctx = _ctx(
+        "WINDSTREAM ENTERPRISE|Account Summary Invoice 77170792|"
+        "Previous Total 5.12|Payments Applied Thank You -2.13|"
+        "Monthly Charges 0.00|Total Invoice Amount 4.82|"
+        "Windstream Portal|Manage your Windstream services directly"
+    )
+    ctx.page_meta = (PageMeta(1, 0, 1, 0, "primary"),)
+    assert "promo_content" not in tags_for(ctx)
