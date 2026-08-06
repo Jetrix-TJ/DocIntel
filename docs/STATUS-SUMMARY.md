@@ -19,9 +19,11 @@ revision), not read from project documentation or from `.loop/scorecard.json`
 >   fixed, and the five personas that declared **zero `bill_to_name` selectors**
 >   (`comcast`, `windstream`, `edco`, `upak`, `veritiv`) now all declare one, so
 >   `bill_to_mismatch` can structurally fire for every persona in both packs —
->   verified firing on real Windstream and real Edco second samples. Two
->   selector-*quality* defects found by the whole-branch review remain open (U-Pak
->   3/12, Edco 1/28); both fail safe. See §4.1.
+>   verified firing on real Windstream and real Edco second samples. The
+>   whole-branch review found two selector-*quality* defects behind that: U-Pak's
+>   (3 of 12 real samples) is **fixed**, via a one-key grammar extension
+>   (`scope: "block"`); Edco's (1 of 28) is an **accepted tradeoff**, documented
+>   rather than fixed. Both fail safe. See §4.1.
 > * **The business delivered second-period samples**: 111 real documents across 7
 >   of 10 vendors, in `all-docs/second-samples/`. This is the #1 ask from the
 >   previous revision. Running a sample of them (not yet formal, no gold labels),
@@ -159,8 +161,8 @@ the one fully-correct document (DTSS) is still the least-measured one.
 Ordered by what they cost if the system runs on documents it has not seen. **Six
 of the nine items below are closed outright, including all of this revision's new
 second-sample findings (§4.9); §4.1 closed on branch
-`sdd/verified-findings-remediation` and carries two open selector-quality
-defects, both failing safe, recorded under it.**
+`sdd/verified-findings-remediation`, with one accepted selector-quality tradeoff
+(Edco, 1 of 28 real samples, fails safe) recorded under it.**
 
 ### 4.1 The wrong-inbox guard covering only half the corpus — **closed** (`fda882c`, then Tasks 6–8 of `sdd/verified-findings-remediation`)
 
@@ -204,23 +206,37 @@ samples are OCR-sourced, miss the anchor, and fall through to the roster rung
 unchanged. The roster rung remains behind every selector as the fallback when one
 misses, so a selector miss is not a regression to the old behaviour.
 
-**Two selector-quality defects remain open, both failing safe**, found by that
-same whole-branch replay and not by any single task's review:
+The same whole-branch replay found **two selector-quality defects** no single
+task's review had seen. Both fail safe; one is fixed and one is an accepted
+tradeoff.
 
-* **U-Pak, 3 of 12 real second samples.** The `text_block` capture takes the
-  whole `Bill To` block rather than the party line when the block carries an
+* **U-Pak, 3 of 12 real second samples — FIXED.** The `text_block` capture took
+  the whole `Bill To` block rather than the party line when the block carried an
   `ATTN:`/email line above the name (invoices 4421470 and 4489932) or when OCR
-  garbles it, which also costs those records their `bill_to_address`.
-* **Edco, 1 of 28 real second samples.** Invoice 709223OCT25 prints the
-  service-at descriptor above the party name instead of below it — the reverse
-  of the other 27 — so the `same-row` selector reads `SYSCO FOODS-SAN DIEGO` and
-  raises a false `bill_to_mismatch` on a correctly-addressed bill.
-
-Neither can be fixed by tightening the selector's `pattern` inside the closed
-grammar (measured; the wrong values are well-formed party-name shapes in the
-right position). Both are flagged in the personas' own `notes` and are a
-selector-design decision, not an open safety hole: each routes its document to a
-human rather than auto-approving it.
+  garbled it, which also cost those records their `bill_to_address`. Tightening
+  the `pattern` alone made it *worse* — `near-anchor` reaches x=390 from `Bill`
+  (x0=90) and takes in the service-location column at x0=355.07, so a per-line
+  shape returned the service location on 6 of 12. The fix is a one-key grammar
+  extension, `scope: "line" | "block"` (selector-grammar.md §1.1), which makes
+  the column cut reachable by any pattern instead of only by `text_block`;
+  U-Pak's selector is now `scope: "block"` plus an anchored party-name shape.
+  Measured over all 12 samples plus the gold PDF: 10 clean captures, 3 clean
+  misses, **zero wrong values**, `bill_to_address` present on all 12, and the
+  one false `bill_to_mismatch` gone. A miss falls through to the roster rung, so
+  it is never a loss.
+* **Edco, 1 of 28 real second samples — accepted tradeoff, not fixed.** Invoice
+  709223OCT25 prints the service-at descriptor above the party name instead of
+  below it — the reverse of the other 27 — so the `same-row` selector reads
+  `SYSCO FOODS-SAN DIEGO` and raises a false `bill_to_mismatch` on a
+  correctly-addressed bill. Both orderings print four lines, so the party is at
+  no fixed index, and a shape constraint is provably inert here (measured: the
+  anchored shape returns byte-identical results to `text` on all 28 samples plus
+  gold, `SYSCO FOODS-SAN DIEGO` included — it is a well-formed two-token party
+  name in the correct position). Only a semantic check could separate them, and
+  that is the roster rung this selector deliberately moves off. Accepted in
+  exchange for the three *correct* misprint mismatches the selector raises;
+  documented in `edco.json`'s own `notes`. It routes one correctly-addressed
+  document to a human rather than auto-approving anything.
 
 ### 4.2 Confidence does not track correctness — **still open, narrower**
 
@@ -440,14 +456,15 @@ Recommended order, updated:
 
 | Priority | Action | Why |
 |--:|---|---|
-| 1 | **Settle the two open `bill_to_name` selector-quality defects** (U-Pak 3/12, Edco 1/28 — §4.1) | The selectors themselves are written (all 5 vendors, Tasks 6–8), so `bill_to_mismatch` can now fire; what is left is that two of them read the wrong line on a minority of real documents, and neither is fixable by tightening `pattern` inside the closed grammar. |
-| 2 | **Fix confidence calibration** (§4.2) | The item where the failure mode is real money misrouted despite correct-looking machinery — the U-Pak $6,621.41 error has now survived two revisions unfixed. |
-| 3 | **Finish labelling the second-sample backlog** (§4.8): 6 vendors with material and no formal gold label yet, 3 vendors with no second sample at all | Converts informal spot-checks into permanent regression coverage. Edco is the template. |
-| 4 | **Write the missing rules**, addresses first (§4.4) | Largest raw accuracy gain, ~48 assertions, growing as more vendors are added. Do this alongside item 3, on the *new* samples, so rules aren't fitted to single documents again. |
-| 5 | Re-enable the deferred arithmetic cross-checks (12 tests currently skipped) | Independently required before some documents can route correctly; also unblocks 3 of the 12 skipped tests. |
+| 1 | **Fix confidence calibration** (§4.2) | The item where the failure mode is real money misrouted despite correct-looking machinery — the U-Pak $6,621.41 error has now survived two revisions unfixed. |
+| 2 | **Finish labelling the second-sample backlog** (§4.8): 6 vendors with material and no formal gold label yet, 3 vendors with no second sample at all | Converts informal spot-checks into permanent regression coverage. Edco is the template. |
+| 3 | **Write the missing rules**, addresses first (§4.4) | Largest raw accuracy gain, ~48 assertions, growing as more vendors are added. Do this alongside item 2, on the *new* samples, so rules aren't fitted to single documents again. |
+| 4 | Re-enable the deferred arithmetic cross-checks (12 tests currently skipped) | Independently required before some documents can route correctly; also unblocks 3 of the 12 skipped tests. |
 
 **Dropped from this list, resolved this revision:** root-causing the Windstream
-collapse was priority 1 last revision — closed, see §4.9.
+collapse was priority 1 last revision — closed, see §4.9. Writing a `bill_to_name`
+selector for the five personas that lacked one was priority 1 in the revision
+before this — closed by Tasks 6–8 and the `scope: "block"` fix, see §4.1.
 
 Deliberately **not** recommended, unchanged from every prior revision: enabling
 the vision/LLM path. Nothing measured this revision changes that conclusion.
