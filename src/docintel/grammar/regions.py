@@ -546,7 +546,7 @@ def _label_block(
     `LABEL_BLOCK_MAX` ceiling, and the foot of the page.
 
     The anchor's own line is included. The executor excludes the anchor's words
-    from its candidates, so a `text_block` capture yields the address beneath the
+    from its candidates, so a block-scoped capture yields the address beneath the
     label rather than the label itself.
     """
     a = _require(anchor, "label-block")
@@ -608,8 +608,8 @@ def _label_block(
     # serves label/amount ladders, where the wide gap between a label and its
     # right-aligned amount is the layout, not contamination - narrowing here cut
     # the amount off and regressed Centracom and Comcast. The executor applies
-    # `column_cut` only for `text_block`, because it is the only caller that knows
-    # the pattern; a region resolver is pattern-blind on purpose.
+    # `column_cut` only for a BLOCK-SCOPED selector, because it is the only caller
+    # that knows the selector; a region resolver is selector-blind on purpose.
     kept = [w for band in bands for w in band]
     bottom = max([a.word.y1, *(w.y1 for w in kept)])
     return (_span(page, tuple(kept), (x0, top, x1, bottom)),)

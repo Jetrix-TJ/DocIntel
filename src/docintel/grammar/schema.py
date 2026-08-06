@@ -27,6 +27,7 @@ from docintel.core.errors import ValidationError
 PersonaWriteStatus = Literal["draft", "active"]
 Capture = Literal["first", "all_matches"]
 AnchorOccurrence = Literal["first", "last", "mid_line"]
+Scope = Literal["line", "block"]
 TotalsPageRole = Literal["last", "first"]
 FingerprintTextSource = Literal["native", "ocr", "either"]
 
@@ -126,6 +127,20 @@ SCANLINE_REGIONS: frozenset[str] = frozenset({"last-page", "remittance-block"})
 # to agree with. See `FieldSelector.anchor_occurrence` for what each mode means and
 # the measurements behind `mid_line`.
 ANCHOR_OCCURRENCES: frozenset[str] = frozenset({"first", "last", "mid_line"})
+
+# The closed `scope` vocabulary, beside the others for the same reason. See
+# `FieldSelector.scope`.
+SCOPES: frozenset[str] = frozenset({"line", "block"})
+
+# The one pattern whose NAME already implied block scope, and still does.
+#
+# `patterns._text_block` returns its whole input, so it only ever made sense
+# against a whole block, and `executor._candidates` dispatched on this literal
+# string before `scope` existed. Every persona shipping it predates the key and
+# carries no `scope`, so the default has to be derived from the pattern rather
+# than from the field's own default - anything else silently rewrites nine
+# shipped address selectors into their first line.
+BLOCK_SCOPED_PATTERNS: frozenset[str] = frozenset({"text_block"})
 
 
 @runtime_checkable
@@ -261,6 +276,43 @@ class FieldSelector:
     # anchored selector in both packs.
     anchor_occurrence: AnchorOccurrence = "first"
     capture: Capture = "first"
+    # WHICH CANDIDATES the region offers the pattern. GRAMMAR EXTENSION, section 10.
+    #
+    # `line` (default) is what every selector did before this key existed:
+    # `executor._candidates` walks the region's rows and offers each row's cells,
+    # then its individual words, then the whole row. `block` offers ONE candidate
+    # instead - the region's lines joined by newlines, cut at the first column
+    # gutter right of the anchor (`regions.column_cut`).
+    #
+    # The reason: that column cut existed already, but was reachable ONLY by
+    # `pattern: "text_block"`, because `_candidates` dispatched on the literal
+    # pattern name. So a selector could have the cut or a shape constraint, never
+    # both - and on a two-column layout those are exactly the two things a party
+    # name needs at once.
+    #
+    # Measured, on U-PAK's `bill_to_name` across all 12 real second samples plus
+    # the gold document. `Bill To` is at x0=90 and the service-location column at
+    # x0=355.1, inside `near-anchor`'s 300pt reach, and the two columns' rows
+    # interleave one row apart:
+    #
+    #   line  + party-name shape   6 of 12 return the SERVICE LOCATION
+    #                              ('ROYAL CANIN', 'BLUE ZONE', 'MARS CANADA',
+    #                              'RED ZONE', 'ARL LAB', 'ASPIRE BAKERY') -
+    #                              wrong-party reads on correctly-addressed bills
+    #   block + `text_block`       3 of 12 capture the whole Bill To block,
+    #                              including an ATTN:/email line above the name
+    #   block + party-name shape   10 clean captures, 3 clean misses, 0 wrong
+    #
+    # The third row is safe for a reason worth stating: `re` matches `^...$`
+    # against the whole string unless `re.MULTILINE` is set and
+    # `patterns.compile_restricted` never sets it, so an anchored shape against a
+    # block is all-or-nothing across the WHOLE block. A block carrying anything
+    # besides the name cannot match, and a clean miss falls through to
+    # `ops.infer.resolve_bill_to_alias`'s roster rung.
+    #
+    # Default "line", pinned by a test, and `text_block` still resolves to
+    # "block" whether or not a persona says so - see `BLOCK_SCOPED_PATTERNS`.
+    scope: Scope = "line"
     adjust: tuple[str, ...] = ()
     required: bool = True
 
@@ -417,14 +469,31 @@ def _parse_field_selector(raw: Mapping[str, Any]) -> FieldSelector:
         # An occurrence selector with no anchor to select an occurrence OF is a
         # typo that would otherwise do nothing quietly.
         raise ValidationError("anchor_occurrence requires an anchor")
+    pattern = str(_require_key(raw, "pattern"))
+    scope = raw.get("scope")
+    if scope is not None and scope not in SCOPES:
+        raise ValidationError(f"scope must be one of {sorted(SCOPES)}, got {scope!r}")
+    if pattern in BLOCK_SCOPED_PATTERNS:
+        # The pattern already meant block scope and predates the key, so it wins
+        # when nothing is said - and contradicting it is an authoring error, not a
+        # request. `patterns._text_block` returns its whole input, so line scope
+        # would hand it one row at a time and silently reduce every address to its
+        # first line.
+        if scope == "line":
+            raise ValidationError(
+                f"pattern {pattern!r} is block-scoped by definition; scope 'line' "
+                "would hand it one row at a time and truncate the block"
+            )
+        scope = "block"
     return FieldSelector(
         field=str(_require_key(raw, "field")),
-        pattern=str(_require_key(raw, "pattern")),
+        pattern=pattern,
         region=str(_require_key(raw, "region")),
         anchor=None if raw.get("anchor") is None else str(raw["anchor"]),
         anchor_alts=_as_tuple(raw.get("anchor_alts")),
         anchor_occurrence=occurrence,
         capture=capture,
+        scope="line" if scope is None else scope,
         adjust=_as_tuple(raw.get("adjust")),
         required=bool(raw.get("required", True)),
     )

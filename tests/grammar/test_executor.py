@@ -1398,3 +1398,118 @@ def test_declared_headers_that_match_nothing_are_an_error_not_a_fallback() -> No
     })
     assert ctx.row_groups.get("charges", []) == []
     assert any("none matched" in e for e in ctx.events)
+
+
+# --------------------------------------------------------------------------
+# `scope` - which candidates the region offers the pattern
+# --------------------------------------------------------------------------
+#
+# GRAMMAR EXTENSION, section 1.1. Until it existed, `_candidates` chose between
+# per-line candidates and one column-cut block by testing whether the selector's
+# pattern was the literal string `"text_block"` - so the column cut, the thing
+# that keeps a two-column layout's other column out of the capture, was reachable
+# only by a pattern that accepts anything at all. A selector that needs BOTH the
+# cut and a shape constraint could not be written.
+#
+# Measured need (U-PAK `bill_to_name`): `Bill To` sits at x0=90 and the
+# service-location column at x0=355.1, inside `near-anchor`'s 300pt reach, and the
+# two columns' rows interleave. With per-line candidates a party-name shape
+# returns the SERVICE LOCATION on 6 of 12 real second samples; with the block it
+# returns the party or nothing.
+
+def _two_column_block_page() -> PageText:
+    """U-PAK's real page-1 geometry, reduced to the two columns that matter.
+
+    `Bill To:` labels the left column at x0=90; `Location:` labels the right at
+    x0=355.1, on the same row. The customer's own block interleaves with the
+    service location's, one row apart, and the service location's first row sits
+    ABOVE the customer's name - which is what makes reading order alone wrong.
+    """
+    return _page(
+        1,
+        ("Bill", 90.0, 135.68), ("To:", 104.6, 135.68), ("Location:", 355.1, 135.68),
+        ("ROYAL", 355.1, 169.18), ("CANIN", 384.4, 169.18),
+        ("NORTHSTAR", 90.0, 173.18), ("RECYCLING", 142.0, 173.18),
+    )
+
+
+PARTY_SHAPE = r"^([A-Za-z0-9][A-Za-z0-9&.,'()/#-]{1,29} [A-Za-z0-9 &.,'()/#-]{1,44})$"
+
+
+def test_line_scope_offers_the_neighbouring_column_as_a_candidate() -> None:
+    """The behaviour `scope: "block"` exists to escape, pinned first so the
+    extension is measured against something rather than asserted.
+
+    `near-anchor` is x-bounded at `anchor.x0 + 300` = 390, which takes in the
+    right column at x0=355.1. Its row is 4pt above the customer's, so it is
+    offered first and a party-name shape accepts it."""
+    ctx = _run(_ctx(_two_column_block_page()), {
+        "field": "bill_to_name", "anchor": "Bill To",
+        "region": "near-anchor", "pattern": PARTY_SHAPE,
+    })
+    assert ctx.extracted.get("bill_to_name") == "ROYAL CANIN"
+
+
+def test_block_scope_applies_the_column_cut_to_a_regex_pattern() -> None:
+    """The extension itself: the same region, the same pattern, the same page -
+    and the right column is gone, because the block is cut at the column gutter
+    exactly as `text_block` has always cut it."""
+    ctx = _run(_ctx(_two_column_block_page()), {
+        "field": "bill_to_name", "anchor": "Bill To",
+        "region": "near-anchor", "pattern": PARTY_SHAPE, "scope": "block",
+    })
+    assert ctx.extracted.get("bill_to_name") == "NORTHSTAR RECYCLING"
+
+
+def test_block_scope_makes_an_anchored_pattern_reject_a_multi_line_block() -> None:
+    """Why an anchored shape plus block scope is a SAFE idiom rather than merely
+    a narrower one. `re` matches `^...$` against the whole string unless
+    `re.MULTILINE` is set, and `compile_restricted` never sets it, so a block
+    carrying anything besides the name cannot match - a clean miss, which falls
+    through to `resolve_bill_to_alias`'s roster rung, rather than a wrong value.
+
+    Real geometry: `_AP Invoice 4421470 U-Pak` prints `ATTN: SEAN LEES` at
+    top=161.18, above the party at top=169.18, both inside near-anchor's window.
+    """
+    ctx = _run(_ctx(_page(
+        1,
+        ("Bill", 90.0, 135.68), ("To:", 104.6, 135.68),
+        ("ATTN:", 90.0, 161.18), ("SEAN", 115.3, 161.18), ("LEES", 139.3, 161.18),
+        ("NORTHSTAR", 90.0, 169.18), ("RECYCLING", 142.0, 169.18),
+    )), {
+        "field": "bill_to_name", "anchor": "Bill To",
+        "region": "near-anchor", "pattern": PARTY_SHAPE, "scope": "block",
+    })
+    assert ctx.extracted.get("bill_to_name") is None
+
+
+def test_block_scope_still_drops_the_anchors_own_words() -> None:
+    """The `skip` set applies on both paths. Without it a block-scoped capture
+    would return the label that located it (F14's anchor hazard)."""
+    ctx = _run(_ctx(_page(
+        1,
+        ("FOR", 100.0, 300.0), ("SERVICE", 130.0, 300.0), ("AT:", 190.0, 300.0),
+        ("1600", 100.0, 315.0), ("Industrial", 140.0, 315.0), ("Rd", 210.0, 315.0),
+    )), {
+        "field": "service_location", "anchor": "FOR SERVICE AT:",
+        "region": "near-anchor", "pattern": r"^(.{1,60})$", "scope": "block",
+    })
+    assert ctx.extracted.get("service_location") == "1600 Industrial Rd"
+
+
+def test_text_block_behaves_identically_with_and_without_the_explicit_scope() -> None:
+    """The backward-compatibility claim, asserted rather than argued: every
+    persona shipping `text_block` predates `scope`, so `text_block` alone must
+    keep producing exactly what `text_block` plus `scope: "block"` produces."""
+    implicit = _run(_ctx(_two_column_block_page()), {
+        "field": "bill_to_address", "anchor": "Bill To",
+        "region": "near-anchor", "pattern": "text_block",
+    })
+    explicit = _run(_ctx(_two_column_block_page()), {
+        "field": "bill_to_address", "anchor": "Bill To",
+        "region": "near-anchor", "pattern": "text_block", "scope": "block",
+    })
+    assert implicit.extracted.get("bill_to_address") == "NORTHSTAR RECYCLING"
+    assert explicit.extracted.get("bill_to_address") == implicit.extracted.get(
+        "bill_to_address"
+    )

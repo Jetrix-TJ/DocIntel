@@ -35,6 +35,7 @@ selector := field_selector | row_group_selector | scanline_selector
   "region":  "<region>",            // required unless anchor is provably unique
   "pattern": "<pattern>",           // required
   "capture": "first" | "all_matches",   // default "first"
+  "scope":   "line" | "block",      // default "line" ("block" when pattern is text_block)
   "adjust":  "<adjust_op>" | ["<adjust_op>", …],   // optional, pack-registered
   "required": true | false          // default true; false → absence is not a miss
 }
@@ -73,6 +74,37 @@ Two notes on that guard. It keys off the **document's actual text source at run 
 persona's `layout_fingerprint.text_source` (§6) — no runtime code reads any fingerprint member, and
 `windstream.json` declares `native` while four of its five real samples are OCR-sourced. And it is
 one-sided: the ordinal modes read nothing about line bands and are deliberately **not** withheld.
+
+**`scope` — which candidates the region offers the pattern.** Closed enum, two values. This is a
+selector-level key, not a member of the §2 region vocabulary: it does not add, remove or reshape a
+region, it says how the region's words are presented to the pattern.
+
+| Value | The region offers |
+|---|---|
+| `line` (default) | each row's cells, then its individual words, then the whole row — most specific first |
+| `block` | **one** candidate: the region's lines joined by newlines, cut at the first column gutter right of the anchor |
+
+The column cut is what keeps a two-column layout's *other* column out of a capture, and until this
+key existed it was reachable only by `pattern: "text_block"` — the one pattern that accepts
+anything — because the executor dispatched on the pattern's name. A selector could have the cut or
+a shape constraint, never both, which is exactly what a party name on a two-column bill needs at
+once. `text_block` still means block scope whether or not a persona says so, and declaring it
+`"line"` is rejected: the pattern returns its whole input, so a row at a time would silently reduce
+every address to its first line.
+
+**An anchored shape against a block is all-or-nothing across the WHOLE block**, which is what makes
+this a *safe* idiom rather than merely a narrower one: `re` matches `^…$` against the entire string
+unless `re.MULTILINE` is set and §3.2's compiler never sets it, so a block carrying anything besides
+the value cannot match, and a clean miss falls through to whatever fallback the field has. Measured
+on U-PAK's `bill_to_name` over all 12 real second samples plus the gold document, where `Bill To`
+sits at x0=90 and the service-location column at x0=355.1 — inside `near-anchor`'s 300pt reach, with
+the two columns' rows interleaved one row apart:
+
+| `scope` + pattern | Result |
+|---|---|
+| `line` + party-name shape | 6 of 12 return the **service location** — wrong-party reads on correctly-addressed bills |
+| `block` + `text_block` | 3 of 12 capture the whole block, including an `ATTN:`/email line above the name |
+| `block` + party-name shape | 10 clean captures, 3 clean misses, **0 wrong values** |
 
 ### 1.2 `row_group_selector` — repeating rows
 
@@ -163,7 +195,7 @@ A pattern is **either** a named pattern **or** a restricted regex.
 | `date` | `9/15/2025` · `08/14/2025` · `Dec 09, 2025` · `September 01, 2025` · `03/31/25` · `January 01, 2026` | Normalized to ISO. Ambiguous 2-digit years → confidence penalty. |
 | `date_loose` | as `date`, plus `MARCH 31, 2025`, `EOM plus 15` → unparsed passthrough | |
 | `text` | any non-empty run on one line | |
-| `text_block` | multi-line run within the region | For addresses. |
+| `text_block` | multi-line run within the region | For addresses. Implies `scope: "block"` (§1.1). |
 | `account_number` | alphanumeric with internal spaces/dashes preserved **and** a normalized form | `8495 44 462 0365242` → `8495444620365242` (F6) |
 | `phone` | `416-675-3700` · `918-653-3103` | |
 | `postal_code` | `45887` · `01028-2744` · `M9W 7E9` · `N1G 4N4` | CA postal codes matter for currency inference (F14) |

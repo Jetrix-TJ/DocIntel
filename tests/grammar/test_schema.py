@@ -145,6 +145,67 @@ def test_mid_line_still_requires_an_anchor() -> None:
         ]))
 
 
+def test_the_default_scope_is_line() -> None:
+    """Pinned separately, for the same reason as `anchor_occurrence`'s default:
+    flipping it would silently move every selector in both packs from per-line
+    candidates to a single column-cut block."""
+    (sel,) = parse_persona(_base(field_selectors=[
+        {"field": "vendor_name", "region": "header-block", "pattern": "text"},
+    ])).field_selectors
+    assert isinstance(sel, FieldSelector)
+    assert sel.scope == "line"
+
+
+def test_scope_accepts_the_two_defined_modes() -> None:
+    """`line` offers each row's cells, words and whole line in turn; `block`
+    offers the region's column-cut block as one multi-line candidate - the
+    mechanism `pattern: "text_block"` already used internally, now sayable
+    independently of which pattern is doing the matching."""
+    for mode in ("line", "block"):
+        (sel,) = parse_persona(_base(field_selectors=[
+            {"field": "bill_to_name", "anchor": "Bill To", "region": "near-anchor",
+             "pattern": "text", "scope": mode},
+        ])).field_selectors
+        assert isinstance(sel, FieldSelector)
+        assert sel.scope == mode
+
+
+def test_an_unknown_scope_is_rejected() -> None:
+    """The enum stays closed: `column` or `blok` would otherwise fall back to
+    per-line candidates silently, which is the wrong answer wearing the right
+    JSON."""
+    with pytest.raises(ValidationError, match="scope"):
+        parse_persona(_base(field_selectors=[
+            {"field": "bill_to_name", "anchor": "Bill To", "region": "near-anchor",
+             "pattern": "text", "scope": "column"},
+        ]))
+
+
+def test_text_block_reports_block_scope_without_being_asked() -> None:
+    """Backward compatibility, stated as a property rather than left implicit.
+    Every persona shipping `pattern: "text_block"` today was written before
+    `scope` existed and none carries the key; the pattern has always meant block
+    scope, so it keeps meaning it."""
+    (sel,) = parse_persona(_base(field_selectors=[
+        {"field": "bill_to_address", "anchor": "Bill To", "region": "label-block",
+         "pattern": "text_block"},
+    ])).field_selectors
+    assert isinstance(sel, FieldSelector)
+    assert sel.scope == "block"
+
+
+def test_text_block_may_not_be_declared_line_scoped() -> None:
+    """`text_block` IS the block-scope pattern - `patterns._text_block` returns
+    its whole input, so line scope would hand it one row at a time and quietly
+    turn every address into its first line. A persona asking for that has made a
+    mistake worth reporting."""
+    with pytest.raises(ValidationError, match="scope"):
+        parse_persona(_base(field_selectors=[
+            {"field": "bill_to_address", "anchor": "Bill To", "region": "label-block",
+             "pattern": "text_block", "scope": "line"},
+        ]))
+
+
 def test_adjust_accepts_a_bare_string_or_a_list() -> None:
     """Section 1.1 allows both; downstream should only ever see a tuple."""
     (one,) = parse_persona(_base(field_selectors=[

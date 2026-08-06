@@ -353,7 +353,7 @@ class Executor:
     # -- candidate generation ---------------------------------------------
 
     def _candidates(
-        self, span: Span, pattern: str, skip: frozenset[Word]
+        self, span: Span, scope: str, skip: frozenset[Word]
     ) -> Iterator[str]:
         """Strings to try the pattern against, most specific first.
 
@@ -363,17 +363,24 @@ class Executor:
         per-word pass still finds the figure.
 
         `skip` holds the words that spelled the anchor. Excluding them is what
-        stops a `text_block` on `near-anchor` returning the label it was
+        stops a block capture on `near-anchor` returning the label it was
         located by instead of the address next to it.
+
+        **`scope`, not the pattern's NAME, chooses between the two paths.** This
+        method used to test `pattern == "text_block"`, which made the column cut
+        below reachable only by the one pattern that accepts anything - so a
+        selector could have the cut or a shape constraint, never both.
+        `schema._parse_field_selector` still resolves `text_block` to
+        `scope: "block"` on its own, so nothing that shipped before the key moved.
         """
-        if pattern == "text_block":
+        if scope == "block":
             bands = [[w for w in line if w not in skip] for line in span.lines()]
             # Stop at the real column edge rather than the region's nominal right
-            # bound. Only `text_block` does this: it is the pattern that captures a
-            # multi-line block, so a neighbouring column is contamination. A
-            # label/amount ladder on the same region needs the opposite - the wide
-            # gap before its right-aligned amount IS the layout - and `regions.py`
-            # cannot tell the two apart because a resolver never sees the pattern.
+            # bound. Only block scope does this: it captures a multi-line run, so a
+            # neighbouring column is contamination. A label/amount ladder on the
+            # same region needs the opposite - the wide gap before its right-aligned
+            # amount IS the layout - and `regions.py` cannot tell the two apart
+            # because a resolver never sees the selector.
             left = min((w.x0 for w in skip), default=span.bbox[0])
             cut = regions.column_cut(bands, left, span.bbox[2])
             lines = [
@@ -415,7 +422,7 @@ class Executor:
         want_all = selector.capture == "all_matches"
 
         for span in spans:
-            for candidate in self._candidates(span, selector.pattern, skip):
+            for candidate in self._candidates(span, selector.scope, skip):
                 if perf_counter() > deadline:
                     # Section 3.2: a blown budget is a miss plus a modifier,
                     # never a wedged worker. Whatever was found so far is
