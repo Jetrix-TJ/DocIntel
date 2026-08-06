@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 
+from docintel.core import pagination
 from docintel.core.models import JobContext
 from docintel.packs.registry import primary_text
 
@@ -128,9 +129,6 @@ def doc_type_for(ctx: JobContext) -> tuple[str, str]:
     return "standard_invoice", "default"
 
 
-_PAGE_OF_RE = re.compile(r"\b(\d+)\s+OF\s+(\d+)\b")
-
-
 def _is_paginated_continuation(ctx: JobContext) -> bool:
     """True if every page carries a `N OF M` footer with M == len(ctx.pages).
 
@@ -141,22 +139,7 @@ def _is_paginated_continuation(ctx: JobContext) -> bool:
     "invoice plus attachment" - does. Reading the real printed footer, not
     guessing from role counts, is what tells the two apart.
     """
-    total_pages = len(ctx.pages)
-    if total_pages < 2:
-        return False
-    seen_numbers: set[int] = set()
-    for page in ctx.pages:
-        found = False
-        for line in page.lines():
-            text = " ".join(w.text for w in line).upper()
-            match = _PAGE_OF_RE.search(text)
-            if match and int(match.group(2)) == total_pages:
-                seen_numbers.add(int(match.group(1)))
-                found = True
-                break
-        if not found:
-            return False
-    return seen_numbers == set(range(1, total_pages + 1))
+    return pagination.shared_footer_pages(ctx.pages) is not None
 
 
 def _has_table(ctx: JobContext) -> bool:
