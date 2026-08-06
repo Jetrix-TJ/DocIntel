@@ -250,6 +250,18 @@ def test_a_tax_line_tags_has_tax() -> None:
     assert "has_tax" in tags_for(_ctx(_page("Sub Total 54.50 Taxes 7.09 Total 61.59")))
 
 
+def test_a_zero_tax_value_on_the_same_line_does_not_tag_has_tax() -> None:
+    """Boundary the same-line path must also hold to: a nonzero Sub Total
+    (or any other token) sitting on the same line as the tax label must
+    not corroborate a genuinely zero tax value. This is the exact
+    false-positive class the next-line Veritiv fix exists to close -
+    same-line matches need the identical rigor, not 'any nonzero token on
+    the line', or a same-line document with real other charges and $0.00
+    tax would still misfire."""
+    ctx = _ctx(_page("Sub Total 54.50 Taxes 0.00 Total 54.50"))
+    assert "has_tax" not in tags_for(ctx)
+
+
 def test_zero_total_tax_does_not_tag_has_tax() -> None:
     """Real Veritiv bug: 'Total Tax' is a column-header label; the actual
     tax charged is $0.00 (items marked non-taxable). Must not fire.

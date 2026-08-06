@@ -98,30 +98,17 @@ def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -
     return False
 
 
-def _line_has_nonzero_money(text: str) -> bool:
-    """Whether `text` carries at least one money token that isn't 0.00 (or
-    a purely-zero variant like 0,00.00). Used to corroborate a label match
-    against the value it labels, rather than trusting the label alone."""
-    for token in _MONEY_RE.findall(text):
-        cleaned = token.replace(",", "")
-        try:
-            if float(cleaned) != 0.0:
-                return True
-        except ValueError:
-            continue
-    return False
-
-
 def _aging_buckets_nonzero(text: str) -> bool:
     """Nonzero among the 30/60/90-day bucket columns only - the money
     tokens strictly between the first (CURRENT) and last (Please Pay) on
     the row. Both ends are deliberately excluded: CURRENT and Please Pay
     are nonzero on every real U-PAK invoice carrying any balance at all,
-    aged or not - `_line_has_nonzero_money` on the raw row would therefore
-    still fire on the exact all-buckets-empty documents this corroboration
-    exists to catch (verified: `AMOUNT 6763.96 0.00 0.00 0.00 $6763.96` has
-    a nonzero CURRENT/Please Pay with nothing actually aged). Requiring a
-    real 30/60/90 figure is what a genuinely overdue account has that a
+    aged or not - treating "any nonzero token on the raw row" as
+    corroboration would therefore still fire on the exact
+    all-buckets-empty documents this corroboration exists to catch
+    (verified: `AMOUNT 6763.96 0.00 0.00 0.00 $6763.96` has a nonzero
+    CURRENT/Please Pay with nothing actually aged). Requiring a real
+    30/60/90 figure is what a genuinely overdue account has that a
     current-only one does not - confirmed against real U-PAK second
     samples that DO carry one (`... 0.01 0.00 0.00 ...`, `... 0.00 4476.34
     0.02 ...`)."""
@@ -181,6 +168,31 @@ def _tax_value_nonzero(text: str) -> bool:
         return False
 
 
+def _same_line_tax_value_nonzero(text: str) -> bool:
+    """The tax amount immediately following the tax label on the SAME
+    line - not 'any nonzero token on the line', which would let a nonzero
+    Sub Total or Total (present on every real invoice) corroborate a
+    genuinely zero tax value, reproducing the exact false-positive class
+    this whole corroboration exists to fix. Verified against the real
+    same-line match, U-PAK's 'H.S.T. # 123142812RT0001    2,325.69': the
+    registration number isn't money-shaped (no decimal point), so the
+    first money token found after the label match is the real tax
+    amount, 2,325.69 - not the label's own text and not some other
+    column's total."""
+    for label_match in _TAX_LINE.finditer(text):
+        after = text[label_match.end():]
+        money_match = _MONEY_RE.search(after)
+        if not money_match:
+            continue
+        cleaned = money_match.group(0).replace(",", "")
+        try:
+            if float(cleaned) != 0.0:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
     for page in ctx.pages:
         lines = page.lines()
@@ -188,7 +200,7 @@ def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
             text = " ".join(w.text for w in line)
             if not _TAX_LINE.search(text):
                 continue
-            if _line_has_nonzero_money(text):
+            if _same_line_tax_value_nonzero(text):
                 return True
             if i + 1 < len(lines):
                 next_text = " ".join(w.text for w in lines[i + 1])
