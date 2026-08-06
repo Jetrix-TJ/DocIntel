@@ -503,3 +503,14 @@ def test_tier_2_fallback_still_picks_page_1_alone_without_a_footer_sequence() ->
     assert meta[0].role == "primary"
     assert meta[1].role == "supporting"
     assert used_last_resort is True
+
+
+def test_total_credit_line_qualifies_as_a_totals_signal() -> None:
+    """Real Complete Beverage bug: a batched credit-memo page prints 'TOTAL
+    CREDIT $2,899.00' rather than any of the other enumerated totals
+    phrases. Without recognizing it, the page with the real credit-memo
+    header never gets primary status and the whole document goes unclaimed."""
+    page1 = _page(1, [["Credit", "Memo"], ["TOTAL", "CREDIT", "$2,899.00"]])
+    page2 = _page(2, [["GRAND", "TOTAL"]])  # certificate/BOL page, no real anchor either
+    meta, _ = pageroles.assign((page1, page2), _meta([page1, page2]))
+    assert meta[0].role == "primary"
