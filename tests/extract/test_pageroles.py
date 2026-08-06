@@ -468,3 +468,38 @@ def test_grand_total_with_exactly_one_money_token_still_qualifies_as_primary() -
     meta, used_last_resort = pageroles.assign((page,), _meta([page]))
     assert meta[0].role == "primary"
     assert used_last_resort is False
+
+
+# ---------------------------------------------------------------------------
+# Fix round 4: real EDCO bug (823283AUG25/823283SEP25). EDCO's totals-box
+# labels render as non-text graphics, so a genuinely two-page continued
+# invoice has NO page carrying either signal at all — true tier-2. But both
+# pages share a matching `N OF M` pagination footer, real proof this is one
+# continuous invoice rather than an invoice-plus-attachment, so tier-2 should
+# trust that proof over a blind page-1-only guess.
+# ---------------------------------------------------------------------------
+
+
+def test_tier_2_fallback_marks_every_page_of_a_proven_continuation_sequence_primary() -> None:
+    """Reproduces the real EDCO 823283 bug: neither page carries any anchor
+    or totals signal at all (true tier-2), but both pages share a matching
+    `N OF 2` footer — real proof this is one continuous invoice, not a
+    page-1-only guess. `CURRENT CHARGES:` (page 2 only) must become readable
+    by primary-scoped selectors."""
+    page1 = _page(1, [["BALANCE", "FORWARD", "3593.91"], ["MD9-M", "1", "OF", "2"]])
+    page2 = _page(2, [["CURRENT", "CHARGES:", "3267.54"], ["MD9-M", "2", "OF", "2"]])
+    meta, used_last_resort = pageroles.assign((page1, page2), _meta([page1, page2]))
+    assert meta[0].role == "primary"
+    assert meta[1].role == "primary"
+    assert used_last_resort is True  # still a guess, still tagged — just a better-informed one
+
+
+def test_tier_2_fallback_still_picks_page_1_alone_without_a_footer_sequence() -> None:
+    """No regression: when there is no proven continuation sequence, tier-2
+    behaves exactly as before — page 1 only."""
+    page1 = _page(1, [["BALANCE", "FORWARD", "3593.91"]])
+    page2 = _page(2, [["CURRENT", "CHARGES:", "3267.54"]])
+    meta, used_last_resort = pageroles.assign((page1, page2), _meta([page1, page2]))
+    assert meta[0].role == "primary"
+    assert meta[1].role == "supporting"
+    assert used_last_resort is True

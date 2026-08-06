@@ -51,14 +51,24 @@ decide whether that is worth surfacing):
 1. The first page carrying a totals-block label on its own — that is where
    the payable lives, even without a confirmed identity anchor next to it.
    A reasonable inference, not flagged any further.
-2. If literally no page carries either signal, page 1, as an unconditional
-   last resort. This tier is fundamentally a guess — the exact shape of the
-   bug the F10 review round was about, just relocated from "always page 1"
-   to "page 1 when the phrase enumeration below doesn't recognize this
-   document's wording" — and a log line nobody is watching is not an
-   acceptable way to surface a guess in a project whose whole position is
-   that a wrong value is recoverable *because it is visible*. So tier 2 is
-   reported twice: once via `logger.warning`, and once structurally, in
+2. If literally no page carries either signal: page 1 alone, as an
+   unconditional last resort — UNLESS every page of the document shares a
+   matching, self-consistent `N OF M` pagination footer
+   (`core.pagination.shared_footer_pages`), in which case every page in
+   that footer sequence is marked `primary` instead. A footer sequence is
+   proof, not a guess, that the pages are one continuous invoice (EDCO's
+   `823283AUG25`/`823283SEP25`: the totals-box labels render as non-text
+   graphics, so neither page matches an anchor or totals label at all, yet
+   `CURRENT CHARGES` sits on page 2 only — a page-1-only guess would make it
+   permanently unreadable to primary-scoped selectors even though the
+   footer already proves page 2 belongs). Without such a footer sequence,
+   this tier is still fundamentally a guess — the exact shape of the bug the
+   F10 review round was about, just relocated from "always page 1" to "page
+   1 when the phrase enumeration below doesn't recognize this document's
+   wording" — and a log line nobody is watching is not an acceptable way to
+   surface a guess in a project whose whole position is that a wrong value
+   is recoverable *because it is visible*. So tier 2 is reported twice
+   either way: once via `logger.warning`, and once structurally, in
    `assign`'s second return value (`used_last_resort: bool`), which
    `s2_filter.py` turns into the `page_role_fallback` tag on the emitted
    record. Tier 1 does not get a tag; it is a targeted, reasonable
@@ -97,6 +107,7 @@ import re
 from dataclasses import replace
 
 from docintel.core.models import PageMeta, PageText
+from docintel.core.pagination import shared_footer_pages
 
 logger = logging.getLogger(__name__)
 
@@ -240,13 +251,24 @@ def assign(
                 totals_only[0] + 1,
             )
         else:
-            primary_idx = {0}
-            used_last_resort = True
-            logger.warning(
-                "pageroles: no page carried an identity anchor, a totals label, "
-                "or both; falling back to page 1 as a last resort so the "
-                "document still has a primary page"
-            )
+            footer_pages = shared_footer_pages(pages)
+            if footer_pages is not None:
+                primary_idx = {i for i in range(len(pages)) if (i + 1) in footer_pages}
+                used_last_resort = True
+                logger.warning(
+                    "pageroles: no page carried an identity anchor, a totals label, "
+                    "or both; falling back to all %d pages, which share a proven "
+                    "N-of-M pagination footer sequence",
+                    len(footer_pages),
+                )
+            else:
+                primary_idx = {0}
+                used_last_resort = True
+                logger.warning(
+                    "pageroles: no page carried an identity anchor, a totals label, "
+                    "or both; falling back to page 1 as a last resort so the "
+                    "document still has a primary page"
+                )
 
     roles = []
     for i, page in enumerate(pages):
