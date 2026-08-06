@@ -42,6 +42,31 @@ review, a false negative lets contradicted reference numbers through
 silently, which is why `has_flattened_annotations` forces review
 unconditionally rather than merely discounting confidence.
 
+A third pixel signal — shape, not just amount — was added after DTSS's real
+second-sample document `_AP Invoice 6081DTSS D.T.S.S. Inc. 36000.00000.pdf`
+page 2 (a computer-generated delivery table with a solid pastel-blue header
+bar and a pastel-blue shaded "Delivery ID" column) false-fired signals 1 and
+2 above: rendered at this module's `RESOLUTION`, that page measures
+`hit_frac=0.0933` and `hit_cells=280` — both *higher* than Federal
+Recycling's own true positive (`hit_frac=0.0445`, `hit_cells=193`), so no
+tightening of `FRAC_THRESHOLD` or `MIN_HIT_CELLS` could separate the two by
+amount alone; DTSS's page clears both thresholds with more margin than the
+true positive does. What actually differs is contiguity: 4-connected-
+component analysis of the hit grid (`_largest_band`) shows DTSS's pastel
+pixels form a single component holding all 280 hit cells (100%) and
+spanning 45 of the grid's 52 rows (87%) — one tall, unbroken band running
+almost the full height of the table — while Federal Recycling's six
+scattered highlight strokes and comment boxes break into five separate
+components, the largest holding only 82 of 193 hit cells (42%) and spanning
+13 rows (25%). `BAND_DOMINANCE_FRAC` (0.7) and `BAND_ROW_SPAN_FRAC` (0.5)
+were picked from this pair to leave both cases clearly on opposite sides
+(DTSS: 1.0 dominance / 0.87 row-span fraction, well above both cuts;
+Federal Recycling: 0.42 dominance / 0.25 row-span fraction, well below
+both) — a page must clear *both* the dominance and row-span cuts on its
+largest component to be rejected as a printed band rather than scattered
+markup, so a large-but-not-tall blob or a tall-but-partial column still
+counts as annotated.
+
 **Known blind spot, stated plainly because an undocumented one is a trap: this
 detector is entirely saturation-dependent, and therefore CANNOT see a
 greyscale scan or a black/grey-pen annotation.** Both pixel signals key off
@@ -106,6 +131,14 @@ GRID_COLS = 40
 GRID_ROWS = 52
 CELL_HIT_THRESHOLD = 24  # average out of 255 in a downsampled cell
 MIN_HIT_CELLS = 50  # scattered marks, not one printed logo block
+
+# A single connected component that both (a) holds most of the hit cells and
+# (b) runs most of the page's height is a printed banded/zebra-striped table
+# column or header bar, not scattered human markup - see BAND_DOMINANCE_FRAC
+# / BAND_ROW_SPAN_FRAC below and the module docstring's DTSS calibration
+# paragraph for the measurements that picked these two cuts.
+BAND_DOMINANCE_FRAC = 0.7  # largest component's share of all hit cells
+BAND_ROW_SPAN_FRAC = 0.5  # largest component's row span, as a fraction of GRID_ROWS
 
 _SAT_LUT = [255 if SAT_MIN <= i <= SAT_MAX else 0 for i in range(256)]
 _VALUE_LUT = [255 if i >= VALUE_MIN else 0 for i in range(256)]
@@ -187,5 +220,50 @@ def _image_is_annotated(img: Image.Image) -> bool:
         return False
 
     grid = mask.resize((GRID_COLS, GRID_ROWS), Image.BOX)
-    hit_cells = sum(1 for cell in grid.get_flattened_data() if cell >= CELL_HIT_THRESHOLD)
-    return hit_cells >= MIN_HIT_CELLS
+    hit_mask = [cell >= CELL_HIT_THRESHOLD for cell in grid.get_flattened_data()]
+    hit_cells = sum(hit_mask)
+    if hit_cells < MIN_HIT_CELLS:
+        return False
+
+    band_size, band_row_span = _largest_band(hit_mask)
+    if band_size >= BAND_DOMINANCE_FRAC * hit_cells and band_row_span >= BAND_ROW_SPAN_FRAC * GRID_ROWS:
+        # Almost all the hit mass sits in one contiguous run spanning most of
+        # the page's height: a printed table's shaded header/column, not
+        # scattered highlighter strokes or comment boxes (see module
+        # docstring's DTSS calibration paragraph).
+        return False
+    return True
+
+
+def _largest_band(hit_mask: list[bool]) -> tuple[int, int]:
+    """4-connected-component analysis over the `GRID_ROWS` x `GRID_COLS` hit
+    grid. Returns `(largest_component_cell_count, largest_component_row_span)`
+    for whichever component has the most cells - the two numbers
+    `_image_is_annotated` uses to tell "one tall contiguous band" (a zebra-
+    striped table column or header bar) apart from "several small, separate
+    blobs" (scattered highlighter strokes / comment boxes).
+    """
+    visited = [False] * len(hit_mask)
+    best_size = 0
+    best_row_span = 0
+    for start, is_hit in enumerate(hit_mask):
+        if not is_hit or visited[start]:
+            continue
+        visited[start] = True
+        stack = [start]
+        cells: list[int] = []
+        while stack:
+            idx = stack.pop()
+            cells.append(idx)
+            row, col = divmod(idx, GRID_COLS)
+            for n_row, n_col in ((row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1)):
+                if 0 <= n_row < GRID_ROWS and 0 <= n_col < GRID_COLS:
+                    n_idx = n_row * GRID_COLS + n_col
+                    if hit_mask[n_idx] and not visited[n_idx]:
+                        visited[n_idx] = True
+                        stack.append(n_idx)
+        if len(cells) > best_size:
+            best_size = len(cells)
+            rows = [divmod(idx, GRID_COLS)[0] for idx in cells]
+            best_row_span = max(rows) - min(rows) + 1
+    return best_size, best_row_span

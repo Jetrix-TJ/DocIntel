@@ -1,6 +1,7 @@
 import glob
 
 import pdfplumber
+from PIL import Image, ImageDraw
 
 from docintel.extract import annotations as annotations_module
 from docintel.extract.annotations import RESOLUTION, detect_flattened
@@ -72,3 +73,34 @@ def test_greyscale_annotations_are_a_known_blind_spot_not_detected():
 
     grey_img = colour_img.convert("L").convert("RGB")
     assert annotations_module._image_is_annotated(grey_img) is False  # noqa: SLF001
+
+
+def test_zebra_striped_delivery_table_is_not_flagged_as_annotated() -> None:
+    """Real DTSS bug: DTSS's real second-sample document `_AP Invoice
+    6081DTSS D.T.S.S. Inc. 36000.00000.pdf` page 2 is a computer-generated
+    delivery table with a solid pastel-blue header bar and a pastel-blue
+    shaded "Delivery ID" column running the full height of the table -
+    measured at `hit_frac=0.0933` (threshold 0.03) and `hit_cells=280`
+    (threshold 50) at this module's `RESOLUTION`, i.e. it clears *both*
+    existing thresholds with more margin than Federal Recycling's own true
+    positive does (`hit_frac=0.0445`, `hit_cells=193`) - so tightening either
+    threshold cannot separate this page from the true positive; only a
+    shape/contiguity check can. Reusing this file's controlled-saturation
+    image-construction approach (see `test_greyscale_annotations_are_a_
+    known_blind_spot_not_detected` above), this fixture paints a same-size
+    (850x1100, this module's `RESOLUTION` for a US-Letter page) synthetic
+    page with the same two rectangles in the same measured HSV band
+    (S=47, V=216, i.e. within [SAT_MIN, SAT_MAX] at >=VALUE_MIN) and neutral
+    (S=0) grey everywhere else, reproducing the real page's single dominant,
+    tall, contiguous connected component (one printed table column/header,
+    not six scattered highlighter strokes) that `_image_is_annotated` must
+    not mistake for flattened human markup.
+    """
+    band_colour = (176, 192, 216)  # HSV S=47, V=216 - sampled from the real DTSS page
+    background = (248, 248, 248)  # HSV S=0 - neutral page background, outside the band
+    img = Image.new("RGB", (850, 1100), background)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 42, 701, 84], fill=band_colour)  # full-width header bar
+    draw.rectangle([64, 85, 170, 994], fill=band_colour)  # shaded ID column, full table height
+
+    assert annotations_module._image_is_annotated(img) is False  # noqa: SLF001
