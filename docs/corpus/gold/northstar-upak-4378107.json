@@ -13,15 +13,14 @@
     "F19",
     "F20"
   ],
-  "notes": "THE ARITHMETIC-MISMATCH CASE. Total Invoice 14789.77 but Please Pay 14740.85, with all aging buckets at 0.00 - so the -48.92 gap is NOT a prior balance. amount_payable must be null and the document must route to review. Also: totals live on page 5, not page 1.",
+  "notes": "THE ARITHMETIC-MISMATCH CASE. Total Invoice 14789.77 but Please Pay 14740.85, with all aging buckets at 0.00 - so the -48.92 gap is NOT a prior balance. amount_payable must be null and the document must route to review. Also: totals live on page 5, not page 1. CORRECTION 2026-08-06 (classification-accuracy-fixes task 6): dropped `past_due` from classification.tags - its aging row (`AMOUNT 14740.85 0.00 0.00 0.00 $14740.85`) is byte-for-byte the same shape as U-Pak's 4 confirmed past_due false positives (nonzero CURRENT/Please Pay, zero 30/60/90 buckets), and this note already establishes there is no genuine aged/prior balance here. The tag was a residual artifact of the exact bug ladder.py's _AGING_HEADER-alone check being fixed here, not a real nonzero aging case.",
   "classification": {
     "doc_type": "standard_invoice",
     "tags": [
       "foreign_currency",
       "has_tax",
       "sub_accounts",
-      "mixed_sign",
-      "past_due"
+      "mixed_sign"
     ],
     "text_source": "native",
     "page_count": 5,
