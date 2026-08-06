@@ -138,6 +138,27 @@ def test_a_credit_memo_title_wins_over_everything() -> None:
     assert doc_type_for(ctx)[0] == "credit_memo"
 
 
+def test_credit_memo_mentioned_in_a_line_item_note_does_not_reclassify_a_real_invoice() -> None:
+    """Real Complete Beverage bug: an invoice's line-item note reads 'For
+    remaining credited items refer to Credit memo 32684.' — a full sentence,
+    not a document title. Must not fire _CREDIT_MEMO."""
+    ctx = _ctx(_page(
+        "COMPLETE BEVERAGE DESTRUCTION|BALANCE DUE $556.20|"
+        "For remaining credited items refer to Credit memo 32684."
+    ))
+    doc_type, signal = doc_type_for(ctx)
+    assert doc_type != "credit_memo"
+
+
+def test_credit_memo_title_on_its_own_short_line_still_fires() -> None:
+    """No regression: a genuine credit-memo document title, alone on a short
+    line, must still classify as credit_memo."""
+    ctx = _ctx(_page("Credit Memo|CREDIT TO CREDIT # 32473|TOTAL CREDIT $2,899.00"))
+    doc_type, signal = doc_type_for(ctx)
+    assert doc_type == "credit_memo"
+    assert signal == "credit_memo_title"
+
+
 def test_northstars_own_letterhead_is_own_paperwork() -> None:
     ctx = _ctx(_page("Northstar Recycling Company LLC|Packing Slip"))
     assert doc_type_for(ctx)[0] == "own_paperwork"

@@ -45,6 +45,7 @@ _NEGATIVE_MONEY = re.compile(r"(?<![\w.])-\d{1,3}(?:,\d{3})*\.\d{2}\b|\(\d{1,3}(
 _AGING_HEADER = re.compile(r"\b30\s*DAYS\b.*\b60\s*DAYS\b", re.I)
 _PAST_DUE = re.compile(r"\bPAST\s+DUE\b", re.I)
 _MAX_PAST_DUE_LINE_WORDS = 6
+_MAX_CREDIT_MEMO_LINE_WORDS = 7
 _TAX_LINE = re.compile(r"\b(total tax|taxes|h\.?\s?s\.?\s?t\.?|g\.?\s?s\.?\s?t\.?)\b", re.I)
 _SUB_ACCT = re.compile(r"\*\*?\s*SUB\s*ACCT", re.I)
 _DISCOUNT = re.compile(r"\bdiscount\b", re.I)
@@ -106,7 +107,7 @@ def doc_type_for(ctx: JobContext) -> tuple[str, str]:
     """(doc_type, signal_that_fired). The section 1 ladder, in order."""
     text = primary_text(ctx)
 
-    if _CREDIT_MEMO.search(text):
+    if _short_line_has(ctx, _CREDIT_MEMO, _MAX_CREDIT_MEMO_LINE_WORDS):
         return "credit_memo", "credit_memo_title"
 
     rates = _UNIT_RATE.findall(text)
