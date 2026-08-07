@@ -89,8 +89,25 @@ letterhead is still captured) but the sender domain is the primary source; see
 | `invoice_date` | | `Date` · `Invoice Date` · `DATE` |
 | `bill_date` | EDCO's shape: a billing date and no invoice date | `Billing Date` · `Bill Date` |
 | `total_printed` | The headline figure, **as printed** — never adjusted toward a payable | `Total` · `Balance Due` · `Total Amount Due` · `TOTAL` · `Amount Due` · `Total Invoice` |
-| `bill_to_name` | **Guard**: must resolve to Northstar | `Bill To` · `FOR` · `SOLD TO` |
+| `bill_to_name` | **Guard**: must resolve to Northstar (see the claim note below) | `Bill To` · `FOR` · `SOLD TO` |
 | `reference_list[]` | Objects with provenance (F11) | see §3 |
+
+**Claim note (2026-08-07).** The guard is a marker list (`BILL_TO_MARKERS` in
+`packs/northstar/__init__.py`), and it is applied in two tiers because precision
+was measured for the first time on 2026-08-07 and two over-claims were found:
+
+- A marker specific enough to name only this company claims on its own.
+- `ma 01028` — the bare ZIP, added so four real EDCO invoices with typo'd company
+  names would still be claimed — now requires the token `northst` as well. All 28
+  real EDCO second samples carry it, including the four that depend on the ZIP.
+- A marker whose every line-level occurrence sits in a **SHIP-TO** block no longer
+  claims. Northstar's own address on a ship-to line says where a pallet went, not
+  who owes the money. Zero of the 100 real documents carrying a line-level marker
+  hit are affected.
+
+See `tests/packs/test_claim_precision.py` for the out-of-domain corpus that
+measures this direction; before these changes it claimed three documents that
+belong to nobody in this system.
 
 ### Printed — commercial terms
 

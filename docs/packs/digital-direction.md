@@ -162,6 +162,21 @@ and it is pinned by `tests/test_printed_fields_only_path.py`.
 | `remit_payee` `remit_address` | `Make check payable to` · `payable to` | Drives alias resolution (F5) |
 | `vendor_name` `vendor_address` `return_address` | Letterhead, envelope block | |
 
+**Claim note (2026-08-07).** This pack claims by CARRIER, with the managed-client
+roster as a documented secondary signal. That secondary half used to be a bare
+substring test over the whole primary text, so an unrelated vendor's invoice
+claimed the pack merely by naming a client in a line-item description
+(`1x SIGNAGE FOR CITY OF DUBLIN PROJECT`). It now requires the client name on a
+short line, i.e. in a bill-to block rather than in prose.
+
+Measured across all 111 second-samples: every one of the 7 Digital Direction
+documents is claimed by its carrier alias and **zero** reach this fallback, so
+its word cutoff is fitted to the over-claim it rejects rather than to a real
+document — the one constant in this pack without real-document backing. It is
+kept rather than deleted because the pack's growth path is a bill from a carrier
+not yet in the alias table addressed to a client who is; the first real document
+to arrive through it should be used to re-derive the cutoff.
+
 ### Dates
 
 `due_date` — `Payment due` · `Due date` · `Payment Due` · `Due Date:`.
