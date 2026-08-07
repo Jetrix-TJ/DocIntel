@@ -76,7 +76,34 @@ audit, and diffed the results.
   explicitly out of this plan's scope (documented per-task by each implementer and
   independently confirmed by each task's reviewer — e.g. EDCO's known swapped-header
   `bill_to_name` defect, telecom bills' unrelated address/reference mismatches). No gold
-  document's assertion count went down because of these fixes; several went up (see below).
+  document's assertion count went down because of these fixes. Exactly one went up —
+  the other 10 are byte-for-byte identical, assertion by assertion, between the pre-plan
+  baseline (`cb763e0`) and current HEAD (measured directly with `replay-gold --json` at
+  both commits): `northstar-edco-819387` moved from **17/26 to 20/26** (+3), driven by
+  Task 1's `payments_credits` fix.
+
+  **`northstar-edco-819387` still fails overall, and that is worth stating plainly.** It
+  is the poster child named for defect #1 in this very audit, and both the original plan
+  (Task 1, step 5) and this task's own brief predicted it would flip to fully green — it
+  did not. The three assertions Task 1 specifically targeted now pass:
+  `fields.payments_credits` (`-3380.67`, matches gold), `derived.payable_basis`
+  (`total_printed`), and `derived.amount_payable` (`2628.44`) — confirming the fix works
+  exactly as designed. The document is still `passed: false` (20/26) because six *other*
+  assertions fail, none of them new and none caused by this plan:
+  - `review_flag`/`lane` — a pre-existing confidence-calibration gap: `total_printed`'s
+    extraction confidence (0.90) sits below EDCO's own `amount_payable` threshold (0.95,
+    `packs/northstar/thresholds.py`), which routes the document to the `medium` lane and
+    forces `review_flag = True` regardless of correctness. Already documented as a known,
+    out-of-scope defect in the gold file's own note.
+  - `fields.bill_to_address`/`fields.bill_to_attention` — EDCO's real record folds the
+    attention line into the address block; already documented as pre-existing in the gold
+    file's own note and in Task 1's report.
+  - `line_items.count`/`line_items.amounts` (expected 11 items and amounts, actual 0/[])
+    — a real, plain pipeline gap, named explicitly rather than folded into the "out of
+    scope" generalization above: EDCO's persona
+    (`src/docintel/packs/northstar/personas/edco.json`) has no `line_items` selector at
+    all, so none of this document's 11 line items are ever extracted. Not covered by this
+    plan's scope.
 - Two gold-label changes were made, both explicitly authorized after evidence review
   (documented in the plan's ledger and in commits `1e133e9`, part of Task 6/8):
   - `docs/corpus/gold/northstar-upak-4378107.json` — `past_due` removed from
@@ -107,13 +134,38 @@ audit, and diffed the results.
 **EDCO review-flag note:** the plan's investigation predicted the fix would bring EDCO's
 review rate down to ≤4/28 (3 genuine bill-to typos + 1 known defect). The real, measured
 number is 9/28 — a real and substantial improvement (47%), but short of the optimistic
-prediction. The gap is because Task 1's `payments_credits` selector, anchored on the
-literal `"PAYMENT -- THANK YOU"` phrase, does not resolve every EDCO document with an
-intervening balance adjustment — one document (`968397OCT25`) uses an `"INCREASE"` line
-instead, which Task 1 explicitly and correctly declined to guess a sign convention for
-rather than force a fit. The remaining EDCO review flags are real, uninvestigated-further
-cases, not newly discovered false positives — closing them fully would need a follow-up
-task, not a correction to this one.
+prediction. All 9 residual flags were traced individually, by tag, on a fresh run of the
+same 111-document batch filtered to `all-docs/second-samples/edco/*.pdf`:
+- **4 documents** carry `bill_to_mismatch` (`176024OCT25`, `709223OCT25`, `823282AUG25`,
+  `823282SEP25`) — 3 genuine bill-to typos on EDCO's own printed record
+  (`NORTHSTRAY RECYCLING`, `NORTHSTART RECYCLING`) plus one already-documented,
+  pre-existing defect (`709223OCT25`'s swapped customer-block rows, recorded at length in
+  `edco.json`'s persona notes and explicitly deferred to a human product decision, not
+  something this audit newly found).
+- **1 document** (`968397OCT25`) carries `past_due` alone: it uses an `"INCREASE"` line
+  instead of the `"PAYMENT -- THANK YOU"` phrase Task 1's `payments_credits` selector
+  anchors on, which Task 1 explicitly and correctly declined to guess a sign convention
+  for rather than force a fit.
+- **4 documents** (`704363AUG25`, `819387AUG25`, `819387SEP25`, `978979AUG25`) carry only
+  the `page_role_fallback` tag, yet are still review-flagged — previously unexplained.
+  Investigated directly (`docintel.cli process --json` on each): all 4 have
+  `derived.payable_basis: "total_printed"` and `reason: null` — `derive_amount_payable`
+  is *not* refusing on any of them, so this is not a `line_items`-related derivation
+  refusal. Each document's carried balance is `0.00` (a same-cycle payment fully offsets
+  the prior balance), so `derive_amount_payable` takes its ordinary printed-total branch
+  cleanly. The actual cause is the same confidence-calibration gap named above for
+  `northstar-edco-819387` (which is itself `819387AUG25` — the same physical document,
+  present in both the gold corpus and this batch): `total_printed`'s extraction confidence
+  (0.90) sits below EDCO's own `amount_payable` threshold (0.95,
+  `packs/northstar/thresholds.py`), which routes all 4 documents to the `medium` lane and
+  sets `review_flag = True` regardless of the underlying numbers being correct. This is a
+  real, separate, pre-existing gap (predates this plan — `thresholds.py`'s threshold
+  values were last touched by `095060f` and `8f4fb35`, both before `cb763e0`), not
+  something this plan's fixes caused or could have closed.
+
+Closing any of the 9 remaining flags — the 1 swapped-header defect, the 1 sign-convention
+gap, or the 4 confidence-threshold cases — would need a follow-up task, not a correction
+to this one.
 
 **Verified explicitly, not just by count:** `promo_content` now correctly tags
 `Windstream_021942648_09022025_BILL.pdf` (the real full-page ad — "Go Kinetic Business",
