@@ -172,10 +172,33 @@ def _aging_buckets_nonzero(text: str) -> bool:
     return False
 
 
+def _primary_pages(ctx: JobContext) -> list:
+    """Pages restricted to primary role, mirroring `primary_text()`'s own
+    fallback (registry.py): if no roles are assigned yet, every page counts,
+    since Stage 2 always assigns roles before Stage 3 runs for real."""
+    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
+    if not primary:
+        return list(ctx.pages)
+    return [p for p in ctx.pages if p.page_number in primary]
+
+
 def _aging_table_has_balance(ctx: JobContext) -> bool:
     """`_AGING_HEADER` finds the column-header row; this corroborates it
     against the value row, which in every corpus/second-sample document is
-    either the same visual line (rare) or the next one."""
+    either the same visual line (rare) or the next one.
+
+    Deliberately scans every page, not just primary ones (whole-branch
+    review finding 4). This is not a new widening: `past_due`'s OTHER half
+    of the check, `_short_line_has(ctx, _PAST_DUE, ...)`, has scanned every
+    page since before this plan (see its own docstring re: Federal
+    Recycling's terms-and-conditions page), and that decision was already
+    reviewed and accepted. Scoping only this corroboration to primary pages
+    would not remove the risk - the disjunction it corroborates already
+    reads every page - so it would just make the two halves of one `past_due`
+    check inconsistent with each other for no safety gain. Empirically, this
+    is also moot: every real `_AGING_HEADER` match in the corpus and
+    second-samples (U-Pak) is on a primary page already, since U-Pak's
+    repeating template marks every one of its pages primary."""
     everything = "\n".join(p.text for p in ctx.pages)
     if not _AGING_HEADER.search(everything):
         return False
@@ -242,7 +265,20 @@ def _same_line_tax_value_nonzero(text: str) -> bool:
 
 
 def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
-    for page in ctx.pages:
+    """Whether a tax label on the primary page(s) is corroborated by a
+    nonzero value, same line or the next.
+
+    Narrowed to primary-role pages (whole-branch review finding 4): Task 6
+    introduced this helper scanning EVERY page, which contradicts
+    `primary_text()`'s documented contract (registry.py) that a supporting
+    page - a Bill of Lading, a certificate - may carry facts (a different
+    tax regime, a different total) that are not statements about the
+    invoice it's attached to. A stapled BOL naming an unrelated "Taxes"
+    line would, under the all-pages version, wrongly tag a tax-exempt
+    parent invoice `has_tax`. Narrowing to primary pages costs nothing real:
+    every actual `_TAX_LINE` match in the corpus and all 7 Veritiv plus all
+    U-Pak second samples is already on that document's own primary page(s)."""
+    for page in _primary_pages(ctx):
         lines = page.lines()
         for i, line in enumerate(lines):
             text = " ".join(w.text for w in line)
