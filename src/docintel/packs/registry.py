@@ -29,6 +29,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from docintel.core.models import JobContext
 from docintel.core.senders import normalize_name as normalize_name
+from docintel.packs import signals
 from docintel.pipeline.hooks import HookRegistry
 
 # `normalize_name` is re-exported (not re-defined) for existing callers
@@ -186,15 +187,14 @@ def primary_text(ctx: JobContext) -> str:
     extraction does: a supporting Bill of Lading may name a different company,
     carry a different tax regime, or show a different total, and none of those
     are statements about the invoice it is attached to.
+
+    The page SELECTION - including the fall back to every page when Stage 2 has
+    not assigned roles yet - lives in `signals.primary_pages`, which this joins.
+    It used to be implemented here as well, and two copies of a rule that happen
+    to agree today is not a contract: `signals` is the closed registry a
+    declarative ladder compiles against, so the selection has to be one thing.
     """
-    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
-    if not primary:
-        # No roles assigned yet. Falling back to every page is right here rather
-        # than fail-closed: a classifier that classifies nothing is worse than
-        # one that occasionally reads a supporting page, and Stage 2 always
-        # assigns roles before Stage 3 in the real pipeline.
-        return "\n".join(page.text for page in ctx.pages)
-    return "\n".join(p.text for p in ctx.pages if p.page_number in primary)
+    return "\n".join(page.text for page in signals.primary_pages(ctx))
 
 
 def all_text(ctx: JobContext) -> str:

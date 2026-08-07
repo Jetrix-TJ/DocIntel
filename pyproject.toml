@@ -35,6 +35,12 @@ target-version = "py312"
 files = [
     "src/docintel/core",
     "src/docintel/grammar",
+    # The signal registry a declarative ladder compiles against. Checked for the
+    # same reason `grammar` is: it is a closed vocabulary other people's data
+    # binds to, so its signatures are a contract rather than an implementation
+    # detail. The rest of `packs/` is not checked yet - adding it is its own,
+    # noisier task.
+    "src/docintel/packs/signals.py",
     # The vision adapters are checked because they sit on an external SDK
     # boundary: every value that crosses it is untyped, and the whole design of
     # `policy.py` is about not trusting it.
