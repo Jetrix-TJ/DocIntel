@@ -127,7 +127,7 @@ audit, and diffed the results.
 | `has_tax` | 19 | 16 | -3 (all 3 were the named Veritiv false positives) |
 | `has_flattened_annotations` | 2 | 1 | -1 (the DTSS zebra-striped-table false positive) |
 | `doc_type: telecom_bill` | 5 | 7 | +2 (the 2 previously-unclaimed 472-page Windstream documents) |
-| `doc_type: credit_memo` | 1 | 2 | +1 (the previously-unclaimed Complete Beverage batched credit memo) |
+| `doc_type: credit_memo` | 1 | **1** | +0 net, but the member changed — see below |
 | `promo_content` | 1 (on the wrong document) | 1 (on the correct document) | relabeled, verified below |
 | `prior_balance_present`/`prior_balance_cleared` (Digital Direction) | 0 / 3 | 1 / 6 | Task 9's "Previous Total" anchor now catches a real unresolved carryover that previously got no tag at all |
 
@@ -167,6 +167,34 @@ Closing any of the 9 remaining flags — the 1 swapped-header defect, the 1 sign
 gap, or the 4 confidence-threshold cases — would need a follow-up task, not a correction
 to this one.
 
+**`credit_memo` correction (whole-branch review finding 1):** the count staying at 1
+before and after is not the "no change" it looks like — it is two errors that happened to
+be the same size, corrected in a later pass. Before the plan, complete_beverage's one
+`credit_memo` was `_AP Invoice 32593 ... 556.20000.pdf`, a **plain invoice**
+(`INVOICE # 32593`, `TOTAL DUE $556.20`) that only matched because `_CREDIT_MEMO` fired on
+a footnote — "For remaining credited items refer to Credit memo 32684." — reading as a
+document title. Task 4's original fix (line-length only) was verified against a
+single-line synthetic fixture and looked correct, but the real OCR'd document wraps that
+footnote across two SHORT lines ("For remaining credited items refer to" / "Credit memo
+32684"), so the fix was a no-op on the actual document it was written for: **32593 still
+misclassified as `credit_memo` on Task 4's own "after" HEAD.** Meanwhile `_AP Invoice
+32473 ... -2249.00000.pdf` — the genuine credit memo (`Credit Memo` / `CREDIT TO CREDIT #
+32473` / `TOTAL CREDIT $2,899.00`) — joined the `credit_memo` count correctly, via Task
+5/6's `TOTAL CREDIT` pageroles fix, landing the reported "1 → 2" as if both were right.
+They were not: it was "1 wrong → 1 wrong + 1 right", a count of 2 hiding one continuing
+defect.
+
+The whole-branch review caught this by checking the real document end to end, not just
+the count. The fix (position, not just length — a genuine title must be near the top of
+page 1, not deep in the page like a footnote; see `_credit_memo_title_present` in
+`packs/northstar/ladder.py`) makes the count **1 → 1**, but the membership changes: 32593
+leaves (now correctly `invoice_with_attachment`, joining complete_beverage's other 26
+invoice+attachment documents) and 32473 is the sole remaining `credit_memo`. Verified
+directly, not inferred from the count: re-ran the full 111-document batch after the fix —
+`credit_memo` docs = exactly `['.../32473 Complete Beverage Destruction -2249.00000.pdf']`,
+and complete_beverage's `invoice_with_attachment` count is 26 (was 25 pre-plan, +1 for
+32593 now landing correctly there).
+
 **Verified explicitly, not just by count:** `promo_content` now correctly tags
 `Windstream_021942648_09022025_BILL.pdf` (the real full-page ad — "Go Kinetic Business",
 QR code, app-store language) and correctly no longer tags
@@ -179,8 +207,25 @@ positive was added).
 
 The classification/tagging layer went from measurably unreliable on real-world data (3
 completely unclaimed documents, 51% of the corpus flagged for review, several
-demonstrably-wrong tags on real invoices) to a state where every doc_type/pack assignment
-in the corpus is correct, zero documents are unclaimed, and every remaining `review_flag`
-or tag firing that was checked traces to either a genuine business condition (a real
-typo'd bill-to name, a real aged balance) or an already-documented, separately-tracked
-defect outside this plan's scope.
+demonstrably-wrong tags on real invoices) to a state where zero documents are unclaimed
+and every remaining `review_flag` or tag firing that was checked traces to either a
+genuine business condition (a real typo'd bill-to name, a real aged balance) or an
+already-documented, separately-tracked defect outside this plan's scope.
+
+**Every doc_type/pack assignment in the corpus is now correct — but that claim was false
+until a whole-branch review caught it.** The original version of this paragraph said so
+based on the ten tasks' own per-document spot-checks and the batch counts, which is
+exactly how the `credit_memo` defect above hid: Task 4's fix passed its own unit tests and
+the count moved the way a correct fix would move it (1 → 2), so nothing in that task's own
+verification loop had reason to look closer. It took re-running the real `32593` document
+end to end, after all ten tasks were "done", to see it was still `credit_memo`. That fix
+(finding 1 above) is now applied and independently re-verified against the full
+111-document batch, so the claim is re-stated here only because it was re-checked, not
+carried forward from the original audit: every `credit_memo`, `invoice_with_attachment`,
+`telecom_bill`, and `standard_invoice` assignment across all 111 second-samples documents
+matches manual verification, complete_beverage's `credit_memo` count is the genuinely
+correct 1 (`32473` alone), and no other doc_type/pack count moved as a side effect of this
+correction (confirmed by re-diffing the full batch: `unclaimed_document`, `review_flag`,
+`bill_to_mismatch`, `past_due`, `has_tax`, `has_flattened_annotations`, `promo_content`,
+`prior_balance_present`/`cleared`, and `telecom_bill` are all unchanged from the numbers
+above).
