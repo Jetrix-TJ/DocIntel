@@ -100,9 +100,28 @@ def refine_prior_balance_tags(ctx: JobContext, next_: Next) -> JobContext:
     return next_(ladder.retag_prior_balance(ctx))
 
 
+def refine_invoice_number_tag(ctx: JobContext, next_: Next) -> JobContext:
+    """`no_invoice_number`, which only extraction can decide (spec section 2).
+
+    Registered at `beforeConfidenceGate` for the same reason as
+    `refine_prior_balance_tags` and `collect_references`: `afterExtraction` fires
+    *before* Stage 6 (`runner.HOOKS_BEFORE`), so a hook there reads the values
+    Stage 5 captured rather than the values the record ends up carrying. Adding
+    a value op to `invoice_number` - a normalizer that strips a prefix, say -
+    must not be able to change whether this tag fires, and at `afterExtraction`
+    it could.
+
+    Registration order within the socket is deliberately not relied on:
+    `collect_references` reads `ctx.extracted` and `ctx.reference_list` and never
+    touches `ctx.tags`, so there is no dependency between the two to encode.
+    """
+    return next_(ladder.retag_missing_invoice_number(ctx))
+
+
 def register(registry: HookRegistry) -> None:
     registry.register("classifySignals", telecom_ladder, PACK_NAME)
     registry.register("beforePersonaLookup", resolve_carrier_fingerprint, PACK_NAME)
     registry.register("afterExtraction", apply_billing_conventions, PACK_NAME)
     registry.register("beforeConfidenceGate", refine_prior_balance_tags, PACK_NAME)
+    registry.register("beforeConfidenceGate", refine_invoice_number_tag, PACK_NAME)
     registry.register("beforeConfidenceGate", collect_references, PACK_NAME)

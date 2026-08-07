@@ -215,6 +215,34 @@ def retag_prior_balance(ctx: JobContext) -> JobContext:
     return ctx
 
 
+def retag_missing_invoice_number(ctx: JobContext) -> JobContext:
+    """Tag `no_invoice_number` when extraction found none (spec section 2).
+
+    Three of this pack's four carriers print no invoice number at all - the
+    document's identity falls back to account plus billing period - and that is
+    a fact a downstream consumer needs, because it is the reason two months of
+    the same account are not duplicates of each other.
+
+    **Registered at `beforeConfidenceGate`, not computed in `tags_for`.** Stage 3
+    runs before extraction, so a classification-time version of this could only
+    ever report whether an anchor was PRINTED, which is a different claim. The
+    same reasoning that puts `retag_prior_balance` at this socket puts this one
+    here: the value that matters is the one the record ends up carrying, after
+    Stage 6's value ops, not the one Stage 5 captured.
+
+    An empty or whitespace-only value counts as missing. A selector that matched
+    its anchor and captured nothing has not found an invoice number, and the
+    record must not imply that it did.
+
+    Unlike `retag_prior_balance` there is no pair to refine here and no
+    conservative half to leave standing: the absence of a value IS the finding.
+    """
+    value = ctx.extracted.get("invoice_number")
+    if value is None or not str(value).strip():
+        ctx.add_tag("no_invoice_number")
+    return ctx
+
+
 def _prior_balance_is_cleared(ctx: JobContext) -> bool:
     """Whether the printed payment exactly offsets the printed prior balance."""
     prior = _as_decimal(ctx.extracted.get("prior_balance"))

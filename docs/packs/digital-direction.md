@@ -55,7 +55,7 @@ that carrier — so champion/challenger regeneration (spec Part 3) matters more 
 | `prior_balance_cleared` | Upgraded from `present` when `prior_balance + payments_credits == 0` | Comcast, Windstream, Lumen |
 | `past_due` | Dunning block / aging | Centracom |
 | `multi_brand_sender` | Alias table collapsed ≥2 printed names | Lumen (3), Windstream (2) |
-| `no_invoice_number` | Identity fell back to account+period | Centracom, Comcast, Windstream |
+| `no_invoice_number` | No `invoice_number` was extracted, so identity falls back to account+period. Emitted at `beforeConfidenceGate` (`ladder.retag_missing_invoice_number`), not in `tags_for` — Stage 3 runs before extraction and could only report whether an anchor was *printed*, which is a different claim. | Centracom, Comcast, Windstream |
 | `promo_content` | Page 1 matches a closed enumeration of Windstream/Kinetic marketing phrases (`go kinetic business`, `gokineticbusiness.com`, `scan the qr code`, `mybusiness.gokinetic.com`, `google play or the app store`) — content-based, no image/char-count heuristic. **Comcast/Lumen/Centracom promotional content cannot be tagged at all, by design**, per the code's own docstring | Windstream |
 | `has_scanline` | Remittance OCR-A line present | all four |
 
