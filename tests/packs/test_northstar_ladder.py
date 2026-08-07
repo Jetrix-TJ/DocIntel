@@ -238,6 +238,30 @@ def test_a_past_due_banner_tags_past_due() -> None:
     assert "past_due" in tags_for(ctx)
 
 
+def test_a_past_due_banner_on_a_supporting_page_still_tags() -> None:
+    """Pins a DELIBERATE widening that nothing else can see.
+
+    This pack's `past_due` banner check reads every page, not just primary ones
+    - Federal Recycling's terms-and-conditions page is a supporting page, and
+    that decision was reviewed and accepted before the 2026-08-06 plan. The
+    Digital Direction pack's identical check is correctly narrowed to primary
+    pages, so the two now pass opposite `primary_only` values to the same shared
+    `signals.short_label_line`.
+
+    Without this test the widening is a comment. Flipping the flag - or
+    "tidying" the explicit `primary_only=False` at the call site - leaves the
+    whole suite green AND `replay-gold` byte-identical, because a gold `tags`
+    assertion is a SUPERSET check and therefore cannot see a tag that stops
+    firing.
+    """
+    ctx = _ctx(
+        _page("Invoice 100.00"),
+        _page("PAST DUE", number=2),
+        roles=("primary", "supporting"),
+    )
+    assert "past_due" in tags_for(ctx)
+
+
 def test_past_due_boilerplate_in_prose_does_not_tag() -> None:
     """Federal Recycling's terms print "PAST DUE AMOUNTS SUBJECT TO INTEREST FEES
     IN THE AMOUNT OF 18.99% ANNUALLY..." on every invoice it sends, and its gold

@@ -22,6 +22,7 @@ import re
 
 from docintel.core import pagination
 from docintel.core.models import JobContext
+from docintel.packs import signals
 from docintel.packs.registry import primary_text
 
 # --- doc-type signals -----------------------------------------------------
@@ -92,24 +93,6 @@ def _noise_ratio(text_tokens: list[str]) -> float:
     return sum(odd(t) for t in text_tokens) / len(text_tokens)
 
 
-def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -> bool:
-    """Whether `pattern` appears on a SHORT line, not buried in prose.
-
-    Federal Recycling's terms and conditions read "PAST DUE AMOUNTS SUBJECT TO
-    INTEREST FEES IN THE AMOUNT OF 18.99% ANNUALLY..." - boilerplate on every
-    invoice this vendor sends, and its gold label is correctly not tagged
-    `past_due`. EDCO's is a standalone `PAST DUE` banner. The difference is line
-    length, the same discriminator `extract.pageroles` uses for the same reason.
-    """
-    for page in ctx.pages:
-        for line in page.lines():
-            if len(line) > max_words:
-                continue
-            if pattern.search(" ".join(w.text for w in line)):
-                return True
-    return False
-
-
 def _credit_memo_title_present(ctx: JobContext) -> bool:
     """Whether a genuine credit-memo TITLE sits near the top of page 1.
 
@@ -134,16 +117,16 @@ def _credit_memo_title_present(ctx: JobContext) -> bool:
     removes that concern outright: a supporting attachment page can no
     longer contribute a false `credit_memo` title match, regardless of its
     role.
+
+    Mechanics now live in `packs.signals.title_near_top`; the two constants
+    remain this pack's policy, and the evidence for them is above.
     """
-    if not ctx.pages:
-        return False
-    head = ctx.pages[0].lines()[:_MAX_CREDIT_MEMO_LINE_INDEX]
-    for line in head:
-        if len(line) > _MAX_CREDIT_MEMO_LINE_WORDS:
-            continue
-        if _CREDIT_MEMO.search(" ".join(w.text for w in line)):
-            return True
-    return False
+    return signals.title_near_top(
+        ctx,
+        _CREDIT_MEMO,
+        max_words=_MAX_CREDIT_MEMO_LINE_WORDS,
+        max_line_index=_MAX_CREDIT_MEMO_LINE_INDEX,
+    )
 
 
 def _aging_buckets_nonzero(text: str) -> bool:
@@ -172,16 +155,6 @@ def _aging_buckets_nonzero(text: str) -> bool:
     return False
 
 
-def _primary_pages(ctx: JobContext) -> list:
-    """Pages restricted to primary role, mirroring `primary_text()`'s own
-    fallback (registry.py): if no roles are assigned yet, every page counts,
-    since Stage 2 always assigns roles before Stage 3 runs for real."""
-    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
-    if not primary:
-        return list(ctx.pages)
-    return [p for p in ctx.pages if p.page_number in primary]
-
-
 def _aging_table_has_balance(ctx: JobContext) -> bool:
     """`_AGING_HEADER` finds the column-header row; this corroborates it
     against the value row, which in every corpus/second-sample document is
@@ -202,19 +175,15 @@ def _aging_table_has_balance(ctx: JobContext) -> bool:
     everything = "\n".join(p.text for p in ctx.pages)
     if not _AGING_HEADER.search(everything):
         return False
-    for page in ctx.pages:
-        lines = page.lines()
-        for i, line in enumerate(lines):
-            text = " ".join(w.text for w in line)
-            if not _AGING_HEADER.search(text):
-                continue
-            if _aging_buckets_nonzero(text):
-                return True
-            if i + 1 < len(lines):
-                next_text = " ".join(w.text for w in lines[i + 1])
-                if _aging_buckets_nonzero(next_text):
-                    return True
-    return False
+    return signals.label_with_corroborating_value(
+        ctx,
+        _AGING_HEADER,
+        same_line=_aging_buckets_nonzero,
+        next_line=_aging_buckets_nonzero,
+        # Every page, preserving the scope this docstring justifies above. Not
+        # to be "tidied" to the default.
+        primary_only=False,
+    )
 
 
 def _tax_value_nonzero(text: str) -> bool:
@@ -278,19 +247,13 @@ def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
     parent invoice `has_tax`. Narrowing to primary pages costs nothing real:
     every actual `_TAX_LINE` match in the corpus and all 7 Veritiv plus all
     U-Pak second samples is already on that document's own primary page(s)."""
-    for page in _primary_pages(ctx):
-        lines = page.lines()
-        for i, line in enumerate(lines):
-            text = " ".join(w.text for w in line)
-            if not _TAX_LINE.search(text):
-                continue
-            if _same_line_tax_value_nonzero(text):
-                return True
-            if i + 1 < len(lines):
-                next_text = " ".join(w.text for w in lines[i + 1])
-                if _tax_value_nonzero(next_text):
-                    return True
-    return False
+    return signals.label_with_corroborating_value(
+        ctx,
+        _TAX_LINE,
+        same_line=_same_line_tax_value_nonzero,
+        next_line=_tax_value_nonzero,
+        primary_only=True,
+    )
 
 
 def _roles(ctx: JobContext) -> tuple[int, int]:
@@ -373,7 +336,16 @@ def tags_for(ctx: JobContext) -> list[str]:
     if _NEGATIVE_MONEY.search(text):
         tags.append("mixed_sign")
 
-    if _short_line_has(ctx, _PAST_DUE, _MAX_PAST_DUE_LINE_WORDS) or _aging_table_has_balance(ctx):
+    # `primary_only=False` is DELIBERATE and must not be tidied to the default.
+    # Federal Recycling's terms-and-conditions page is a supporting page, and
+    # this check has read every page since before the 2026-08-06 plan - a
+    # decision that was reviewed and accepted then. Pinned by
+    # `test_northstar_ladder.py::test_a_past_due_banner_on_a_supporting_page_still_tags`,
+    # because a superset gold assertion cannot see a tag that stops firing.
+    banner = signals.short_label_line(
+        ctx, _PAST_DUE, _MAX_PAST_DUE_LINE_WORDS, primary_only=False
+    )
+    if banner or _aging_table_has_balance(ctx):
         tags.append("past_due")
 
     if _short_line_has_nonzero_tax(ctx):
