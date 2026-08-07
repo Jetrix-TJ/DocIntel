@@ -509,8 +509,18 @@ def test_total_credit_line_qualifies_as_a_totals_signal() -> None:
     """Real Complete Beverage bug: a batched credit-memo page prints 'TOTAL
     CREDIT $2,899.00' rather than any of the other enumerated totals
     phrases. Without recognizing it, the page with the real credit-memo
-    header never gets primary status and the whole document goes unclaimed."""
+    header never gets primary status and the whole document goes unclaimed.
+
+    Asserting `meta[0].role == "primary"` alone is vacuous here: on this
+    2-page fixture, page 1 ends up primary either way - tier 1 (recognized
+    via `TOTAL CREDIT`, `used_last_resort=False`) or tier 2's blind
+    page-1-only guess (`used_last_resort=True`) land on the identical
+    visible outcome. `used_last_resort` is the one observable that tells
+    "recognized via a real signal" apart from "got here by luck", so it
+    must be asserted False - which also requires the enumeration to
+    actually recognize `TOTAL CREDIT` for this test to mean anything."""
     page1 = _page(1, [["Credit", "Memo"], ["TOTAL", "CREDIT", "$2,899.00"]])
     page2 = _page(2, [["GRAND", "TOTAL"]])  # certificate/BOL page, no real anchor either
-    meta, _ = pageroles.assign((page1, page2), _meta([page1, page2]))
+    meta, used_last_resort = pageroles.assign((page1, page2), _meta([page1, page2]))
     assert meta[0].role == "primary"
+    assert used_last_resort is False
