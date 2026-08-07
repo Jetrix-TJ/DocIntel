@@ -36,9 +36,9 @@ stops (spec Stage 3).
 | Tag | Trigger | Evidence |
 |---|---|---|
 | `mixed_sign` | Line-item signs differ | Federal Recycling, Complete Beverage, U-Pak |
-| `past_due` | `PAST DUE` · aging buckets · dunning block | EDCO, U-Pak |
+| `past_due` | `PAST DUE` · dunning block, **or** an aging-bucket header (`30 DAYS...60 DAYS`) corroborated by a genuinely nonzero 30/60/90-day bucket value — the header alone is not enough, since real U-Pak invoices print it with every bucket at $0.00 | EDCO, U-Pak |
 | `foreign_currency` | `currency != USD` | U-Pak (CAD) |
-| `has_tax` | Tax line present | Veritiv, U-Pak |
+| `has_tax` | A tax label (`Total Tax` · `Taxes` · `H.S.T.` · `G.S.T.`) corroborated by a genuinely nonzero tax value on the same line or the next — the label alone is not enough, since real Veritiv invoices print `Total Tax` as $0.00 for non-taxable line items | Veritiv, U-Pak |
 | `has_flattened_annotations` | Colored fills / overlapping text runs, `annots == 0` | Federal Recycling |
 | `handwritten_supporting` | Handwriting on a `supporting` page | Complete Beverage p2 |
 | `ocr_only` | `text_source == ocr` | Federal Recycling, Complete Beverage |
