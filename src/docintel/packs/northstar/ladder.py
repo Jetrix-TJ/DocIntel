@@ -46,6 +46,18 @@ _AGING_HEADER = re.compile(r"\b30\s*DAYS\b.*\b60\s*DAYS\b", re.I)
 _PAST_DUE = re.compile(r"\bPAST\s+DUE\b", re.I)
 _MAX_PAST_DUE_LINE_WORDS = 6
 _MAX_CREDIT_MEMO_LINE_WORDS = 7
+# How many of page 1's lines count as "near the top", i.e. where a genuine
+# document TITLE lives. Line length alone cannot separate a credit-memo title
+# from a footnote reference to one: real OCR of Complete Beverage's "For
+# remaining credited items refer to Credit memo 32684." wraps across two
+# SHORT lines rather than one long prose line, so the short second line
+# passes the word-count check exactly like a real title would. Position is
+# the real discriminator, confirmed on the two real documents (whole-branch
+# review finding 1): the genuine title on `_AP Invoice 32473 ...` sits at
+# page-1 line index 5 of 20; the false-positive wrapped footnote on
+# `_AP Invoice 32593 ...` sits at line index 25-26 of 30, deep in the page.
+# 10 is wide enough to keep index 5 with room to spare and well short of 25.
+_MAX_CREDIT_MEMO_LINE_INDEX = 10
 _TAX_LINE = re.compile(r"\b(total tax|taxes|h\.?\s?s\.?\s?t\.?|g\.?\s?s\.?\s?t\.?)\b", re.I)
 _SUB_ACCT = re.compile(r"\*\*?\s*SUB\s*ACCT", re.I)
 _DISCOUNT = re.compile(r"\bdiscount\b", re.I)
@@ -95,6 +107,42 @@ def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -
                 continue
             if pattern.search(" ".join(w.text for w in line)):
                 return True
+    return False
+
+
+def _credit_memo_title_present(ctx: JobContext) -> bool:
+    """Whether a genuine credit-memo TITLE sits near the top of page 1.
+
+    Short-line length alone is not enough (see `_MAX_CREDIT_MEMO_LINE_INDEX`
+    above for the real-document evidence): a footnote reference wrapped by
+    OCR onto a short line reads identically to a real title if position is
+    not also checked. Combines BOTH constraints - short line AND near the
+    top - deliberately, rather than dropping the length check: a bare
+    reuse of `_is_own_paperwork`'s head-window alone (no length constraint)
+    could still be fooled by a short prose aside near the top of the page,
+    which the corpus has not (yet) produced but which the length check
+    guards against for free.
+
+    Reuses `_is_own_paperwork`'s idiom of checking only the first few lines
+    of page 1, the same pattern for the same reason: a genuine document
+    title lives at the top of the page.
+
+    Scope note (whole-branch review finding 4): the credit-memo check used
+    to scan every page via `_short_line_has`, the same all-pages widening
+    flagged for `has_tax`. This rewrite is narrower than even `primary_text()`
+    - literal page 1 only, first `_MAX_CREDIT_MEMO_LINE_INDEX` lines - which
+    removes that concern outright: a supporting attachment page can no
+    longer contribute a false `credit_memo` title match, regardless of its
+    role.
+    """
+    if not ctx.pages:
+        return False
+    head = ctx.pages[0].lines()[:_MAX_CREDIT_MEMO_LINE_INDEX]
+    for line in head:
+        if len(line) > _MAX_CREDIT_MEMO_LINE_WORDS:
+            continue
+        if _CREDIT_MEMO.search(" ".join(w.text for w in line)):
+            return True
     return False
 
 
@@ -219,7 +267,7 @@ def doc_type_for(ctx: JobContext) -> tuple[str, str]:
     """(doc_type, signal_that_fired). The section 1 ladder, in order."""
     text = primary_text(ctx)
 
-    if _short_line_has(ctx, _CREDIT_MEMO, _MAX_CREDIT_MEMO_LINE_WORDS):
+    if _credit_memo_title_present(ctx):
         return "credit_memo", "credit_memo_title"
 
     rates = _UNIT_RATE.findall(text)

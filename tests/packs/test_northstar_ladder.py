@@ -159,6 +159,35 @@ def test_credit_memo_title_on_its_own_short_line_still_fires() -> None:
     assert signal == "credit_memo_title"
 
 
+def test_wrapped_credit_memo_footnote_deep_in_page_does_not_fire() -> None:
+    """Real Complete Beverage 32593 bug (whole-branch review finding 1): the
+    OCR of "For remaining credited items refer to Credit memo 32684." does
+    NOT come back as one long prose line - it wraps across two SHORT lines,
+    "For remaining credited items refer to" (6 words) and "Credit memo
+    32684" (3 words), so the line-length check alone can no longer reject
+    it the way it rejects the single-line version above.
+
+    What still tells this apart from a genuine title is POSITION: on the
+    real 32593 document this footnote sits at page-1 line index 25-26 of
+    30, deep in the page; on the real genuine credit memo (32473) the title
+    sits at line index 5 of 20, near the top. This fixture reproduces that
+    shape - filler lines pushing the wrapped footnote down to roughly the
+    same real depth - and must NOT classify as credit_memo.
+    """
+    filler = [f"Line {i} of unrelated invoice detail text" for i in range(23)]
+    lines = [
+        "COMPLETE BEVERAGE DESTRUCTION",
+        "BALANCE DUE $556.20",
+        *filler,
+        "For remaining credited items refer to",
+        "Credit memo 32684",
+    ]
+    ctx = _ctx(_page("|".join(lines)))
+    doc_type, signal = doc_type_for(ctx)
+    assert doc_type == "standard_invoice"
+    assert doc_type != "credit_memo"
+
+
 def test_northstars_own_letterhead_is_own_paperwork() -> None:
     ctx = _ctx(_page("Northstar Recycling Company LLC|Packing Slip"))
     assert doc_type_for(ctx)[0] == "own_paperwork"
