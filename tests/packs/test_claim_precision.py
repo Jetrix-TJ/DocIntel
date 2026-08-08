@@ -102,3 +102,58 @@ def _ctx(text: str):
 @pytest.mark.parametrize("name,text", sorted(OUT_OF_DOMAIN.items()))
 def test_no_pack_claims_an_out_of_domain_document(name: str, text: str) -> None:
     assert resolve_pack(_ctx(text), load_packs()) is None
+
+
+# --------------------------------------------------------------------------
+# The other direction: a pack must still claim what IS its own
+# --------------------------------------------------------------------------
+
+
+IN_DOMAIN: dict[str, tuple[str, str]] = {
+    # A carrier bill with NO managed-client name anywhere. Digital Direction must
+    # claim it on the carrier alone - that is its primary guard, and the whole
+    # reason this pack does not use a bill-to.
+    #
+    # This case exists because it once regressed and nothing caught it. A first
+    # version of the `alias_table` rule read `ctx.pack.vendor_aliases`, which is
+    # always None while a claim is being evaluated (`resolve_pack` is what SETS
+    # `ctx.pack`), so the rule always returned False and all 7 real Digital
+    # Direction documents went `unclaimed_document`. `replay-gold` stayed
+    # BYTE-IDENTICAL through it: all four DD gold documents also print a
+    # managed-client name on a short line, so the secondary roster rule claimed
+    # them. Only the 111-document sweep saw it.
+    "carrier_only_no_client_named": (
+        "COMCAST BUSINESS|Account Number 8495 44 462 0365242|"
+        "TOTAL AMOUNT DUE 212.87",
+        "digitaldirection",
+    ),
+    "northstar_by_company_name": (
+        "VERITIV|INVOICE 715-33905296|BILL TO: NORTHSTAR RECYCLING COMPANY LLC|"
+        "TOTAL 4,908.00",
+        "northstar",
+    ),
+    # The typo'd bill-to that the corroborated ZIP marker exists to rescue.
+    "northstar_by_corroborated_zip": (
+        "EDCO WASTE|INVOICE 823282|NORTHSTRAY RECYCLING|"
+        "EASTE LONGMEADOWN MA 01028|TOTAL 894.98",
+        "northstar",
+    ),
+}
+
+
+@pytest.mark.parametrize("name,case", sorted(IN_DOMAIN.items()))
+def test_a_pack_still_claims_its_own_documents(name: str, case: tuple[str, str]) -> None:
+    text, expected = case
+    pack = resolve_pack(_ctx(text), load_packs())
+    assert pack is not None, f"{name} should be claimed by {expected}"
+    assert pack.name == expected
+
+
+def test_an_alias_table_rule_without_a_table_is_rejected_at_load() -> None:
+    """The rule cannot silently degrade to 'never matches'. That is precisely
+    what the regression above did, and it cost seven documents."""
+    from docintel.packs.claims import ClaimError, compile_claim
+
+    spec = {"rules": [{"kind": "alias_table", "scope": "primary"}]}
+    with pytest.raises(ClaimError, match="needs a non-empty alias table"):
+        compile_claim(spec)

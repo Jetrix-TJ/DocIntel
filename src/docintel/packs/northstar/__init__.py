@@ -28,7 +28,7 @@ PERSONA_DIR = os.path.join(os.path.dirname(__file__), "personas")
 # truth - they are read from it rather than duplicated.
 with open(ladder.SPEC_PATH) as _fh:
     _SPEC = json.load(_fh)
-CLAIM_GUARD = claims.compile_claim(_SPEC["claim"])
+CLAIM_GUARD = claims.compile_claim(_SPEC["claim"], aliases=aliases.LITERAL_ALIASES)
 BILL_TO_MARKERS: tuple[str, ...] = tuple(
     v for r in _SPEC["claim"]["rules"] if r["kind"] == "markers" for v in r["values"]
 )

@@ -94,22 +94,35 @@ def _corroborated_markers(spec: Mapping[str, Any], where: str) -> Any:
     return rule
 
 
-def _alias_table(spec: Mapping[str, Any], where: str) -> Any:
+def _alias_table(spec: Mapping[str, Any], where: str, aliases: Mapping[str, str]) -> Any:
     """The pack's own alias table resolves a canonical sender.
 
     Digital Direction's primary guard. The alias table is short and stable
     (carriers), whereas the client roster grows every time the business signs
     one - which is why the carrier is the claim and the roster is secondary.
+
+    **The table is supplied at COMPILE time, never read from `ctx.pack`.** A
+    first version of this rule did read `ctx.pack.vendor_aliases`, which is
+    always `None` here: `resolve_pack` is the function that SETS `ctx.pack`, so
+    nothing is bound while a claim is being evaluated. The rule therefore always
+    returned False, and all seven real Digital Direction documents went
+    `unclaimed_document`. The gold corpus did not catch it - its four DD
+    documents also print a managed-client name on a short line, so the secondary
+    roster rule claimed them and `replay-gold` stayed byte-identical. The
+    111-document sweep caught it.
     """
+    if not aliases:
+        raise ClaimError(
+            f"{where}: an alias_table rule needs a non-empty alias table. Module "
+            f"packs pass theirs to compile_claim(); a data pack declares one "
+            f"under `aliases.literal` in its pack file."
+        )
+    needles = [normalize_name(phrase) for phrase in aliases]
     scope = spec.get("scope", "primary")
 
     def rule(ctx: JobContext) -> bool:
-        pack = ctx.pack
-        aliases: dict[str, str] = getattr(pack, "vendor_aliases", {}) or {}
-        if not aliases:
-            return False
         haystack = _normalized_scope(ctx, scope)
-        return any(phrase in haystack for phrase in aliases)
+        return any(n in haystack for n in needles)
 
     return rule
 
@@ -153,6 +166,10 @@ RULES: dict[str, Any] = {
     "alias_table": _alias_table,
     "roster_on_short_line": _roster_on_short_line,
 }
+
+# The one rule kind that needs data the spec does not carry: a module-backed
+# pack keeps its alias table in Python, so the caller supplies it.
+_NEEDS_ALIASES: frozenset[str] = frozenset({"alias_table"})
 
 
 def _every_marker_hit_in_block(spec: Mapping[str, Any], where: str, markers: list[str]) -> Any:
@@ -209,8 +226,15 @@ class ClaimGuard:
         return not any(veto(ctx) for veto in self._vetoes)
 
 
-def compile_claim(spec: Mapping[str, Any]) -> ClaimGuard:
+def compile_claim(
+    spec: Mapping[str, Any], *, aliases: Mapping[str, str] | None = None
+) -> ClaimGuard:
     """Compile a pack's `claim` block. Raises `ClaimError` at load on any problem.
+
+    `aliases` is the pack's own vendor/carrier table, needed by the
+    `alias_table` rule kind. It is passed in rather than read from the context
+    because `ctx.pack` is not bound while a claim is being evaluated -
+    `resolve_pack` is the function that sets it.
 
     Fail-loud for the same reason the ladder compiler is: a claim rule that
     silently evaluates false is a pack that silently stops recognising its own
@@ -236,7 +260,10 @@ def compile_claim(spec: Mapping[str, Any]) -> ClaimGuard:
         scope = rule_spec.get("scope", "primary")
         if scope not in signals.SCOPES:
             raise ClaimError(f"{where}.scope: unknown scope {scope!r}")
-        rules.append(factory(rule_spec, where))
+        if kind in _NEEDS_ALIASES:
+            rules.append(factory(rule_spec, where, aliases or {}))
+        else:
+            rules.append(factory(rule_spec, where))
         # Vetoes operate on the marker text the rules matched on, so collect it.
         if kind == "markers":
             literal_markers += [normalize_name(v) for v in rule_spec["values"]]
