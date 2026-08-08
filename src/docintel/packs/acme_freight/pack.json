@@ -1,0 +1,118 @@
+{
+  "_note": "Acme Freight Services — a third company, onboarded as DATA ONLY. There is no Python module for this pack and no entry in registry.PACK_MODULES; it exists to prove that the declarative work met its goal, and it is the test that fails if a future change makes a pack need code again. See tests/packs/test_datapack.py. This is a SYNTHETIC pack: it ships with no gold documents and no real corpus, so its constants are illustrative rather than measured, which is stated here rather than left for a reader to discover.",
+
+  "name": "acme_freight",
+  "default_currency": "USD",
+  "doc_types": ["standard_invoice", "credit_memo", "statement_of_account"],
+
+  "bill_to_roster": ["acme freight services", "acme freight"],
+
+  "aliases": {
+    "literal": {
+      "summit carriers": "summit",
+      "summit carriers llc": "summit",
+      "redline logistics": "redline"
+    },
+    "display": {
+      "summit": "Summit Carriers, LLC",
+      "redline": "Redline Logistics"
+    }
+  },
+
+  "thresholds": {
+    "total_printed": 0.90,
+    "invoice_number": 0.90,
+    "bill_to_name": 0.90
+  },
+
+  "fields": {
+    "standard_invoice": {
+      "all": ["vendor_name", "invoice_number", "invoice_date", "total_printed", "bill_to_name"],
+      "required": ["bill_to_name"],
+      "any_of": [["invoice_number", "invoice_date"]],
+      "derived_only": []
+    },
+    "credit_memo": {
+      "all": ["vendor_name", "invoice_number", "invoice_date", "total_printed", "bill_to_name"],
+      "required": ["bill_to_name"],
+      "any_of": [["invoice_number", "invoice_date"]],
+      "derived_only": []
+    },
+    "statement_of_account": {
+      "all": ["vendor_name", "invoice_date", "total_printed", "bill_to_name"],
+      "required": ["bill_to_name"],
+      "any_of": [],
+      "derived_only": []
+    }
+  },
+
+  "claim": {
+    "_why": "An AP department, so the guard is the bill-to — the same shape as Northstar. Both markers name the company itself; neither is a bare address, so no corroboration tier is needed. The ship-to veto is carried over for the same reason it exists there: a freight company's own address routinely appears on documents billed to somebody else.",
+    "rules": [
+      {
+        "kind": "markers",
+        "scope": "primary",
+        "values": ["acme freight services", "acme freight", "ap@acmefreight.example"]
+      }
+    ],
+    "vetoes": [
+      { "kind": "every_marker_hit_in_block", "anchor": "\\bship\\s*to\\b" }
+    ]
+  },
+
+  "ladder": {
+    "default": "standard_invoice",
+    "rungs": [
+      {
+        "name": "credit_memo_title",
+        "doc_type": "credit_memo",
+        "_why": "A genuine TITLE near the top of page 1, not a mention. Uses the same primitive and the same two constraints as Northstar's rung, which exists because real OCR wraps a footnote reference onto short lines that read exactly like a title.",
+        "when": {
+          "signal": "title_near_top",
+          "params": {
+            "pattern": "\\b(credit memo|credit note)\\b",
+            "max_words": 7,
+            "max_line_index": 10
+          }
+        }
+      },
+      {
+        "name": "statement_title_no_table",
+        "doc_type": "statement_of_account",
+        "_why": "A document with a payable amount and line items is a bill whatever its header says, so the charges table has to be ABSENT. Presence of the word is never enough — that rule cost the Digital Direction pack $20,123.80 before it was learned.",
+        "when": {
+          "all_of": [
+            {
+              "signal": "pattern_in_scope",
+              "params": { "pattern": "\\bstatement of account\\b", "scope": "primary" }
+            },
+            { "not": { "signal": "money_table_present" } }
+          ]
+        }
+      }
+    ]
+  },
+
+  "tags": [
+    {
+      "tag": "past_due",
+      "_why": "A standalone banner on a short line, never the phrase inside prose — every freight vendor prints past-due language in its terms and conditions.",
+      "when": {
+        "signal": "short_label_line",
+        "params": { "pattern": "\\bPAST\\s+DUE\\b", "max_words": 6 }
+      }
+    },
+    {
+      "tag": "ocr_only",
+      "when": { "signal": "text_source_is", "params": { "value": "ocr" } }
+    },
+    {
+      "tag": "multi_brand_sender",
+      "_why": "Summit bills under two printed names. The tag makes the alias collapse visible on the record rather than a silent normalization nobody can audit.",
+      "when": {
+        "signal": "distinct_printed_aliases_at_least",
+        "params": { "count": 2, "scope": "primary" }
+      }
+    }
+  ]
+}

@@ -25,11 +25,12 @@ than waiting for someone to declare which pack it belongs to.
 from __future__ import annotations
 
 import importlib
+import os
 from typing import Any, Protocol, runtime_checkable
 
 from docintel.core.models import JobContext
 from docintel.core.senders import normalize_name as normalize_name
-from docintel.packs import signals
+from docintel.packs import datapack, signals
 from docintel.pipeline.hooks import HookRegistry
 
 # `normalize_name` is re-exported (not re-defined) for existing callers
@@ -49,6 +50,16 @@ PACK_MODULES: tuple[str, ...] = (
     "docintel.packs.northstar",
     "docintel.packs.digitaldirection",
 )
+
+# Data-only packs: a directory holding `pack.json` and `personas/`, with no
+# Python at all. Listed here for exactly the reason modules are listed above -
+# a pack is a deliberate business decision, so it must not become active because
+# somebody dropped a folder on disk. What the declarative work changed is the
+# COST of that decision (a config file instead of ~1,200 lines across eight
+# modules), not whether one gets made.
+#
+# Paths are relative to this file's directory.
+PACK_FILES: tuple[str, ...] = ("acme_freight/pack.json",)
 
 
 @runtime_checkable
@@ -108,6 +119,9 @@ def load_packs() -> list[Pack]:
         module = importlib.import_module(module_path)
         pack = module.PACK
         packs.append(pack)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for relative in PACK_FILES:
+        packs.append(datapack.load_pack_file(os.path.join(here, relative)))
     return packs
 
 
