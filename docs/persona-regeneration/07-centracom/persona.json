@@ -1,0 +1,132 @@
+{
+  "sender_fingerprint": "digitaldirection|centracom",
+  "doc_type": "telecom_bill",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Centracom (CentraCom Interactive) monthly telecom bill, 10 pages native text. Page 1 is a dense two-column summary carrying every value a selector can reach: a 'Last Month' ladder and letterhead on the left, a 'This Month' charges ladder and account block on the right, plus a tear-off remittance stub at the foot with its own OCR-A scan line. Pages 2-10 are the credit-card form and per-circuit detail with no totals block, so they are supporting pages and contribute nothing to field values. Anchors are the printed labels ('Account Number:', 'Account Name:', 'Bill Date:', 'Due Date:', 'Previous Balance', 'Total Amount Due', 'Remit To:'), each of which repeats verbatim on the stub and is expected to repeat next month regardless of the dollar figures or the billed customer.",
+  "field_selectors": [
+    {
+      "field": "account_number",
+      "anchor": "Account Number:",
+      "region": "near-anchor",
+      "pattern": "account_number",
+      "adjust": ["crosscheck_filename"],
+      "required": true
+    },
+    {
+      "field": "bill_to_name",
+      "anchor": "Account Name:",
+      "region": "near-anchor",
+      "pattern": "text",
+      "required": true
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Bill Date:",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Due Date:",
+      "region": "near-anchor",
+      "pattern": "date_loose",
+      "adjust": ["normalize_date_iso"],
+      "required": false
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amount Due",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": ["crosscheck_scanline"]
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Subtotal Current Charges",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Balance",
+      "anchor_alts": ["Previous Balance Due"],
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "balance_from_last_statement",
+      "anchor": "Balance from last statement",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments Received",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": ["normalize_credit_sign"],
+      "required": false
+    },
+    {
+      "field": "telephone_number",
+      "anchor": "For All Billing Inquiries,",
+      "region": "near-anchor",
+      "pattern": "phone",
+      "required": false
+    },
+    {
+      "field": "circuit_id",
+      "anchor": "Special Circuit:",
+      "anchor_occurrence": "last",
+      "region": "near-anchor",
+      "pattern": "account_number",
+      "required": false
+    },
+    {
+      "field": "remit_payee",
+      "anchor": "Remit To:",
+      "region": "near-anchor",
+      "pattern": "text",
+      "adjust": ["resolve_vendor_alias"],
+      "required": false
+    },
+    {
+      "field": "remit_address",
+      "anchor": "Remit To:",
+      "region": "label-block",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false
+    },
+    {
+      "row_group": "line_items",
+      "table_anchor": "Internet Charges",
+      "region": "label-block",
+      "columns": {
+        "description": "text",
+        "amount": "currency"
+      },
+      "row_count": { "min": 1, "max": 10 },
+      "allow_empty_cells": true
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        { "field": "total_printed", "as": "digits_no_decimal" },
+        { "field": "account_number", "as": "digits_only" }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 15 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native"
+  }
+}

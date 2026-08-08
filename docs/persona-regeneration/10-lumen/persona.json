@@ -1,0 +1,64 @@
+{
+  "sender_fingerprint": "digitaldirection|lumen",
+  "doc_type": "telecom_bill",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Lumen (billed under the legal entity 'Level 3 Communications, LLC') telecom invoice. Two-column header on page 1: left column is the recipient block, right column is a label/value ladder (account number, invoice number, payment due, invoice date). A 'Bill-At-A-Glance' box repeats prior balance, payment, credits, current charges and total as label-then-amount lines. The remittance stub at the foot of page 1 repeats the account/invoice identity under real labels ('Name', 'Billing Account Number', ...) and gives the payee under 'Make check payable to'.",
+  "field_selectors": [
+    { "field": "account_number", "anchor": "Billing Account Number",
+      "region": "same-row", "pattern": "account_number", "required": true },
+
+    { "field": "invoice_number", "anchor": "Invoice Number",
+      "region": "same-row", "pattern": "integer",
+      "adjust": ["crosscheck_scanline"], "required": false },
+
+    { "field": "invoice_date", "anchor": "Invoice Date",
+      "region": "same-row", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+
+    { "field": "due_date", "anchor": "Payment Due",
+      "region": "same-row", "pattern": "date",
+      "adjust": ["normalize_date_iso"], "required": false },
+
+    { "field": "prior_balance", "anchor": "Previous Statement Balance",
+      "region": "same-row", "pattern": "currency", "required": false },
+
+    { "field": "payments_credits", "anchor": "Payment Received - Thank You!",
+      "region": "same-row", "pattern": "currency", "required": false },
+
+    { "field": "credits_adjustments", "anchor": "Credits/Adjustments",
+      "region": "same-row", "pattern": "currency", "required": false },
+
+    { "field": "current_charges", "anchor": "Current Charges",
+      "region": "same-row", "pattern": "currency", "required": false },
+
+    { "field": "total_printed", "anchor": "Total Amount Due",
+      "anchor_alts": ["Amount Due"],
+      "region": "totals-block", "pattern": "currency", "required": true,
+      "adjust": ["crosscheck_scanline"] },
+
+    { "field": "bill_to_name", "anchor": "Name",
+      "region": "same-row", "pattern": "text", "required": true },
+
+    { "field": "remit_payee", "anchor": "Make check payable to",
+      "region": "near-anchor", "pattern": "[A-Za-z][A-Za-z0-9 ,.&'-]{1,79}",
+      "adjust": ["resolve_vendor_alias"], "required": false },
+
+    { "field": "vendor_address", "anchor": "Level 3 Communications, LLC",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"], "required": false },
+
+    { "scanline": true, "region": "remittance-block",
+      "asserts": [
+        { "field": "invoice_number", "as": "digits_only" },
+        { "field": "total_printed", "as": "digits_no_decimal" }
+      ] }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 10 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native",
+    "column_signature": []
+  }
+}

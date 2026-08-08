@@ -189,6 +189,42 @@ None is deleted. Each keeps its measured evidence in
 `2026-08-07-classification-correctness-v2.md` and its review findings in the REVIEW
 document, so picking one up later costs nothing.
 
+## Ledger — completed 2026-08-08
+
+| task | result |
+|---|---|
+| A — signal registry | 13 primitives + 3 value predicates, closed and pinned by a test. `registry.primary_text` single-sourced from `signals.primary_pages`. `signals.py` added to mypy. |
+| B — Northstar migration | `replay-gold` byte-identical. Added the test pinning the deliberate `primary_only=False` widening; verified it bites. |
+| C — declarative ladder | Both packs. `northstar/ladder.py` 325 → 57 lines, `digitaldirection` 263 → 154 (remainder is retag hooks). Specs generated FROM the live compiled patterns, so no transcription drift. Byte-identical at each of four steps. |
+| D — declarative claim | Four rule kinds + one veto kind. `BILL_TO_MARKERS` / `CORROBORATED_MARKERS` / `MANAGED_CLIENTS` now read back out of the spec, so constants cannot drift from the rules using them. |
+| E — third pack | `acme_freight`: one `pack.json`, zero Python. Same `Pack` protocol. Proof test fails if a pack ever needs code again. |
+| F — sweep | 111 documents, zero change to any tag, `doc_type`, claim or review flag. |
+
+Tests 1720 → 1808. `replay-gold` 1/11 throughout — **this program was a
+representation change and was never supposed to move a score.**
+
+### Found while doing it
+
+A silent hazard that the proof test surfaced: data packs were rebuilt on every
+`load_packs()` call while module packs are singletons, and `_ClaimGatedRegistry`
+gates hooks on `ctx.pack is owner` — an identity test. Any caller loading packs
+twice would get a gate that never matches: the pack claims its documents, then
+its ladder never runs, leaving every one at the pipeline default.
+`build_pipeline` happens to load once and share the list, so the shipped path
+was safe. `load_pack_file` is now memoized and a test pins the contract.
+
+### Known defects deliberately preserved
+
+Each is documented at its call site with a `_defect` key naming its parked task.
+They are preserved because this program's correctness proof is a byte-identical
+`replay-gold`, and folding a behaviour change into it would destroy that proof.
+All three are now one- or two-line edits to a JSON file or a single function:
+
+- DD's `credit_memo` rung is a bare search while named `credit_memo_title`.
+- DD's `past_due` reads every page, tagging Windstream via supporting-page prose.
+- `distinct_printed_aliases_at_least` counts alias phrases, so `comcast` inside
+  `comcast business` counts twice.
+
 ## Success criterion
 
 A new company with three document types is onboarded by adding **one pack file, one

@@ -1,0 +1,85 @@
+{
+  "sender_fingerprint": "northstar|veritiv",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Single-page Veritiv sales invoice combining a detachable remittance stub (top) with an order/line-item body (bottom). The vendor name prints twice (letterhead top-left, remittance-stub payee column) with no printed label next to either occurrence; the customer block between them carries no 'Bill To' label at all. A duplicate mini-totals table near the bottom repeats several header-block figures under fragmented two-line column headers (multiple columns literally titled 'Discount' or 'Total'), which is why several money fields are read from the cleaner top-of-page totals area instead.",
+  "field_selectors": [
+    { "field": "invoice_number", "anchor": "Invoice No.",
+      "region": "near-anchor", "pattern": "\\d{2,4}-\\d{5,9}",
+      "required": true },
+
+    { "field": "invoice_date", "anchor": "Invoice Date",
+      "region": "near-anchor", "pattern": "date",
+      "adjust": ["normalize_date_iso"], "required": true },
+
+    { "field": "account_number", "anchor": "Account No.",
+      "region": "near-anchor", "pattern": "\\d{4,8}",
+      "required": true },
+
+    { "field": "due_date", "anchor": "Due Date",
+      "region": "near-anchor", "pattern": "date",
+      "adjust": ["normalize_date_iso"], "required": true },
+
+    { "field": "total_printed", "anchor": "Total Amount Due",
+      "region": "totals-block", "pattern": "currency",
+      "required": true },
+
+    { "field": "customer_po", "anchor": "Customer P.O.",
+      "region": "near-anchor", "pattern": "\\d{5,9}",
+      "required": false },
+
+    { "field": "order_date", "anchor": "Order Date",
+      "region": "near-anchor", "pattern": "date",
+      "adjust": ["normalize_date_iso"], "required": false },
+
+    { "field": "subtotal", "anchor": "Subtotal",
+      "region": "near-anchor", "pattern": "currency",
+      "required": true },
+
+    { "field": "tax_amount", "anchor": "Total Tax",
+      "region": "near-anchor", "pattern": "currency",
+      "required": false },
+
+    { "field": "vendor_name", "region": "top-left", "pattern": "text",
+      "required": false },
+
+    { "field": "vendor_address", "anchor": "VERITIV OPERATING COMPANY",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"], "required": false },
+
+    { "field": "remit_address", "anchor": "VERITIV OPERATING COMPANY",
+      "anchor_occurrence": "last", "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"], "required": false },
+
+    { "field": "bill_to_name", "anchor": "Bill To",
+      "region": "near-anchor", "pattern": "text",
+      "adjust": ["resolve_bill_to_alias"], "required": false },
+
+    { "row_group": "line_items", "table_anchor": "Description/References",
+      "columns": {
+        "item_code": "account_number",
+        "description": "text",
+        "quantity": "integer",
+        "unit_price": "decimal",
+        "amount": "currency"
+      },
+      "column_headers": {
+        "item_code": "Product No.",
+        "description": "Description/References",
+        "quantity": "Qty Shipped",
+        "unit_price": "Unit Price",
+        "amount": "Extended"
+      },
+      "row_count": { "min": 1, "max": 30 },
+      "allow_empty_cells": true,
+      "require_amount": true }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 2 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native",
+    "column_signature": ["Product No.", "Description/References", "Qty Shipped", "Unit Price", "GP"]
+  }
+}

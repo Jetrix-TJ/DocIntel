@@ -1,0 +1,78 @@
+{
+  "sender_fingerprint": "digitaldirection|comcast",
+  "doc_type": "telecom_bill",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Single-carrier monthly bill, 6 pages. Page 1 is the summary/remittance stub (two-column layout flattened into one line stream); page 3 is a headerless charges ladder with no printed column headers. No invoice number is printed anywhere; account_number is the identity key. bill_to_name/bill_to_address print with no label at all, so they are left to resolve_bill_to_alias rather than anchored on the customer's name.",
+
+  "field_selectors": [
+    { "field": "account_number", "anchor": "Account number",
+      "region": "near-anchor", "pattern": "account_number",
+      "adjust": ["strip_internal_whitespace", "resolve_bill_to_alias"],
+      "required": true },
+
+    { "field": "bill_date", "anchor": "Bill date",
+      "region": "same-row", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+
+    { "field": "service_period", "anchor": "Services from",
+      "region": "same-row", "pattern": "text" },
+
+    { "field": "due_date", "anchor": "Payment due",
+      "region": "same-row", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+
+    { "field": "prior_balance", "anchor": "Previous balance",
+      "region": "same-row", "pattern": "currency",
+      "required": false },
+
+    { "field": "payments_credits", "anchor": "Credit Card Payment",
+      "anchor_alts": ["Payments Received", "Payment Received"],
+      "region": "same-row", "pattern": "currency",
+      "adjust": ["normalize_credit_sign", "trailing_cr_to_negative"],
+      "required": false },
+
+    { "field": "current_charges", "anchor": "New charges",
+      "anchor_occurrence": "last",
+      "region": "same-row", "pattern": "currency",
+      "required": false },
+
+    { "field": "taxes_and_fees", "anchor": "Taxes and fees",
+      "region": "same-row", "pattern": "currency",
+      "required": false },
+
+    { "field": "total_printed", "anchor": "Amount due",
+      "anchor_alts": ["Total Amount Due", "Please pay"],
+      "region": "same-row", "pattern": "currency" },
+
+    { "field": "service_location", "anchor": "For service at:",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false },
+
+    { "field": "remit_address", "anchor": "COMCAST",
+      "anchor_occurrence": "last",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma", "resolve_vendor_alias"],
+      "required": false },
+
+    { "row_group": "line_items", "table_anchor": "Your new charges in detail",
+      "columns": { "description": "text", "amount": "currency" },
+      "row_count": { "min": 1, "max": 20 },
+      "allow_empty_cells": true },
+
+    { "scanline": true, "region": "remittance-block",
+      "asserts": [
+        { "field": "account_number", "as": "digits_only" },
+        { "field": "total_printed", "as": "digits_no_decimal" }
+      ]
+    }
+  ],
+
+  "layout_fingerprint": {
+    "page_count": { "min": 4, "max": 10 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native"
+  }
+}

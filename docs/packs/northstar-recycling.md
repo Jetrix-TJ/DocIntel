@@ -12,6 +12,17 @@ least five different labels.
 
 ---
 
+
+> **Representation note (2026-08-08).** This pack's classification ladder, tag
+> rules and claim guard are no longer Python — they live in
+> `src/docintel/packs/northstar/classification.json`, compiled at load by
+> `packs.declarative` and `packs.claims` against the closed signal registry in
+> `packs.signals`. A malformed rule (unknown signal, unknown scope, misspelled
+> parameter) is rejected when the pack is loaded, not by silently failing to
+> fire. The rows below describe the same rules; the file is where they now live,
+> and each carries the measurement it came from in a `_why` or `_defect` key.
+
+
 ## 1. Document types
 
 Priority-ordered signal ladder for `classifySignals`. **First signal that fires wins**, then the ladder

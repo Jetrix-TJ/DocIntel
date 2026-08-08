@@ -1,0 +1,103 @@
+{
+  "sender_fingerprint": "digitaldirection|windstream",
+  "doc_type": "telecom_bill",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Kinetic-branded Windstream bill: a single-column 'Account Summary' label/amount ladder on page 1 (Previous Bill, Payments/Adjustments thru <date>, Amount Previously Due, Current Charges Due, Total Amount Due, all right-aligned at the same x-position as their label), a payment stub below a 'Detach and return...' rule, and a two-column charges-by-provider breakdown on page 3 that interleaves a left-hand figures column with right-hand regulatory prose on the same visual lines.",
+  "field_selectors": [
+    {
+      "field": "account_number",
+      "anchor": "Account number",
+      "region": "near-anchor",
+      "pattern": "^\\d{6,12}$",
+      "required": true
+    },
+    {
+      "field": "telephone_number",
+      "anchor": "Telephone number",
+      "region": "near-anchor",
+      "pattern": "phone",
+      "required": false
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Invoice date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"],
+      "required": true
+    },
+    {
+      "field": "due_date",
+      "anchor": "Due date",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"],
+      "required": false
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Bill",
+      "anchor_alts": ["Previous Balance", "Previous Statement Balance", "Previous Balance Due"],
+      "region": "same-row",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments/Adjustments thru",
+      "anchor_alts": ["Payments Received", "Credit Card Payment"],
+      "region": "same-row",
+      "pattern": "currency",
+      "adjust": ["normalize_credit_sign"],
+      "required": false
+    },
+    {
+      "field": "amount_previously_due",
+      "anchor": "Amount Previously Due",
+      "anchor_alts": ["Past Due"],
+      "region": "same-row",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Current Charges Due",
+      "anchor_alts": ["Current Charges", "Subtotal Current Charges", "New Charges"],
+      "region": "same-row",
+      "pattern": "currency",
+      "required": true
+    },
+    {
+      "field": "total_printed",
+      "anchor": "Total Amount Due",
+      "anchor_alts": ["Amount Due", "Please Pay", "Balance Due"],
+      "region": "same-row",
+      "pattern": "currency",
+      "adjust": ["crosscheck_scanline"],
+      "required": true
+    },
+    {
+      "field": "remit_payee",
+      "anchor": "payable to",
+      "region": "near-anchor",
+      "pattern": "text",
+      "adjust": ["resolve_vendor_alias", "resolve_bill_to_alias"],
+      "required": false
+    },
+    {
+      "scanline": true,
+      "region": "remittance-block",
+      "asserts": [
+        { "field": "total_printed", "as": "digits_no_decimal" },
+        { "field": "account_number", "as": "digits_only" }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 8 },
+    "has_table": true,
+    "totals_page_role": "first",
+    "text_source": "native"
+  }
+}

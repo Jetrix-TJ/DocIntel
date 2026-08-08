@@ -1,0 +1,96 @@
+{
+  "sender_fingerprint": "northstar|edco",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Single-page EDCO waste/recycling account statement. Printed columns are flattened into shared text lines with no headers or field labels for most of the top block (account/date/total window and the two-column NORTHSTAR/EDCO address pair) - only 'BALANCE FORWARD', 'CURRENT CHARGES:', 'FOR SERVICE AT:' and the correspondence notice carry real printed labels. Everything else here is read by page position, which is weaker evidence and is marked required:false throughout.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "region": "header-block",
+      "pattern": "text",
+      "required": false,
+      "adjust": ["resolve_bill_to_alias"]
+    },
+    {
+      "field": "vendor_address",
+      "anchor": "EDCO WASTE & RECYCLING SERVICE",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false
+    },
+    {
+      "field": "remit_address",
+      "anchor": "EDCO WASTE & RECYCLING SERVICE",
+      "anchor_occurrence": "mid_line",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"],
+      "required": false
+    },
+    {
+      "field": "return_address",
+      "anchor": "PLEASE MAIL ALL OTHER CORRESPONDENCE TO:",
+      "region": "same-row",
+      "pattern": "text",
+      "required": false
+    },
+    {
+      "field": "service_location",
+      "anchor": "FOR SERVICE AT:",
+      "region": "near-anchor",
+      "pattern": "text_block",
+      "adjust": ["join_lines_comma"]
+    },
+    {
+      "field": "account_number",
+      "region": "header-block",
+      "pattern": "\\d{2}-\\d[A-Za-z]\\s(\\d{6})",
+      "adjust": ["crosscheck_scanline"],
+      "required": false
+    },
+    {
+      "field": "bill_date",
+      "region": "header-block",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"],
+      "required": false
+    },
+    {
+      "field": "total_printed",
+      "region": "header-block",
+      "pattern": "currency",
+      "adjust": ["crosscheck_scanline"],
+      "required": false
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "BALANCE FORWARD",
+      "region": "same-row",
+      "pattern": "currency",
+      "required": false
+    },
+    {
+      "field": "current_charges",
+      "anchor": "CURRENT CHARGES:",
+      "region": "same-row",
+      "pattern": "currency"
+    },
+    {
+      "scanline": true,
+      "region": "page:1",
+      "asserts": [
+        { "field": "account_number", "as": "digits_only" },
+        { "field": "total_printed", "as": "digits_no_decimal" }
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 2 },
+    "has_table": true,
+    "header_signature": "vendor-left|account-box-right",
+    "totals_page_role": "first",
+    "text_source": "native"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "sender_fingerprint": "northstar|upak",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "notes": "Five-page U-PAK Disposals invoice. Every page repeats the same header/footer (Bill To / Location, Account No., Service Dates, the DATE-DESCRIPTION-QUANTITY-AMOUNT-TOTAL table header, and the aging ladder), so page-role assignment marks all five pages primary (each independently carries an Account No. anchor and a Please Pay totals label). The document-level totals (Subtotal, surcharges, H.S.T., Total Invoice, the aging ladder's Please Pay figure) are printed only on the last page; page 1's Please Pay cell is blank, which is exactly the totals-block / near-anchor-last ordering this grammar exists to handle.",
+
+  "field_selectors": [
+    { "field": "vendor_name", "region": "top-left", "pattern": "text",
+      "required": false },
+
+    { "field": "invoice_number", "anchor": "Invoice #",
+      "region": "near-anchor", "pattern": "text",
+      "adjust": ["trim"] },
+
+    { "field": "invoice_date", "anchor": "Date",
+      "region": "near-anchor", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+
+    { "field": "bill_to_name", "anchor": "Bill To:",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"], "required": true },
+
+    { "field": "service_location", "anchor": "Location:",
+      "region": "label-block", "pattern": "text_block",
+      "adjust": ["join_lines_comma"] },
+
+    { "field": "account_number", "anchor": "Account No.",
+      "region": "near-anchor", "pattern": "account_number" },
+
+    { "field": "service_dates", "anchor": "Service Dates",
+      "region": "near-anchor", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+
+    { "field": "total_printed", "anchor": "Total Invoice",
+      "region": "totals-block", "pattern": "currency" },
+
+    { "field": "please_pay", "anchor": "Please Pay",
+      "anchor_occurrence": "last",
+      "region": "near-anchor", "pattern": "currency" },
+
+    { "field": "subtotal", "anchor": "Subtotal",
+      "region": "totals-block", "pattern": "currency" },
+
+    { "field": "tax_amount", "anchor": "H.S.T. #",
+      "region": "same-row", "pattern": "currency" },
+
+    { "field": "tax_id", "anchor": "H.S.T. #",
+      "region": "same-row", "pattern": "tax_id" },
+
+    { "field": "remit_payee", "anchor": "Please make cheque payable to",
+      "region": "same-row", "pattern": "^(.{2,60}?)\\s{1,3}or$",
+      "required": false },
+
+    { "row_group": "line_items", "table_anchor": "DESCRIPTION",
+      "column_headers": { "service_date": "DATE", "description": "DESCRIPTION",
+                           "quantity": "QUANTITY", "unit_price": "AMOUNT",
+                           "amount": "TOTAL" },
+      "columns": { "service_date": "date", "description": "text",
+                   "quantity": "decimal", "unit_price": "currency",
+                   "amount": "currency" },
+      "row_count": { "min": 1, "max": 40 }, "allow_empty_cells": true,
+      "require_amount": true }
+  ],
+
+  "layout_fingerprint": {
+    "page_count": { "min": 1, "max": 8 },
+    "has_table": true,
+    "header_signature": "vendor-left|billto-location-two-column",
+    "totals_page_role": "last",
+    "text_source": "native",
+    "column_signature": ["DATE", "DESCRIPTION", "QUANTITY", "AMOUNT", "TOTAL"]
+  }
+}
