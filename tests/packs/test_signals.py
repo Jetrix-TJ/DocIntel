@@ -258,3 +258,137 @@ def test_it_reads_primary_pages_by_default() -> None:
         signals.label_with_corroborating_value(ctx, TAX, next_line=_second_to_last_nonzero)
         is False
     )
+
+
+# --------------------------------------------------------------------------
+# The primitives lifted out of the two packs' ladders
+# --------------------------------------------------------------------------
+
+
+SUB_ACCT = re.compile(r"\*\*?\s*SUB\s*ACCT", re.I)
+LETTERHEAD = re.compile(r"\bnorthstar recycling\b", re.I)
+UNIT_RATE = re.compile(r"(?<![\w.])(-?)(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*/\s*[A-Za-z]{1,4}\b")
+
+
+def test_scope_primary_excludes_supporting_pages() -> None:
+    ctx = _ctx(("the invoice", "primary"), ("the attachment", "supporting"))
+    assert "attachment" not in signals.scope_text(ctx, "primary")
+    assert "attachment" in signals.scope_text(ctx, "all")
+
+
+def test_scope_page1_is_literally_page_one() -> None:
+    ctx = _ctx(("first", "primary"), ("second", "primary"))
+    assert signals.scope_text(ctx, "page1") == "first"
+
+
+def test_an_unknown_scope_raises_rather_than_silently_reading_nothing() -> None:
+    """A declarative rung naming a bad scope must fail loudly. Returning "" would
+    make the signal quietly false and the document quietly misclassified."""
+    ctx = _ctx(("x", "primary"))
+    try:
+        signals.scope_text(ctx, "everything")
+    except ValueError as exc:
+        assert "everything" in str(exc)
+    else:  # pragma: no cover - the assertion below is the failure message
+        raise AssertionError("an unknown scope must raise")
+
+
+def test_pattern_in_scope_respects_its_scope() -> None:
+    ctx = _ctx(("invoice", "primary"), ("** SUB ACCT 12", "supporting"))
+    assert signals.pattern_in_scope(ctx, SUB_ACCT, scope="all") is True
+    assert signals.pattern_in_scope(ctx, SUB_ACCT, scope="primary") is False
+
+
+def test_text_near_top_matches_a_long_letterhead_line() -> None:
+    """The case `title_near_top` deliberately cannot serve: a letterhead is a
+    company name and address block, legitimately longer than a title."""
+    body = "Northstar Recycling Company LLC 94 Maple St East Longmeadow MA 01028|rest"
+    assert signals.text_near_top(_ctx((body, "primary")), LETTERHEAD, max_line_index=4) is True
+
+
+def test_text_near_top_ignores_the_same_name_further_down() -> None:
+    """Every corpus document names Northstar somewhere - it is the bill-to on all
+    six - so a whole-page search would call every one own paperwork."""
+    body = "|".join(["ACME VENDOR"] * 6 + ["Bill To Northstar Recycling"])
+    assert signals.text_near_top(_ctx((body, "primary")), LETTERHEAD, max_line_index=4) is False
+
+
+def test_all_matches_negative_when_every_rate_is_negative() -> None:
+    ctx = _ctx(("OCC -40.00/ST|HAUL FEE 200.00", "primary"))
+    assert signals.all_matches_negative(ctx, UNIT_RATE, scope="primary") is True
+
+
+def test_all_matches_negative_is_false_when_one_rate_is_positive() -> None:
+    ctx = _ctx(("OCC -40.00/ST|MIXED 12.50/ST", "primary"))
+    assert signals.all_matches_negative(ctx, UNIT_RATE, scope="primary") is False
+
+
+def test_all_matches_negative_requires_at_least_one_match() -> None:
+    """"No rates at all" is not "all rates negative". A vacuous truth here would
+    make every invoice without a rate column a contra."""
+    ctx = _ctx(("HAUL FEE 200.00", "primary"))
+    assert signals.all_matches_negative(ctx, UNIT_RATE, scope="primary") is False
+
+
+def test_role_shape_matches_one_primary_plus_supporting() -> None:
+    ctx = _ctx(("inv", "primary"), ("bol", "supporting"))
+    assert signals.role_shape(ctx, primary_exactly=1, supporting_at_least=1) is True
+
+
+def test_role_shape_rejects_an_all_primary_document() -> None:
+    """U-PAK's five-page repeating template comes out all-primary, and must not
+    read as an invoice with an attachment."""
+    ctx = _ctx(("p1", "primary"), ("p2", "primary"))
+    assert signals.role_shape(ctx, primary_exactly=1, supporting_at_least=1) is False
+
+
+def test_money_table_present_needs_several_money_tokens_on_one_line() -> None:
+    assert signals.money_table_present(_ctx(("1.00 2.00 3.00", "primary"))) is True
+    assert signals.money_table_present(_ctx(("Total 1.00", "primary"))) is False
+
+
+def test_text_source_is() -> None:
+    ctx = _ctx(("x", "primary"))
+    ctx.text_source = "ocr"
+    assert signals.text_source_is(ctx, value="ocr") is True
+    assert signals.text_source_is(ctx, value="native") is False
+
+
+def test_noise_ratio_reads_supporting_pages_only() -> None:
+    """Federal Recycling carries a handwritten margin note that OCR transcribes,
+    but it is a single-page document with no supporting page - and its gold
+    label is correctly not tagged."""
+    noisy = "eo eS xz qq zz ll pp mm nn bb vv cc"
+    ctx = _ctx((noisy, "primary"))
+    ctx.text_source = "ocr"
+    assert signals.noise_ratio_above(ctx, threshold=0.40) is False
+
+    ctx2 = _ctx(("a clean printed invoice line", "primary"), (noisy, "supporting"))
+    ctx2.text_source = "ocr"
+    assert signals.noise_ratio_above(ctx2, threshold=0.40) is True
+
+
+def test_noise_ratio_is_native_text_blind() -> None:
+    """A text layer is not handwriting, whatever its tokens look like."""
+    ctx = _ctx(("clean", "primary"), ("eo eS xz qq zz ll", "supporting"))
+    ctx.text_source = "native"
+    assert signals.noise_ratio_above(ctx, threshold=0.40) is False
+
+
+class _FakePack:
+    vendor_aliases = {"lumen": "lumen", "centurylink": "lumen", "comcast": "comcast"}
+
+
+def test_distinct_printed_aliases_reads_the_packs_own_table() -> None:
+    ctx = _ctx(("LUMEN a CenturyLink company", "primary"))
+    ctx.pack = _FakePack()
+    assert signals.distinct_printed_aliases_at_least(ctx, count=2) is True
+    assert signals.distinct_printed_aliases_at_least(ctx, count=3) is False
+
+
+def test_distinct_printed_aliases_with_no_pack_is_false_not_an_error() -> None:
+    """Stage 3 runs the ladder after `resolve_pack`, but a hook or a test may
+    reach a signal with no pack bound; a crash there would dead-letter a
+    document over a tag."""
+    ctx = _ctx(("LUMEN", "primary"))
+    assert signals.distinct_printed_aliases_at_least(ctx, count=1) is False

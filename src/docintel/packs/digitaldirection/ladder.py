@@ -30,8 +30,7 @@ import re
 from decimal import Decimal
 
 from docintel.core.models import JobContext
-from docintel.packs.digitaldirection import aliases
-from docintel.packs.registry import all_text, primary_text
+from docintel.packs import signals
 
 _CREDIT_MEMO = re.compile(r"\b(credit memo|adjustment notice)\b", re.I)
 _DISCONNECT = re.compile(
@@ -51,31 +50,49 @@ PRIOR_BALANCE_ANCHORS = re.compile(
     r"balance from last statement|previous balance due|previous total)\b", re.I
 )
 _AGING = re.compile(r"\b(past due|amount past due|30 days\b.*\b60 days)\b", re.I)
+# The aging column header, matched anywhere in the document rather than on a
+# short line. Preserved verbatim from the pre-migration code. Note that `.` does
+# not cross a newline without `re.S` and page text is newline-joined, so this
+# cannot pair a "30 DAYS" on one page with a "60 DAYS" on another - it is a
+# single-line match in practice, which is why it is nearly redundant with
+# `_AGING`'s own third alternative.
+_AGING_COLUMNS = re.compile(r"\b30 DAYS\b.*\b60 DAYS\b", re.I)
 _MAX_PAST_DUE_LINE_WORDS = 8
 _SCANLINE = re.compile(r"\b\d{18,}\b")
 
 
 def doc_type_for(ctx: JobContext) -> tuple[str, str]:
-    """(doc_type, signal_that_fired). Three types, and `telecom_bill` is default."""
-    text = primary_text(ctx)
+    """(doc_type, signal_that_fired). Three types, and `telecom_bill` is default.
 
-    if _CREDIT_MEMO.search(text):
+    Composed from `packs.signals` primitives so the ladder can be expressed as
+    data; the patterns and the rung order remain this pack's policy.
+
+    **Known defect on the first rung, deliberately preserved.** It uses
+    `pattern_in_scope`, a bare search, while returning the signal name
+    `credit_memo_title` - so a bill that merely MENTIONS a credit memo is
+    classified as one, which on this pack loads the wrong persona. Northstar's
+    identical rung was fixed with `title_near_top` on 2026-08-06 and this one
+    never was. The fix is a parked task and is not applied here, because this
+    migration's correctness proof is a byte-identical `replay-gold` and folding
+    a behaviour change into it would destroy that proof.
+    """
+    if signals.pattern_in_scope(ctx, _CREDIT_MEMO, scope="primary"):
         return "credit_memo", "credit_memo_title"
 
     # Suspension language AND no current-charge block. Both halves are required:
     # a bill that merely warns about future disconnection is still a bill.
-    if _DISCONNECT.search(text) and not _CURRENT_CHARGES.search(text):
+    if signals.pattern_in_scope(
+        ctx, _DISCONNECT, scope="primary"
+    ) and not signals.pattern_in_scope(ctx, _CURRENT_CHARGES, scope="primary"):
         return "disconnect_notice", "suspension_without_current_charges"
 
     return "telecom_bill", "default"
 
 
 def tags_for(ctx: JobContext) -> list[str]:
-    text = primary_text(ctx)
-    everything = all_text(ctx)
     tags: list[str] = []
 
-    if PRIOR_BALANCE_ANCHORS.search(text):
+    if signals.pattern_in_scope(ctx, PRIOR_BALANCE_ANCHORS, scope="primary"):
         # Anchor text alone CANNOT tell cleared from present, and guessing on a
         # payment anchor gets Centracom exactly backwards: it prints
         # `Payments Received` and its prior is still 20,123.80 outstanding.
@@ -89,32 +106,29 @@ def tags_for(ctx: JobContext) -> list[str]:
         # safe one.
         tags.append("prior_balance_present")
 
-    if _short_line_has(ctx, _AGING, _MAX_PAST_DUE_LINE_WORDS) or re.search(
-        r"\b30 DAYS\b.*\b60 DAYS\b", everything, re.I
-    ):
+    # `primary_only=False` preserves this check's existing all-pages scope.
+    # It is a KNOWN defect, not a considered widening: page 3 of
+    # `Windstream_041069076` - a supporting page - prints the 5-word prose
+    # fragment "any past due Internet balance.", which no word cutoff can
+    # reject, and it tags a bill whose gold says `prior_balance_cleared`.
+    # Northstar's identical check is correctly primary-scoped and corroborated.
+    # Narrowing this one is a parked behaviour change, kept out of a migration
+    # whose proof is a byte-identical `replay-gold`.
+    if signals.short_label_line(
+        ctx, _AGING, _MAX_PAST_DUE_LINE_WORDS, primary_only=False
+    ) or signals.pattern_in_scope(ctx, _AGING_COLUMNS, scope="all"):
         tags.append("past_due")
 
-    if aliases.count_printed_names(text) >= 2:
+    if signals.distinct_printed_aliases_at_least(ctx, count=2, scope="primary"):
         tags.append("multi_brand_sender")
 
-    if _SCANLINE.search(everything):
+    if signals.pattern_in_scope(ctx, _SCANLINE, scope="all"):
         tags.append("has_scanline")
 
-    if _has_promo_block(ctx):
+    if signals.pattern_in_scope(ctx, _PROMO_MARKERS, scope="page1"):
         tags.append("promo_content")
 
     return tags
-
-
-def _short_line_has(ctx: JobContext, pattern: re.Pattern[str], max_words: int) -> bool:
-    """Whether `pattern` appears on a SHORT line rather than buried in prose."""
-    for page in ctx.pages:
-        for line in page.lines():
-            if len(line) > max_words:
-                continue
-            if pattern.search(" ".join(w.text for w in line)):
-                return True
-    return False
 
 
 _PROMO_MARKERS = re.compile(
@@ -143,33 +157,6 @@ plus the gold PDF: these phrases appear on exactly the two documents above
 and nowhere else in the corpus.
 """
 
-
-def _has_promo_block(ctx: JobContext) -> bool:
-    """A dominant advertising block on page 1 (F9, Windstream).
-
-    Not `image_count`. Two real documents disprove any threshold built on
-    it, image count or char count alike:
-
-    - The genuine ad (`021942648`) OCR's down to a SINGLE collapsed raster
-      (`image_count == 1`) - the old `image_count >= 2` test missed it
-      entirely. Fixing that by adding a low-`char_count` branch does not
-      work either: a real, ordinary bill scanned the same way
-      (`Windstream_205577168`, and both real Lumen invoices) reads the
-      IDENTICAL `image_count == 1, char_count == 0` (`PageMeta.char_count`
-      is the pre-OCR structural text-layer count, which is 0 for any
-      full-page raster regardless of what is actually on it) - there is no
-      cutoff that tells the ad apart from a real bill scanned the same way.
-    - A normal native-PDF bill can carry several small incidental
-      logo/header images with nothing promotional on the page at all -
-      `Windstream_216713099` prints 5 and `image_count >= 2` alone
-      false-fired on it.
-
-    What the real ad DOES carry, on both real instances of it, and no real
-    non-ad document in the corpus does, is its own marketing copy - see
-    `_PROMO_MARKERS`.
-    """
-    page_text = next((p.text for p in ctx.pages if p.page_number == 1), "")
-    return bool(_PROMO_MARKERS.search(page_text))
 
 
 def retag_prior_balance(ctx: JobContext) -> JobContext:

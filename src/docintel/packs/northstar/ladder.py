@@ -20,10 +20,8 @@ from __future__ import annotations
 
 import re
 
-from docintel.core import pagination
 from docintel.core.models import JobContext
 from docintel.packs import signals
-from docintel.packs.registry import primary_text
 
 # --- doc-type signals -----------------------------------------------------
 
@@ -70,27 +68,7 @@ _MONEY_RE = re.compile(r"\d[\d,]*\.\d{2}")
 # and Federal Recycling's printed page 0.17. 0.40 sits in the gap with room on
 # both sides.
 HANDWRITING_NOISE_RATIO = 0.40
-_ODD_CHARS = re.compile(r"[^\w\s.,/$#&()'-]")
 
-
-def _noise_ratio(text_tokens: list[str]) -> float:
-    """Share of tokens that do not look like printed words.
-
-    Three cheap signals, because OCR of handwriting fails in three ways: it
-    produces fragments (`eo`, `eS`), it drops vowels (`Traotor`, `Looeition`),
-    and it invents punctuation. None is reliable alone; the ratio is.
-    """
-    if not text_tokens:
-        return 0.0
-
-    def odd(token: str) -> bool:
-        if len(token) <= 2:
-            return True
-        if token.isalpha() and not re.search(r"[aeiouAEIOU]", token):
-            return True
-        return bool(_ODD_CHARS.search(token))
-
-    return sum(odd(t) for t in text_tokens) / len(text_tokens)
 
 
 def _credit_memo_title_present(ctx: JobContext) -> bool:
@@ -256,84 +234,49 @@ def _short_line_has_nonzero_tax(ctx: JobContext) -> bool:
     )
 
 
-def _roles(ctx: JobContext) -> tuple[int, int]:
-    primary = sum(1 for m in ctx.page_meta if m.role == "primary")
-    supporting = sum(1 for m in ctx.page_meta if m.role != "primary")
-    return primary, supporting
-
 
 def doc_type_for(ctx: JobContext) -> tuple[str, str]:
-    """(doc_type, signal_that_fired). The section 1 ladder, in order."""
-    text = primary_text(ctx)
+    """(doc_type, signal_that_fired). The section 1 ladder, in order.
 
+    Every rung is now a composition of `packs.signals` primitives plus this
+    pack's own patterns and cutoffs. That split is what lets the ladder be
+    expressed as data: the mechanics are named, the policy stays here.
+    """
     if _credit_memo_title_present(ctx):
         return "credit_memo", "credit_memo_title"
 
-    rates = _UNIT_RATE.findall(text)
-    if rates and all(sign == "-" for sign, _ in rates):
+    if signals.all_matches_negative(ctx, _UNIT_RATE, scope="primary"):
         # Every per-unit rate on the page is negative: the commodity lines are
         # all credits. Positive service lines (Federal Recycling's HAUL FEE) are
         # flat amounts with no rate, so they do not disturb this.
         return "contra_invoice", "all_commodity_rates_negative"
 
-    primary, supporting = _roles(ctx)
-    if primary == 1 and supporting >= 1 and not _is_paginated_continuation(ctx):
+    if signals.role_shape(
+        ctx, primary_exactly=1, supporting_at_least=1
+    ) and not signals.shared_pagination_footer(ctx):
         return "invoice_with_attachment", "one_primary_plus_supporting"
 
-    if _STATEMENT.search(text) and not _has_table(ctx):
+    if signals.pattern_in_scope(
+        ctx, _STATEMENT, scope="primary"
+    ) and not signals.money_table_present(ctx):
         return "statement_of_account", "statement_title_no_table"
 
-    if _is_own_paperwork(ctx):
+    if signals.text_near_top(ctx, _NORTHSTAR_LETTERHEAD, max_line_index=4):
+        # Every document in the corpus names Northstar somewhere - it is the
+        # bill-to on all six - so only the first few lines can carry this.
         return "own_paperwork", "northstar_letterhead"
 
     return "standard_invoice", "default"
 
 
-def _is_paginated_continuation(ctx: JobContext) -> bool:
-    """True if every page carries a `N OF M` footer with M == len(ctx.pages).
 
-    A real attachment (a Bill of Lading stapled behind an invoice) has no
-    reason to share the invoice's own pagination sequence. A genuine
-    multi-page invoice whose totals label overflowed onto a later page - the
-    same (primary=1, supporting>=1) role shape the ladder otherwise reads as
-    "invoice plus attachment" - does. Reading the real printed footer, not
-    guessing from role counts, is what tells the two apart.
-    """
-    return pagination.shared_footer_pages(ctx.pages) is not None
-
-
-def _has_table(ctx: JobContext) -> bool:
-    """A crude but honest table test: a line with three or more money tokens."""
-    for page in ctx.pages:
-        for line in page.lines():
-            money = sum(1 for w in line if re.fullmatch(r"[\d,]+\.\d{2}", w.text))
-            if money >= 3:
-                return True
-    return False
-
-
-def _is_own_paperwork(ctx: JobContext) -> bool:
-    """Northstar's own letterhead, i.e. this is not a vendor invoice at all.
-
-    Checked on the FIRST few lines only. Every document in the corpus names
-    Northstar somewhere - it is the bill-to on all six - so a whole-page search
-    would classify every one of them as own paperwork.
-    """
-    if not ctx.pages:
-        return False
-    head = ctx.pages[0].lines()[:4]
-    return any(
-        _NORTHSTAR_LETTERHEAD.search(" ".join(w.text for w in line)) for line in head
-    )
 
 
 def tags_for(ctx: JobContext) -> list[str]:
     """Every tag the document earns. Layered on; never changes the type."""
-    text = primary_text(ctx)
-    everything = "\n".join(p.text for p in ctx.pages)
     tags: list[str] = []
 
-    if _NEGATIVE_MONEY.search(text):
+    if signals.pattern_in_scope(ctx, _NEGATIVE_MONEY, scope="primary"):
         tags.append("mixed_sign")
 
     # `primary_only=False` is DELIBERATE and must not be tidied to the default.
@@ -351,38 +294,24 @@ def tags_for(ctx: JobContext) -> list[str]:
     if _short_line_has_nonzero_tax(ctx):
         tags.append("has_tax")
 
-    if _SUB_ACCT.search(everything):
+    if signals.pattern_in_scope(ctx, _SUB_ACCT, scope="all"):
         tags.append("sub_accounts")
 
-    if ctx.text_source == "ocr":
+    if signals.text_source_is(ctx, value="ocr"):
         tags.append("ocr_only")
 
-    if _DISCOUNT.search(text):
+    if signals.pattern_in_scope(ctx, _DISCOUNT, scope="primary"):
         tags.append("early_pay_discount")
 
-    if _handwritten_supporting(ctx):
+    # Supporting pages only (F10, Complete Beverage p2-p3), which removes the
+    # whole false-positive risk: Federal Recycling carries a handwritten margin
+    # note that OCR transcribes, but it is a single-page document with no
+    # supporting page, and its gold label is correctly not tagged.
+    if signals.noise_ratio_above(ctx, threshold=HANDWRITING_NOISE_RATIO):
         tags.append("handwritten_supporting")
 
     return tags
 
-
-def _handwritten_supporting(ctx: JobContext) -> bool:
-    """Handwriting on a supporting page (F10, Complete Beverage p2-p3).
-
-    Only supporting pages are examined, which removes the whole false-positive
-    risk: Federal Recycling carries a handwritten margin note that OCR
-    transcribes, but it is a single-page document with no supporting page, and
-    its gold label is correctly not tagged.
-    """
-    if ctx.text_source != "ocr":
-        return False
-    supporting = {m.page_number for m in ctx.page_meta if m.role != "primary"}
-    for page in ctx.pages:
-        if page.page_number not in supporting:
-            continue
-        if _noise_ratio([w.text for w in page.words]) >= HANDWRITING_NOISE_RATIO:
-            return True
-    return False
 
 
 def classify(ctx: JobContext) -> JobContext:
