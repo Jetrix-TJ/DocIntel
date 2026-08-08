@@ -1,0 +1,115 @@
+{
+  "_note": "Digital Direction's classification, as data. THIS PACK HAS NO statement_of_account TYPE AND THAT IS THE POINT: Centracom's page 1 is titled 'Account Summary' and the word 'statement' appears twice. A statement rung above the default would misclassify it and run the wrong persona - a $20,123.80 error. The rule the pack spec settles on: a document with a payable amount and service line items is a bill, whatever its header says. If a statement type is ever needed it must require the ABSENCE of a current-charges block, not the presence of the word.",
+  "ladder": {
+    "default": "telecom_bill",
+    "rungs": [
+      {
+        "name": "credit_memo_title",
+        "doc_type": "credit_memo",
+        "_defect": "KNOWN, PARKED. This is a bare search while the rung is named credit_memo_title - a bill that merely MENTIONS a credit memo is classified as one, which on this pack loads the wrong persona. Northstar's identical rung was fixed with title_near_top on 2026-08-06 and this one never was. Latent: 0 of 7 telecom second-samples print the wording. Fixing it is now a two-line edit to this file.",
+        "when": {
+          "signal": "pattern_in_scope",
+          "params": {
+            "pattern": "\\b(credit memo|adjustment notice)\\b",
+            "scope": "primary"
+          }
+        }
+      },
+      {
+        "name": "suspension_without_current_charges",
+        "doc_type": "disconnect_notice",
+        "_why": "Both halves required: a bill that merely warns about future disconnection is still a bill.",
+        "when": {
+          "all_of": [
+            {
+              "signal": "pattern_in_scope",
+              "params": {
+                "pattern": "\\b(disconnect notice|service will be disconnected|suspension notice)\\b",
+                "scope": "primary"
+              }
+            },
+            {
+              "not": {
+                "signal": "pattern_in_scope",
+                "params": {
+                  "pattern": "\\b(current charges|new charges|subtotal current charges|current charges due)\\b",
+                  "scope": "primary"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "tags": [
+    {
+      "tag": "prior_balance_present",
+      "_why": "The CONSERVATIVE half of the pair. Anchor text alone cannot tell cleared from present, and guessing on a payment anchor gets Centracom exactly backwards: it prints 'Payments Received' and its prior is still 20,123.80 outstanding. refine_prior_balance_tags upgrades this to prior_balance_cleared only once the printed amounts prove it. If that hook never runs, the surviving claim is the safe one.",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "\\b(previous balance|previous bill|previous statement balance|balance from last statement|previous balance due|previous total)\\b",
+          "scope": "primary"
+        }
+      }
+    },
+    {
+      "tag": "past_due",
+      "_defect": "KNOWN, PARKED. primary_only is false, so page 3 of Windstream_041069076 - a SUPPORTING page - tags this bill via the 5-word prose fragment 'any past due Internet balance.', against a gold label of prior_balance_cleared. No word cutoff can reject a 5-word fragment; page scope can. Northstar's identical check is primary-scoped AND corroborated by a nonzero bucket. Fixing it is a one-line edit to this file.",
+      "when": {
+        "any_of": [
+          {
+            "signal": "short_label_line",
+            "params": {
+              "pattern": "\\b(past due|amount past due|30 days\\b.*\\b60 days)\\b",
+              "max_words": 8,
+              "primary_only": false
+            }
+          },
+          {
+            "signal": "pattern_in_scope",
+            "params": {
+              "pattern": "\\b30 DAYS\\b.*\\b60 DAYS\\b",
+              "scope": "all"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tag": "multi_brand_sender",
+      "_why": "Makes the alias collapse auditable: Lumen prints three names for one carrier. Reads the pack's own vendor_aliases table.",
+      "_defect": "KNOWN, PARKED. Counts alias PHRASES, so 'comcast' inside 'comcast business' counts twice and tags Comcast against its gold label. Fixing it is a one-line change in signals.distinct_printed_aliases_at_least - and note the naive fix is wrong: Lumen's three printed names share one canonical.",
+      "when": {
+        "signal": "distinct_printed_aliases_at_least",
+        "params": {
+          "count": 2,
+          "scope": "primary"
+        }
+      }
+    },
+    {
+      "tag": "has_scanline",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "\\b\\d{18,}\\b",
+          "ignore_case": false,
+          "scope": "all"
+        }
+      }
+    },
+    {
+      "tag": "promo_content",
+      "_why": "A closed enumeration of the 'Kinetic Business by Windstream' insert's own marketing copy, cited to two real documents. NOT image_count: the genuine ad OCRs to a single collapsed raster (image_count 1), identical to an ordinary bill scanned the same way, while a normal native-PDF bill can carry 5 incidental logo images.",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "go kinetic business|gokineticbusiness\\.com|scan the qr code|mybusiness\\.gokinetic\\.com|google play or the app store",
+          "scope": "page1"
+        }
+      }
+    }
+  ]
+}

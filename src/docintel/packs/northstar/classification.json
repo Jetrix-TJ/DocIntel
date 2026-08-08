@@ -1,0 +1,177 @@
+{
+  "_note": "Northstar's classification, as data. Compiled by packs.declarative against the closed signal registry in packs.signals. Rung order is load-bearing: contra_invoice sits ABOVE invoice_with_attachment because Federal Recycling is a single-page contra and Complete Beverage is a multi-page invoice that also contains negative lines. Testing 'has attachments' first would misclassify any multi-page invoice with a rebate line; testing 'has negatives' first would misclassify Complete Beverage.",
+  "ladder": {
+    "default": "standard_invoice",
+    "rungs": [
+      {
+        "name": "credit_memo_title",
+        "doc_type": "credit_memo",
+        "_why": "A genuine TITLE near the top of page 1. Length alone cannot separate it from a footnote: real OCR of Complete Beverage's 'For remaining credited items refer to Credit memo 32684.' wraps onto SHORT lines at index 25-26, while the real title on _AP Invoice 32473 sits at index 5. max_line_index 10 is wide enough to keep index 5 with room to spare and well short of 25.",
+        "when": {
+          "signal": "title_near_top",
+          "params": {
+            "pattern": "\\b(credit memo|credit note|adjustment note)\\b",
+            "max_words": 7,
+            "max_line_index": 10
+          }
+        }
+      },
+      {
+        "name": "all_commodity_rates_negative",
+        "doc_type": "contra_invoice",
+        "_why": "Every per-unit RATE is negative. The /UNIT suffix is what makes it a rate rather than an amount: U-PAK prints -40.500 and Complete Beverage -0.65, both negative unit prices with no suffix, and neither is a contra.",
+        "when": {
+          "signal": "all_matches_negative",
+          "params": {
+            "pattern": "(?<![\\w.])(-?)(\\d{1,3}(?:,\\d{3})*\\.\\d{1,4})\\s*/\\s*[A-Za-z]{1,4}\\b",
+            "ignore_case": false,
+            "scope": "primary"
+          }
+        }
+      },
+      {
+        "name": "one_primary_plus_supporting",
+        "doc_type": "invoice_with_attachment",
+        "_why": "An invoice with something stapled behind it - unless the pages share an N OF M footer, which proves they are one continuous invoice rather than an attachment.",
+        "when": {
+          "all_of": [
+            {
+              "signal": "role_shape",
+              "params": {
+                "primary_exactly": 1,
+                "supporting_at_least": 1
+              }
+            },
+            {
+              "not": {
+                "signal": "shared_pagination_footer"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "statement_title_no_table",
+        "doc_type": "statement_of_account",
+        "_why": "A document with a payable amount and service line items is a bill, whatever its header says - so the charges table has to be ABSENT.",
+        "when": {
+          "all_of": [
+            {
+              "signal": "pattern_in_scope",
+              "params": {
+                "pattern": "\\bstatement of account\\b",
+                "scope": "primary"
+              }
+            },
+            {
+              "not": {
+                "signal": "money_table_present"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "northstar_letterhead",
+        "doc_type": "own_paperwork",
+        "_why": "First few lines only. Every corpus document names Northstar somewhere - it is the bill-to on all six - so a whole-page search would call every one own paperwork.",
+        "when": {
+          "signal": "text_near_top",
+          "params": {
+            "pattern": "\\bnorthstar recycling\\b",
+            "max_line_index": 4
+          }
+        }
+      }
+    ]
+  },
+  "tags": [
+    {
+      "tag": "mixed_sign",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "(?<![\\w.])-\\d{1,3}(?:,\\d{3})*\\.\\d{2}\\b|\\(\\d{1,3}(?:,\\d{3})*\\.\\d{2}\\)",
+          "scope": "primary"
+        }
+      }
+    },
+    {
+      "tag": "past_due",
+      "_why": "A standalone banner OR an aging header corroborated by a nonzero 30/60/90 bucket. primary_only is false DELIBERATELY: Federal Recycling's terms-and-conditions page is a supporting page. Pinned by test_a_past_due_banner_on_a_supporting_page_still_tags.",
+      "when": {
+        "any_of": [
+          {
+            "signal": "short_label_line",
+            "params": {
+              "pattern": "\\bPAST\\s+DUE\\b",
+              "max_words": 6,
+              "primary_only": false
+            }
+          },
+          {
+            "signal": "label_with_corroborating_value",
+            "params": {
+              "label": "\\b30\\s*DAYS\\b.*\\b60\\s*DAYS\\b",
+              "same_line": "middle_tokens_nonzero",
+              "next_line": "middle_tokens_nonzero",
+              "primary_only": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tag": "has_tax",
+      "_why": "The column LABEL is printed on every Veritiv invoice, taxed or not. Only a real value separates them.",
+      "when": {
+        "signal": "label_with_corroborating_value",
+        "params": {
+          "label": "\\b(total tax|taxes|h\\.?\\s?s\\.?\\s?t\\.?|g\\.?\\s?s\\.?\\s?t\\.?)\\b",
+          "same_line": "money_after_label_nonzero",
+          "next_line": "second_to_last_token_nonzero",
+          "primary_only": true
+        }
+      }
+    },
+    {
+      "tag": "sub_accounts",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "\\*\\*?\\s*SUB\\s*ACCT",
+          "scope": "all"
+        }
+      }
+    },
+    {
+      "tag": "ocr_only",
+      "when": {
+        "signal": "text_source_is",
+        "params": {
+          "value": "ocr"
+        }
+      }
+    },
+    {
+      "tag": "early_pay_discount",
+      "when": {
+        "signal": "pattern_in_scope",
+        "params": {
+          "pattern": "\\bdiscount\\b",
+          "scope": "primary"
+        }
+      }
+    },
+    {
+      "tag": "handwritten_supporting",
+      "_why": "Supporting pages only. Federal Recycling carries a handwritten margin note OCR transcribes, but it is single-page with no supporting page and is correctly untagged. Threshold measured on the corpus: Complete Beverage's handwritten BOL pages score 0.51 and 0.46, its printed invoice and certificate pages 0.22 and 0.28, Federal Recycling's printed page 0.17. 0.40 sits in the gap with room on both sides.",
+      "when": {
+        "signal": "noise_ratio_above",
+        "params": {
+          "threshold": 0.4
+        }
+      }
+    }
+  ]
+}

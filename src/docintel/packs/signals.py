@@ -378,3 +378,87 @@ def distinct_printed_aliases_at_least(ctx: JobContext, *, count: int, scope: str
     aliases: dict[str, str] = getattr(pack, "vendor_aliases", {}) or {}
     haystack = normalize_name(scope_text(ctx, scope))
     return len({phrase for phrase in aliases if phrase in haystack}) >= count
+
+
+# --------------------------------------------------------------------------
+# Value predicates.
+#
+# `label_with_corroborating_value` asks "is there a real value near this
+# label?", and what counts as "the value" is layout-specific. These are the
+# named, closed set of answers - the equivalent of the signal registry itself,
+# one level down. A declarative rung names one instead of supplying a lambda,
+# which is what keeps the ladder expressible as data.
+# --------------------------------------------------------------------------
+
+_MONEY = re.compile(r"\d[\d,]*\.\d{2}")
+
+
+def _as_float(token: str) -> float | None:
+    try:
+        return float(token.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def middle_tokens_nonzero(text: str) -> bool:
+    """Nonzero among the money tokens STRICTLY BETWEEN the first and the last.
+
+    The aging row's 30/60/90 buckets. Both ends are excluded deliberately:
+    CURRENT and Please Pay are nonzero on every real U-PAK invoice carrying any
+    balance at all, aged or not, so "any nonzero token on the row" would still
+    fire on the exact all-buckets-empty documents this corroboration exists to
+    catch - verified against `AMOUNT 6763.96 0.00 0.00 0.00 $6763.96`.
+    """
+    tokens = _MONEY.findall(text)
+    middle = tokens[1:-1] if len(tokens) > 2 else []
+    return any((v := _as_float(t)) is not None and v != 0.0 for t in middle)
+
+
+def second_to_last_token_nonzero(text: str) -> bool:
+    """The token immediately before the trailing grand total.
+
+    Veritiv's discount/weight/subtotal/'Total Tax'/'Amount Due' row. NOT "any
+    nonzero token on the line": Subtotal and this vendor's discount columns are
+    nonzero on every real invoice and would make the check trivially true on
+    exactly the $0.00-tax documents it exists to catch. Verified against all 7
+    real Veritiv second samples - taxed rows read `...0.00 0.00 299.55
+    4,908.00`, untaxed ones `...0.00 0.00 0.00 625.00`.
+    """
+    tokens = _MONEY.findall(text)
+    if not tokens:
+        return False
+    candidate = tokens[-2] if len(tokens) >= 2 else tokens[-1]
+    value = _as_float(candidate)
+    return value is not None and value != 0.0
+
+
+def money_after_label_nonzero(label: re.Pattern[str]) -> Callable[[str], bool]:
+    """The first money token following the label ON THE SAME LINE.
+
+    Not "any nonzero token on the line", which would let a nonzero Sub Total or
+    Total - present on every real invoice - corroborate a genuinely zero tax
+    value, reproducing the exact false-positive class the corroboration exists
+    to fix. Verified against U-PAK's `H.S.T. # 123142812RT0001    2,325.69`:
+    the registration number is not money-shaped, so the first money token after
+    the label is the real tax amount.
+
+    Returns a closure because the predicate needs the label it is corroborating.
+    """
+
+    def predicate(text: str) -> bool:
+        for match in label.finditer(text):
+            found = _MONEY.search(text[match.end():])
+            if found is not None:
+                value = _as_float(found.group(0))
+                if value is not None and value != 0.0:
+                    return True
+        return False
+
+    return predicate
+
+
+VALUE_PREDICATES: dict[str, Callable[..., object]] = {
+    "middle_tokens_nonzero": middle_tokens_nonzero,
+    "second_to_last_token_nonzero": second_to_last_token_nonzero,
+    "money_after_label_nonzero": money_after_label_nonzero,
+}
