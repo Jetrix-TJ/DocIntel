@@ -173,5 +173,40 @@
         }
       }
     }
-  ]
+  ],
+  "claim": {
+    "_why": "This pack is an AP department: every invoice it handles is billed TO Northstar, so the guard is the bill-to. Precision measured for the first time on 2026-08-07 - before tightening, the pack claimed an unrelated vendor's invoice billed to a different company at the marker ZIP, and one billed to a company in Austin whose only tie was a SHIP-TO block.",
+    "rules": [
+      {
+        "kind": "markers",
+        "scope": "primary",
+        "values": [
+          "northstar recycling",
+          "northstar bimbo",
+          "nsrecycle com",
+          "po box 188 east longmeadow",
+          "94 maple st east longmeadow"
+        ],
+        "_why": "Each names the company, or an address specific enough that no other business prints it. The PO Box appears without the company name at all on the EDCO remittance stub."
+      },
+      {
+        "kind": "corroborated_markers",
+        "scope": "primary",
+        "pairs": [
+          {
+            "marker": "ma 01028",
+            "requires": "northst"
+          }
+        ],
+        "_why": "The bare ZIP was added so 4 real EDCO invoices with typo'd company names (NORTHSTART, NORTHSTRAY, NORTHSTAR RECY) would still be claimed - but a bare ZIP claims any document printing it. `northst` is the longest prefix every real rendering shares; measured, 28 of 28 real EDCO samples carry it, including all 4 that depend on the ZIP."
+      }
+    ],
+    "vetoes": [
+      {
+        "kind": "every_marker_hit_in_block",
+        "anchor": "\\bship\\s*to\\b",
+        "_why": "Goods can be delivered here on an invoice billed to somebody else. Measured across all 111 second-samples: 100 documents carry a marker on a primary-page line and for ZERO of them is every such line a ship-to line, so this costs nothing real."
+      }
+    ]
+  }
 }

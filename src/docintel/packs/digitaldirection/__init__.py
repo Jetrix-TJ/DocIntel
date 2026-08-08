@@ -36,58 +36,25 @@ from docintel.packs.digitaldirection import (
     references,
     thresholds,
 )
-from docintel.packs.registry import normalize_name, primary_text
+from docintel.packs import claims
 from docintel.pipeline.hooks import HookRegistry
 
 PERSONA_DIR = os.path.join(os.path.dirname(__file__), "personas")
 
-# Managed clients seen in the corpus. A secondary signal, not the claim: the
-# client list grows every time Digital Direction signs one, whereas the carrier
-# list is short and stable.
-MANAGED_CLIENTS: tuple[str, ...] = (
-    "clyde companies",
-    "clyde administration",
-    "city of dublin",
-    "choctaw travel mart",
+# Compiled once at import from the same spec file the ladder uses.
+# `MANAGED_CLIENTS` is read back out of the spec rather than duplicated beside
+# it, so the roster cannot drift from the rule that uses it.
+with open(ladder.SPEC_PATH) as _fh:
+    _SPEC = json.load(_fh)
+CLAIM_GUARD = claims.compile_claim(_SPEC["claim"])
+MANAGED_CLIENTS: tuple[str, ...] = tuple(
+    v
+    for r in _SPEC["claim"]["rules"]
+    if r["kind"] == "roster_on_short_line"
+    for v in r["values"]
 )
 
 
-# How many words a line may carry and still be read as a bill-to block entry
-# rather than prose or a line item. `BILL TO: CLYDE COMPANIES` is 4 words;
-# `1x SIGNAGE FOR CITY OF DUBLIN PROJECT 2,400.00` - a real over-claim measured
-# on 2026-08-07, where a print shop's invoice to a third party was claimed by
-# this pack because a managed client was named in a line-item description - is 8.
-_MAX_BILL_TO_LINE_WORDS = 6
-
-
-def _managed_client_in_a_bill_to_block(ctx: JobContext) -> bool:
-    """Whether a managed client is named on a SHORT line, not buried in prose.
-
-    The secondary half of `claims`. It used to be a bare substring test over the
-    whole primary text, which claims any document that mentions a client
-    anywhere - including one that merely describes work done for them.
-
-    **This path has no real-document coverage, and that is stated rather than
-    hidden.** Measured across all 111 second-samples on 2026-08-07: every one of
-    the 7 Digital Direction documents is claimed by its CARRIER alias, and
-    exactly **zero** reach this fallback. So the word cutoff above is fitted to
-    the over-claim it rejects and to the shape of a bill-to line, not to a real
-    document that needs it - unlike every other constant in this pack. It is
-    kept rather than deleted because the pack's growth path is a bill from a
-    carrier not yet in the alias table, addressed to a client who is; deleting
-    it would make that document `unclaimed_document` instead. The first real
-    document to arrive through here should be used to re-derive the cutoff.
-    """
-    primary = {m.page_number for m in ctx.page_meta if m.role == "primary"}
-    pages = [p for p in ctx.pages if p.page_number in primary] or list(ctx.pages)
-    for page in pages:
-        for line in page.lines():
-            if len(line) > _MAX_BILL_TO_LINE_WORDS:
-                continue
-            haystack = normalize_name(" ".join(w.text for w in line))
-            if any(client in haystack for client in MANAGED_CLIENTS):
-                return True
-    return False
 
 
 class DigitalDirectionPack:
@@ -146,11 +113,11 @@ class DigitalDirectionPack:
 
         Carrier first, managed client second - see the module docstring for why
         the bill-to cannot be the primary guard here.
+
+        The rules live in `classification.json` and are compiled by
+        `packs.claims`, so onboarding a carrier or a client is a data change.
         """
-        text = primary_text(ctx)
-        if aliases.canonical(text) is not None:
-            return True
-        return _managed_client_in_a_bill_to_block(ctx)
+        return CLAIM_GUARD.claims(ctx)
 
     def personas(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []

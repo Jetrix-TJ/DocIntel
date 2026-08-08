@@ -111,5 +111,28 @@
         }
       }
     }
-  ]
+  ],
+  "claim": {
+    "_why": "THIS PACK CLAIMS BY THE CARRIER, NOT THE BILL-TO. It is a telecom expense manager processing bills for several managed clients (CLYDE COMPANIES, City of Dublin, Choctaw Travel Mart), so there is no single recipient to guard on. What every one of its documents shares is that the sender is a known carrier - its domain by definition. The carrier list is short and stable; the client roster grows every time the business signs one.",
+    "rules": [
+      {
+        "kind": "alias_table",
+        "scope": "primary",
+        "_why": "The primary guard. Reads the pack's own vendor_aliases, so onboarding a carrier is a table edit."
+      },
+      {
+        "kind": "roster_on_short_line",
+        "scope": "primary",
+        "max_words": 6,
+        "values": [
+          "clyde companies",
+          "clyde administration",
+          "city of dublin",
+          "choctaw travel mart"
+        ],
+        "_why": "Secondary. A short line means a bill-to block, not a line-item description: an unrelated print shop's invoice claimed this pack merely by naming a managed client in `1x SIGNAGE FOR CITY OF DUBLIN PROJECT`.",
+        "_defect": "NO REAL-DOCUMENT COVERAGE. Measured 2026-08-07: all 7 real Digital Direction documents are claimed by the carrier alias and ZERO reach this rule, so max_words is fitted to the over-claim it rejects rather than to a real bill. Kept because the pack's growth path is a bill from a carrier not yet in the alias table addressed to a client who is. The first real document through here should re-derive the cutoff."
+      }
+    ]
+  }
 }
