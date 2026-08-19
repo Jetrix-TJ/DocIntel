@@ -1,0 +1,546 @@
+<title>docintel · Technical Overview</title>
+<style>
+  :root{
+    --bg:#0b0e13; --bg2:#0f141b; --panel:#0e131a; --panel2:#121922;
+    --ink:#e8eef5; --mut:#8a97a8; --dim:#5c6675; --line:#1d2530;
+    --amber:#ffb454; --amber-d:#d98a2b; --mint:#5ad1b4; --red:#ff7a85;
+    --blue:#79c0ff; --purp:#d2a8ff; --grn:#7ee787;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"Liberation Mono",monospace;
+    --serif:ui-serif,Georgia,"Iowan Old Style","Palatino Linotype",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); line-height:1.62; -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(900px 500px at 8% -6%, rgba(255,180,84,.09), transparent 60%),
+      radial-gradient(800px 600px at 100% 4%, rgba(90,209,180,.07), transparent 55%),
+      linear-gradient(rgba(255,255,255,.016) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.016) 1px, transparent 1px);
+    background-size:auto, auto, 46px 46px, 46px 46px;
+    background-attachment:fixed;
+  }
+
+  .shell{max-width:1240px; margin:0 auto; padding:34px 26px 90px; display:grid;
+    grid-template-columns:224px minmax(0,1fr); gap:44px; align-items:start}
+  nav.toc{position:sticky; top:24px; font-family:var(--mono); font-size:12px; line-height:1.5; max-height:calc(100vh - 48px); overflow-y:auto}
+  nav.toc .tt{color:var(--dim); letter-spacing:.14em; text-transform:uppercase; font-size:10px; margin:18px 0 8px}
+  nav.toc a{display:block; color:var(--mut); text-decoration:none; padding:4px 10px; border-left:2px solid var(--line); transition:.18s}
+  nav.toc a:hover{color:var(--amber); border-left-color:var(--amber-d); background:rgba(255,180,84,.05)}
+  nav.toc a.part{color:var(--ink); font-weight:700; border-left-color:transparent; padding-left:2px; margin-top:4px}
+  main{min-width:0}
+
+  header.hero{margin-bottom:10px}
+  .brand{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+  .logo{font-family:var(--serif); font-size:58px; line-height:.9; letter-spacing:-.01em;
+    background:linear-gradient(94deg,var(--amber),#ffd9a0 55%,var(--mint));
+    -webkit-background-clip:text; background-clip:text; color:transparent}
+  .logo .dot{color:var(--amber); -webkit-text-fill-color:var(--amber)}
+  .pill{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+    color:var(--bg); background:var(--amber); padding:4px 9px; border-radius:999px; transform:translateY(-8px)}
+  .pill.mint{background:var(--mint)}
+  h1.doct{font-family:var(--serif); font-weight:400; font-size:34px; margin:14px 0 6px; letter-spacing:.01em}
+  .lede{color:var(--mut); font-size:16px; max-width:760px; margin:0}
+  .lede b{color:var(--ink); font-weight:600}
+  .meta{font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:12px; display:flex; gap:16px; flex-wrap:wrap}
+  .meta b{color:var(--mut); font-weight:500}
+
+  .rule{height:1px; background:linear-gradient(90deg,transparent,var(--line) 10%,var(--line) 90%,transparent); margin:30px 0}
+
+  h2.part{font-family:var(--mono); font-weight:400; margin:52px 0 4px;
+    color:var(--amber); text-transform:uppercase; letter-spacing:.16em; font-size:11.5px}
+  h3{font-family:var(--serif); font-weight:400; font-size:27px; margin:12px 0 8px; letter-spacing:.01em; scroll-margin-top:24px}
+  h3 .num{font-family:var(--mono); font-size:14px; color:var(--amber); margin-right:10px; vertical-align:3px}
+  h4{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--mint); margin:20px 0 8px}
+  p{margin:10px 0}
+  section{margin-bottom:14px}
+  code{font-family:var(--mono); font-size:.86em; color:var(--amber); background:rgba(255,180,84,.08); padding:1px 6px; border-radius:5px}
+  pre{font-family:var(--mono); font-size:.82em; color:var(--ink); background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:10px; padding:14px 16px; overflow-x:auto; line-height:1.55}
+  pre code{background:none; padding:0; color:var(--ink)}
+  b,strong{color:var(--ink); font-weight:600}
+  a.ref{color:var(--blue); text-decoration:none; font-family:var(--mono); font-size:.82em}
+  ul,ol{margin:10px 0; padding-left:22px} li{margin:6px 0}
+
+  .card{border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); padding:18px 20px; margin:16px 0}
+  .qa{border:1px solid var(--line); border-left:3px solid var(--amber-d); border-radius:10px; background:linear-gradient(180deg,rgba(255,180,84,.04),transparent); padding:4px 18px 12px; margin:16px 0}
+  .qa .q{font-weight:700; color:var(--ink); margin:14px 0 4px; display:flex; gap:9px}
+  .qa .q::before{content:"Q"; font-family:var(--mono); font-size:11px; color:var(--bg); background:var(--amber); border-radius:5px; padding:1px 6px; flex:none; height:fit-content; margin-top:3px; font-weight:700}
+  .qa .a{color:var(--mut); margin:0 0 8px 28px}
+  .qa .a b{color:var(--ink)}
+
+  .callout{border-radius:12px; padding:14px 18px; margin:18px 0; font-size:14.5px; line-height:1.55; border:1px solid}
+  .callout .h{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:5px; font-weight:700}
+  .callout.key{border-color:rgba(90,209,180,.35); background:rgba(90,209,180,.06)} .callout.key .h{color:var(--mint)}
+  .callout.warn{border-color:rgba(255,122,133,.32); background:rgba(255,122,133,.06)} .callout.warn .h{color:var(--red)}
+  .callout.info{border-color:rgba(121,192,255,.28); background:rgba(121,192,255,.05)} .callout.info .h{color:var(--blue)}
+  .callout p{margin:6px 0} .callout code{background:rgba(255,255,255,.06)}
+
+  .tip{border-bottom:1px dotted var(--dim); cursor:help; position:relative}
+  .tip:hover{border-bottom-color:var(--amber-d)}
+  .chip.tip{border-bottom:none}
+  .tip::after{
+    content:attr(data-tip);
+    position:absolute; left:50%; bottom:calc(100% + 9px); transform:translateX(-50%) translateY(4px);
+    width:max-content; max-width:250px; white-space:normal; text-align:left;
+    background:#05070a; color:var(--ink); border:1px solid var(--line); border-radius:9px;
+    padding:9px 12px; font-family:var(--sans); font-size:12.5px; font-weight:400; line-height:1.45;
+    text-transform:none; letter-spacing:normal;
+    box-shadow:0 14px 34px -12px rgba(0,0,0,.85);
+    opacity:0; visibility:hidden; transition:opacity .16s ease, transform .16s ease;
+    z-index:60; pointer-events:none;
+  }
+  .tip:hover::after{opacity:1; visibility:visible; transform:translateX(-50%) translateY(0)}
+  @media (max-width:900px){ .tip::after{max-width:210px} }
+
+  .flow{display:flex; align-items:stretch; flex-wrap:wrap; margin:18px 0 8px}
+  .stage{flex:1 1 0; min-width:88px; text-align:center; padding:12px 5px 11px; position:relative;
+    border:1px solid var(--line); border-right:none; background:var(--panel); font-family:var(--mono)}
+  .stage:first-child{border-radius:12px 0 0 12px}
+  .stage:last-child{border-right:1px solid var(--line); border-radius:0 12px 12px 0}
+  .stage .n{font-size:11.5px; font-weight:600; color:var(--mint)}
+  .stage .s{font-size:8.5px; color:var(--dim); margin-top:2px; letter-spacing:.03em; text-transform:uppercase}
+  .stage::after{content:"→"; position:absolute; right:-8px; top:50%; transform:translateY(-50%);
+    color:var(--dim); font-size:13px; z-index:2; background:var(--bg); padding:0 1px}
+  .stage:last-child::after{display:none}
+  .always{display:flex; flex-wrap:wrap; gap:7px; margin:10px 0 4px; align-items:center}
+  .always .lbl{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin-right:2px}
+  .chip{font-family:var(--mono); font-size:10.5px; color:var(--mut); border:1px solid var(--line);
+    border-radius:999px; padding:3px 10px; background:var(--panel)}
+  .chip::before{content:"●"; color:var(--grn); font-size:7px; margin-right:6px; vertical-align:1px}
+
+  .steps{counter-reset:st; margin:16px 0; border-left:1px dashed var(--line); padding-left:0}
+  .step{position:relative; padding:2px 0 16px 46px; margin-left:14px}
+  .step::before{counter-increment:st; content:counter(st); position:absolute; left:-15px; top:0;
+    width:30px; height:30px; border-radius:50%; background:var(--panel2); border:1px solid var(--line);
+    color:var(--amber); font-family:var(--mono); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .step .st-h{font-weight:600; color:var(--ink)}
+  .step .st-h code{font-size:12px}
+  .step .st-b{color:var(--mut); font-size:14px; margin-top:2px}
+  .step.term::before{color:var(--mint); border-color:rgba(90,209,180,.4)}
+
+  .lane{display:flex; gap:10px; flex-wrap:wrap; margin:14px 0}
+  .box{flex:1 1 210px; border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:12px 14px}
+  .box .bh{font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px}
+  .box p{margin:2px 0; font-size:13px; color:var(--mut)}
+  .box.auth .bh{color:var(--purp)} .box.perm .bh{color:var(--red)} .box.trans .bh{color:var(--blue)} .box.good .bh{color:var(--mint)}
+
+  .aflow{margin:16px 0; font-family:var(--mono); font-size:12.5px}
+  .aflow .row{display:flex; align-items:center; gap:10px; margin:7px 0; flex-wrap:wrap}
+  .aflow .node{border:1px solid var(--line); border-radius:8px; padding:7px 12px; background:var(--panel); color:var(--ink)}
+  .aflow .node.hot{border-color:rgba(90,209,180,.4); color:var(--mint)}
+  .aflow .node.bad{border-color:rgba(255,122,133,.35); color:var(--red)}
+  .aflow .arw{color:var(--dim)}
+  .aflow .tag{color:var(--dim); font-size:11px}
+
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px}
+  th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--mut); font-weight:600}
+  td code{font-size:12px}
+  tr:nth-child(even) td{background:rgba(255,255,255,.012)}
+  .table-wrap{overflow-x:auto}
+
+  footer{margin-top:56px; border-top:1px solid var(--line); padding-top:22px; color:var(--dim); font-size:12.5px; font-family:var(--mono)}
+  footer b{color:var(--mut)}
+
+  @media (max-width:900px){
+    .shell{grid-template-columns:1fr; gap:10px}
+    nav.toc{position:static; display:none}
+    .logo{font-size:46px}
+  }
+</style>
+<div class="shell">
+
+  <nav class="toc">
+    <div class="tt">Overview</div>
+    <a href="#idea" class="part">The two ideas</a>
+    <a href="#install" class="part">Install &amp; first run</a>
+    <div class="tt">Part 1 · Pipeline</div>
+    <a href="#walk">One document, end to end</a>
+    <div class="tt">Part 2 · Deep dives</div>
+    <a href="#classify">1 · Classification &amp; claim rules</a>
+    <a href="#extract">2 · The extraction cascade</a>
+    <a href="#confidence">3 · Confidence &amp; the review queue</a>
+    <a href="#realtime">4 · Real-time notification</a>
+    <a href="#onboard">5 · Onboarding a new company</a>
+    <a href="#accuracy">6 · Growing the accuracy corpus</a>
+    <a href="#formats">7 · Multi-format intake</a>
+    <div class="tt">Part 3</div>
+    <a href="#limits">Honest limitations</a>
+    <div class="tt">Part 4 · Next phase</div>
+    <a href="#next">8 · What's proposed, not shipped</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="brand">
+        <span class="logo">docintel<span class="dot">.</span></span>
+        <span class="pill">0.1</span>
+        <span class="pill mint">invoices · bills · statements</span>
+      </div>
+      <h1 class="doct">Technical Overview</h1>
+      <p class="lede">How each core mechanism of the shipped library actually works — the reasoning
+      behind the <b>emit-always pipeline</b> and the <b>confidence-scored routing</b> that decides when
+      a human sees a document at all. Written to answer the questions a reviewing engineer will raise,
+      not to restate the API.</p>
+      <div class="meta">
+        <span><b>branch</b> main</span>
+        <span><b>schema</b> 1</span>
+        <span><b>packs live today</b> northstar · digitaldirection · spt_metals · acme_freight</span>
+        <span><b>mode</b> synchronous · stateless-by-default · human-in-the-loop where confidence says so</span>
+      </div>
+    </header>
+
+    <div class="rule"></div>
+
+    <h2 class="part">Overview</h2>
+    <h3 id="idea">The two ideas that explain everything else</h3>
+    <p>docintel is a <b>library</b> other programs embed. It turns one document — a PDF, an email
+    with attachments, an Office file — into a clean, confidence-scored <code>record</code>.
+    Everything below is a variation on two ideas:</p>
+
+    <p><b>Idea 1 — a pipeline you don't assemble.</b> Every document flows through the same eleven
+    stages. <code>build_pipeline()</code> wires all of them — every pack's classification rules, every
+    persona, every hook — from one call. You never hand-build the sequence.</p>
+
+    <div class="flow">
+      <div class="stage"><div class="n">intake</div><div class="s">read</div></div>
+      <div class="stage"><div class="n">filter</div><div class="s">attachments</div></div>
+      <div class="stage"><div class="n">classify</div><div class="s">company+type</div></div>
+      <div class="stage"><div class="n">persona</div><div class="s">lookup</div></div>
+      <div class="stage"><div class="n">profile</div><div class="s">route</div></div>
+      <div class="stage"><div class="n">5a</div><div class="s">cached rules</div></div>
+      <div class="stage"><div class="n">5b</div><div class="s">vision</div></div>
+      <div class="stage"><div class="n">5c</div><div class="s">escalate</div></div>
+      <div class="stage"><div class="n">capture</div><div class="s">fields</div></div>
+      <div class="stage"><div class="n">gate</div><div class="s">confidence</div></div>
+      <div class="stage"><div class="n">emit</div><div class="s">always</div></div>
+    </div>
+
+    <p><b>Idea 2 — confidence you don't compute yourself.</b> A band of scoring and routing runs
+    underneath <i>every</i> document, whether or not you opt into anything. You don't decide when a
+    human should look — the pipeline decides, from real signal, and tells you.</p>
+
+    <div class="always">
+      <span class="lbl">always on</span>
+      <span class="chip tip" data-tip="Every document that goes in produces exactly one record out - processed, skipped, or dead_letter. An exception mid-pipeline still emits a record; nothing is ever silently lost.">emit-always invariant</span>
+      <span class="chip tip" data-tip="Every selector a persona can write is checked against 14 closed rules before it can ship - no anchor may restate the value it's meant to find, no selector may target a derived-only field, and more.">14-rule persona validator</span>
+      <span class="chip tip" data-tip="A new persona defaults to status=draft, which applies an automatic 0.85 confidence penalty and can never reach the high lane - every document routes to review until someone promotes it.">draft confidence penalty</span>
+      <span class="chip tip" data-tip="A field registered as money or an exact count that shows up with the wrong Python type raises loudly at score time, rather than silently comparing wrong.">fail-loud numeric guard</span>
+      <span class="chip tip" data-tip="Within one run, a document whose derived identity matches one already seen is flagged possible_duplicate_of - so the same invoice mailed twice doesn't get paid twice.">in-run duplicate detection</span>
+      <span class="chip tip" data-tip="PDF, an .eml or Outlook .msg (every attachment processed in its own right), and .docx/.xlsx via LibreOffice - all through the same intake stage.">multi-format intake</span>
+      <span class="chip tip" data-tip="The Gemini vision fallback only ever fires when a persona's field_hints ask for it - it never invents document structure or decides classification.">vision fallback, never structure</span>
+      <span class="chip tip" data-tip="Register a beforeEmit hook and build_pipeline(hooks=...) will call it the instant a document's lane/review_flag is decided - inline, no polling.">real-time hook notification</span>
+      <span class="chip tip" data-tip="A generated or hand-written field name must come from a closed, live vocabulary (scorecard.CHECKED_FIELDS) - nothing invents a name nothing else can score.">closed field vocabulary</span>
+    </div>
+
+    <div class="callout key">
+      <div class="h">The one rule to remember</div>
+      <p><b>"Total Amount Due" is a label, not a promise.</b> The naive read-the-biggest-bold-number
+      approach is correct on most invoices and wrong by five figures on the ones that matter — a prior
+      balance already folded in, a credit not yet applied, a scan-line total that encodes the trap
+      value rather than the true one. <code>amount_payable</code> is <b>derived</b>, never copied from
+      the loudest number on the page, and when the arithmetic doesn't close, the record says so and
+      routes to review — it never guesses.</p>
+    </div>
+
+    <h3 id="install">Install &amp; first run</h3>
+    <h4>As a library</h4>
+    <pre><code>pip install "docintel[ui] @ git+https://github.com/jeevatechjays/DocIntel.git"</code></pre>
+    <pre><code>from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision  # or a real vision adapter
+
+pipeline = build_pipeline(vision=FakeVision())
+record = pipeline.process(document_id="d1", source_path="invoice.pdf")</code></pre>
+    <h4>As a CLI</h4>
+    <pre><code>docintel process invoice.pdf --json
+docintel serve   # local web UI - upload a document, work the review queue</code></pre>
+    <div class="qa">
+      <div class="q">Does it need any external services to run?</div>
+      <p class="a">No — the base install runs entirely on rule-based extraction, no API keys, no network
+      calls. <code>[vision]</code> (Gemini) and <code>[generation]</code> (Claude, for onboarding drafts)
+      are opt-in extras; omit them and those code paths simply aren't reachable.</p>
+      <div class="q">What does <code>--vision fake</code> vs <code>cassette</code> vs <code>live</code> mean?</div>
+      <p class="a"><code>fake</code> returns nothing (wiring checks); <code>cassette</code> replays
+      recorded responses (offline, deterministic — the default); <code>live</code> actually calls the
+      model. Every documented example in this page runs fully offline unless stated otherwise.</p>
+    </div>
+
+    <h2 class="part">Part 1 · The pipeline</h2>
+    <h3 id="walk">One document, end to end</h3>
+    <p>Follow a single document from <code>.process()</code> to a delivered record. Each numbered step
+    names the stage and the guarantee that fires there. The green ring is <b>terminal</b> — a record is
+    always emitted, whatever happened upstream.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="st-h">A document arrives — a plain call, no queue required</div>
+        <div class="st-b"><code>pipeline.process(document_id, source_path)</code>. There's no daemon,
+        no watcher inside docintel itself — your own inbox rule, webhook receiver, or upload handler
+        decides when this fires.</div>
+      </div>
+      <div class="step">
+        <div class="st-h">Intake &amp; filter</div>
+        <div class="st-b">A PDF is read directly; an <code>.eml</code>/<code>.msg</code> is unwrapped
+        into one <code>IntakeItem</code> per real attachment; <code>.docx</code>/<code>.xlsx</code> is
+        converted to PDF first. Non-document attachments are filtered before anything expensive runs.</div>
+      </div>
+      <div class="step">
+        <div class="st-h">Classify — which company, which document type</div>
+        <div class="st-b">Claim rules (markers + vetoes) decide whose document this is; a per-company
+        doc_type ladder — a list of signal-based rungs, first match wins — decides what kind it is.</div>
+      </div>
+      <div class="step">
+        <div class="st-h">Persona lookup</div>
+        <div class="st-b"><code>(sender_fingerprint, doc_type)</code> resolves to a persona — <b>hit</b>
+        (a real persona), or <b>hard_miss</b> (nothing configured yet, escalates rather than guessing).</div>
+      </div>
+      <div class="step">
+        <div class="st-h">The extraction cascade: 5a → 5b → 5c</div>
+        <div class="st-b">Cached rules (5a, zero AI calls) run first. A field a persona flags with
+        <code>field_hints</code> can fall back to Gemini vision (5b) — never for structure it wasn't
+        asked about. A hard miss escalates to a real, persistent review-queue job (5c) — never a
+        silent drop.</div>
+      </div>
+      <div class="step">
+        <div class="st-h">Capture fields</div>
+        <div class="st-b">Adjust ops run — alias resolution, sign normalization, derived-value
+        computation (<code>amount_payable</code> and friends) — all from a closed, tested op registry.</div>
+      </div>
+      <div class="step">
+        <div class="st-h">Confidence gate</div>
+        <div class="st-b">Decides <code>lane</code> (<code>high</code>/<code>medium</code>/<code>review</code>/<code>low</code>),
+        <code>review_flag</code>, <code>regen_flag</code>. Any registered <code>beforeEmit</code> hook
+        fires right after this, seeing the real decision.</div>
+      </div>
+      <div class="step term">
+        <div class="st-h">Emit — always exactly one record</div>
+        <div class="st-b">Even a document that dead-letters mid-pipeline still produces a valid,
+        contract-checked record. <code>count(intaken) == count(emitted)</code> is a machine-checked
+        invariant, not a convention.</div>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <div class="h">Why this order matters</div>
+      <p>Classification and persona lookup happen <i>before</i> any AI call — a company with no
+      configuration yet is caught cheaply, at Stage 4, not after an expensive vision round-trip. The
+      confidence gate runs <i>after</i> extraction finishes, so a real-time notification hook always
+      sees the finished routing decision, never a partial one.</p>
+    </div>
+
+    <h2 class="part">Part 2 · Deep dives</h2>
+
+    <h3 id="classify"><span class="num">01</span>Classification &amp; claim rules</h3>
+    <h4>How it works</h4>
+    <p>A pack claims a document via <b>markers</b> (printed names/emails/addresses in a scoped block of
+    the page) and can <b>veto</b> a claim (e.g. its own address appearing only in a "ship to" block,
+    not as the actual bill-to). Once claimed, a <b>doc_type ladder</b> — an ordered list of rungs, each
+    a signal-based condition, first match wins, falling through to a default — decides what kind of
+    document it is. Both are declarative: JSON for a data-only pack, no Python required.</p>
+    <div class="qa">
+      <div class="q">Can two companies both claim the same document?</div>
+      <p class="a">Packs are tried in a fixed, deliberate order and the first to claim wins — order
+      matters precisely because ambiguous claims are possible on real mail (a freight company's own
+      address routinely appears on documents billed to somebody else).</p>
+      <div class="q">What happens when nothing claims it?</div>
+      <p class="a">It's <code>no_persona</code> — not misfiled as a hard miss on some default company.
+      The web UI names it plainly and points at the onboarding template rather than a dead end.</p>
+      <div class="q">Can I add a new doc_type without touching Python?</div>
+      <p class="a">Yes, for a data-only pack — the ladder, tags, and claim rules are all declared in
+      <code>pack.json</code>. A closed, tested signal registry (12 signals) is what a rung's condition
+      is built from; nothing invents a new detector inline.</p>
+    </div>
+
+    <h3 id="extract"><span class="num">02</span>The extraction cascade</h3>
+    <h4>How it works</h4>
+    <p><b>Stage 5a</b> applies a persona's saved selectors — region, anchor, pattern, a closed set of
+    adjust ops — with zero AI calls; this is the high-volume path for every document a company has
+    already been onboarded for. <b>Stage 5b</b> calls Gemini vision, but <i>only</i> for fields a
+    persona's own <code>field_hints</code> name — it is never given free rein to decide what the
+    document contains or how it should classify. <b>Stage 5c</b> escalates a genuine hard miss (no
+    persona at all) into a real, persistent job a human resolves — never a silent drop into "extracted
+    nothing."</p>
+    <div class="qa">
+      <div class="q">Does vision ever get to invent document structure?</div>
+      <p class="a">No — it answers specific field questions a persona already poses. Classification,
+      routing, and lane decisions are made entirely outside the vision call; sanitizing whatever it
+      returns is a dedicated policy boundary (<code>adapters/vision/policy.py</code>), not a trust
+      assumption.</p>
+      <div class="q">What if Gemini returns something malformed or off-topic?</div>
+      <p class="a"><code>sanitize()</code> is the one place every vision result is checked before it can
+      touch a record — an untyped, external response never reaches <code>ctx.extracted</code> raw.</p>
+      <div class="q">Is there a real cost/latency tradeoff between 5a and 5b?</div>
+      <p class="a">Yes, by design: 5a is free and instant once a persona exists; 5b costs a real API
+      call and only runs for the specific fields a persona flags as needing it — not as a blanket
+      fallback for anything 5a missed.</p>
+    </div>
+
+    <h3 id="confidence"><span class="num">03</span>Confidence &amp; the review queue</h3>
+    <h4>How it works</h4>
+    <p>Every field gets a confidence score; per-field thresholds (declared per pack) decide whether a
+    document lands in <code>high</code> (auto-approved), <code>medium</code>, <code>review</code>, or
+    <code>low</code>. A <code>status: draft</code> persona applies an automatic 0.85 confidence penalty
+    and can never reach <code>high</code> — a new persona is provably reviewed before it's trusted with
+    auto-approval, not just documented as reviewed.</p>
+    <div class="qa">
+      <div class="q">What actually decides high vs. review?</div>
+      <p class="a">Per-field thresholds set in the pack, evaluated at Stage 7 (the confidence gate),
+      plus a handful of hard rules — a hard miss, a collapsed persona, an unresolved arithmetic
+      mismatch — that force <code>review_flag=True</code> regardless of the numeric score.</p>
+      <div class="q">Does a reviewer's correction ever improve future runs on its own?</div>
+      <p class="a">Not automatically, and deliberately: <code>promote-correction</code> is a separate,
+      human-run command that turns an accepted correction into a new gold-corpus fixture. Nothing
+      silently retrains or auto-promotes a persona from review-queue activity.</p>
+      <div class="q">What if nobody's watching the queue?</div>
+      <p class="a"><code>docintel queue-status --fail-if-older-than-hours N</code> exits non-zero past a
+      threshold — built to be polled from cron, the honest minimum for a tool with no dedicated
+      on-call process. See §04 for getting notified without polling at all.</p>
+    </div>
+
+    <h3 id="realtime"><span class="num">04</span>Real-time notification</h3>
+    <h4>How it works</h4>
+    <p>docintel ships no inbox watcher or webhook receiver of its own — that's your infrastructure,
+    whatever it looks like. What it does ship is a hook seam: <code>build_pipeline(hooks=...)</code>
+    accepts a caller-built <code>HookRegistry</code>, and a <code>beforeEmit</code> hook fires the
+    instant <code>lane</code>/<code>review_flag</code>/<code>regen_flag</code> are decided — for every
+    document, inline, in the same call that processed it.</p>
+    <pre><code>from docintel import build_pipeline, HookRegistry
+
+def notify_if_needs_review(ctx, nxt):
+    ctx = nxt(ctx)  # let the pipeline finish deciding lane/review_flag first
+    if ctx.review_flag or ctx.lane == "low":
+        my_own_notifier(ctx.document_id, ctx.lane)  # your Slack/email/webhook
+    return ctx
+
+hooks = HookRegistry()
+hooks.register("beforeEmit", notify_if_needs_review, pack="my_integration")
+pipeline = build_pipeline(vision=FakeVision(), hooks=hooks)</code></pre>
+    <div class="qa">
+      <div class="q">Does docintel push to Slack/email/a webhook for me?</div>
+      <p class="a">No, by design — the channel is your own code, in the hook body. docintel doesn't
+      hold credentials or guess your infrastructure; it makes the extension point a one-line
+      registration instead of a hidden internal detail.</p>
+      <div class="q">What if my hook throws?</div>
+      <p class="a">Wrapped as a <code>PackError</code>, the same treatment any pack hook gets — the
+      document dead-letters rather than crashing the run, and the exception names your hook and pack.</p>
+      <div class="q">Can I call <code>.process()</code> from multiple threads for throughput?</div>
+      <p class="a">Not on the <i>same</i> <code>Runner</code> — it keeps small per-run mutable state (an
+      in-run duplicate index, counters) that isn't thread-safe. Build one <code>Runner</code> per
+      worker instead; <code>build_pipeline()</code> is cheap to call again since packs/personas are
+      cached process-wide.</p>
+    </div>
+
+    <h3 id="onboard"><span class="num">05</span>Onboarding a new company</h3>
+    <h4>How it works</h4>
+    <p>Three commands, in order: <code>generate-persona</code> calls Claude once against one sample
+    document to draft a field list — name, type, one-sentence hint — from a closed vocabulary, never
+    selector geometry. <code>new-pack</code> scaffolds a <code>pack.json</code> and a starter persona
+    from that draft, every <code>region</code>/<code>anchor</code> left an explicit placeholder.
+    <code>validate-persona</code> self-checks the result against the same 14 rules the real pipeline
+    enforces, before anyone else looks at it.</p>
+    <div class="qa">
+      <div class="q">Does generation ever guess the selector geometry?</div>
+      <p class="a">No, deliberately. An internal test had a blind agent write full selectors from one
+      PDF and score 194/283 against the shipped personas' 238/283 — losses almost entirely in geometry.
+      A follow-up found deleting every anchor/region from the vision prompt moved 1 value in 102. The
+      field list and hints generalize; the coordinates don't, so they stay a human's job.</p>
+      <div class="q">What happens to a bad draft?</div>
+      <p class="a">Nothing — it's a JSON file on disk, labelled <code>"status": "draft - not reviewed"</code>,
+      never registered anywhere. Nothing on the real pipeline's path reads it until a human wires it
+      into <code>registry.PACK_FILES</code>.</p>
+      <div class="q">How fast can I actually add a new vendor?</div>
+      <p class="a">Minutes to a scaffold and a self-check; the real work is still authoring correct
+      selector geometry against a real sample and confirming extracted values by eye — this tooling
+      removes the blank-page problem, not the review.</p>
+    </div>
+
+    <h3 id="accuracy"><span class="num">06</span>Growing the accuracy corpus</h3>
+    <h4>How it works</h4>
+    <p><code>replay-gold</code> scores the whole pipeline against a hand-labelled corpus;
+    <code>accuracy-report</code> renders the identical numbers as a plain-language summary — percent
+    correct by company and document type, every failure named — for someone who isn't reading code.
+    <code>draft-gold</code> turns one clean pipeline run directly into a new gold-fixture draft, with no
+    review-queue correction required first.</p>
+    <div class="qa">
+      <div class="q">Does <code>draft-gold</code> auto-approve its own routing decision?</div>
+      <p class="a">Never — <code>expected_routing</code> (<code>review_flag</code>/<code>regen_flag</code>/<code>lane</code>)
+      is always left an explicit placeholder, even though the full pipeline already ran and that
+      decision is sitting right there. A gold fixture exists to check routing independently; copying
+      the pipeline's own answer back at itself would make the check permanently, trivially true.</p>
+      <div class="q">How is "percent correct" actually computed?</div>
+      <p class="a"><code>accuracy-report</code> is a pure rendering of <code>replay-gold</code>'s own
+      assertion counts — same scoring function, same corpus, grouped differently. It is never a second,
+      separately-tuned metric.</p>
+    </div>
+
+    <h3 id="formats"><span class="num">07</span>Multi-format intake</h3>
+    <h4>How it works</h4>
+    <p>A directory of mixed files is walked once; each PDF is read directly, each <code>.eml</code>/<code>.msg</code>
+    unwraps into one <code>IntakeItem</code> per real attachment (never the email container itself, and
+    never double-counting a directory's own PDFs), and each <code>.docx</code>/<code>.xlsx</code> is
+    converted to PDF first via headless LibreOffice.</p>
+    <div class="qa">
+      <div class="q">An attachment inside an attachment (a forwarded email as a file)?</div>
+      <p class="a">Each container is unwrapped one level; a nested email-as-attachment is treated as an
+      opaque attached file at that level, not recursively re-opened as its own container today.</p>
+      <div class="q">What happens on an unsupported format?</div>
+      <p class="a">A per-document, per-format decision at the intake boundary
+      (<code>extract.convert.ACCEPTED_SUFFIXES</code>) — an unsupported file is skipped with a named
+      reason, never silently attempted and quietly failing deep in the pipeline.</p>
+    </div>
+
+    <h2 class="part">Part 3 · Straight talk</h2>
+    <h3 id="limits">Honest limitations &amp; deliberate deferrals</h3>
+    <p>What a reviewer should know is <i>intentionally</i> not addressed today, so nothing reads as an
+    accidental gap:</p>
+    <div class="table-wrap">
+    <table>
+      <tr><th>Area</th><th>Status today</th><th>Why</th></tr>
+      <tr><td>Concurrency across a shared <code>Runner</code></td><td>Not thread-safe to share; one <code>Runner</code> per worker is the supported pattern</td><td>An in-run duplicate index and counters are plain mutable state, deliberately scoped to a single sequential run.</td></tr>
+      <tr><td>Inbox/webhook watcher</td><td>Not shipped, by design</td><td>Watching a live mailbox is the caller's own infrastructure; the hook seam (§04) is the extension point, not a built-in poller.</td></tr>
+      <tr><td>Reference notification channel</td><td>Hook exists; no Slack/email/webhook implementation ships</td><td>docintel doesn't hold credentials or guess a client's channel — the callback body is entirely the caller's code.</td></tr>
+      <tr><td><code>validate-persona</code> error reporting</td><td>Reports the first broken rule, not every one at once</td><td>The underlying validator is fail-fast by design (rejection is all-or-nothing); the CLI is honest about that rather than claiming a full lint report.</td></tr>
+      <tr><td>Gold corpus size</td><td>17-18 hand-labelled documents across 4 companies</td><td>Growing it is exactly what <code>draft-gold</code> (§06) exists to make cheap, not a claim that today's corpus is exhaustive.</td></tr>
+      <tr><td>Job queue backend</td><td>Single SQLite file, single-writer</td><td>A real production deployment with concurrent workers needs a real queue backend; the store is a port, not a promise of horizontal scale.</td></tr>
+      <tr><td>Automated persona generation</td><td>Field list + hints only, never selector geometry</td><td>Evidence-based, not a missing feature — see §05's Q&amp;A.</td></tr>
+    </table>
+    </div>
+
+    <h2 class="part">Part 4 · Next phase</h2>
+    <h3 id="next"><span class="num">08</span>What's proposed, not shipped
+      <a class="ref" style="margin-left:8px; vertical-align:2px">proposed — not shipped</a></h3>
+    <div class="callout info">
+      <div class="h">Where docintel stops today</div>
+      <p>The hook seam (§04) gets a caller notified the instant a document needs attention. It stops
+      there: docintel doesn't ship a reference implementation of what to <i>do</i> with that
+      notification, and it doesn't yet generate real selector geometry for a brand-new vendor. This
+      section names what a next phase would close, written the same way Part 2 documents what already
+      exists, so it's evaluated as a plan rather than mistaken for a shipped feature.</p>
+    </div>
+    <div class="lane">
+      <div class="box good"><div class="bh">Reference notifier</div><p>A small, optional package built
+      on the existing <code>beforeEmit</code> hook — a real Slack/email/webhook sender a team can adopt
+      directly instead of writing the callback body from scratch.</p></div>
+      <div class="box auth"><div class="bh">Real selector-geometry generation</div><p>Anamul's original
+      standup ask, in full — genuinely harder than the field-hint draft this session shipped, and by
+      JA's own words "still 100% not ready." Needs real progress on the geometry-generalization problem
+      §05 documents, not just a bigger prompt.</p></div>
+      <div class="box trans"><div class="bh">Concurrent-safe Runner</div><p>A thread-safe variant (or a
+      documented pooling pattern) for services that want one long-lived pipeline object rather than one
+      per worker.</p></div>
+    </div>
+
+    <footer>
+      <p><b>Scope:</b> <code>main</code> branch, schema version 1 · rule-based extraction by default,
+      Gemini vision and Claude-assisted onboarding both opt-in extras.</p>
+      <p><b>Companion:</b> <code>docs/DOCINTEL-ARCHITECTURE-GUIDE.html</code> — the fuller reference:
+      every stage, every current vendor, the full CLI, the eval layer in detail.</p>
+      <p><b>Reading note:</b> this document is conceptual by design — it explains mechanisms and
+      guarantees, not line-by-line implementation. The source of truth is the code under
+      <code>src/docintel/</code>.</p>
+    </footer>
+  </main>
+</div>

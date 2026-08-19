@@ -4,10 +4,18 @@ Turn a vendor invoice or bill into a confidence-scored structured record — wit
 the middle, except for the cases where a human genuinely should be, which the system says so
 about rather than guessing.
 
+## Install
+
+```bash
+pip install "docintel[ui] @ git+https://github.com/jeevatechjays/DocIntel.git"
+```
+
+Contributing to docintel itself instead of just using it? Clone the repo and install editable:
+`pip install -e ".[dev,ui]"`.
+
 ## Run your first document
 
 ```bash
-pip install -e ".[dev,ui]"
 docintel process path/to/an/invoice.pdf --json
 ```
 
@@ -81,6 +89,11 @@ versus what a human always checks — see
 directly in a browser).
 
 ## Go deeper
+
+**[`docs/DOCINTEL-TECHNICAL-OVERVIEW.html`](docs/DOCINTEL-TECHNICAL-OVERVIEW.html)** — written for a
+reviewing engineer deciding whether to adopt this: the two ideas that explain the whole design, a
+walkthrough of one document end to end, per-mechanism Q&A, and an honest table of what's
+deliberately not shipped yet. Open it directly in a browser.
 
 **[`docs/DOCINTEL-ARCHITECTURE-GUIDE.html`](docs/DOCINTEL-ARCHITECTURE-GUIDE.html)** — the full
 reference: every pipeline stage, how classification and extraction actually work, when and how

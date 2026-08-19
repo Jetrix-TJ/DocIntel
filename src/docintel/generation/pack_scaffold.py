@@ -20,6 +20,13 @@ The very next step after this command is `docintel validate-persona
 reminder) - every placeholder this module writes is deliberately something
 that command will catch and name, one at a time, rather than something that
 would silently pass.
+
+Once a human fills in the real selectors, the scaffold is not just valid but
+actually runnable end to end, with no Python: `DataPack.register_hooks`
+(`datapack.py`) resolves `sender_fingerprint` declaratively from the pack's
+own `aliases.literal` table, falling back to its one shipped persona when the
+pack has only that one vendor - the common case for a company onboarded this
+way, needing zero alias entries at all.
 """
 
 from __future__ import annotations

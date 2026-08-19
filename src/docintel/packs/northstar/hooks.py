@@ -21,9 +21,18 @@ cross-checks that means double-counting a confidence boost.
 | `excludeAnnotatedFromGold` | the rule lifecycle, which runs beside the pipeline |
 | `applyBillingConventions` | **here**, at `afterExtraction` |
 
-The three that remain are the three that cannot be expressed any other way: a
-classification ladder, a fingerprint derived from page text, and reference
-patterns that are pack code rather than grammar.
+Three things remain here, and each is here for its own reason - not because a
+classification ladder or a page-text fingerprint are inherently Python-only
+anymore (`datapack.DataPack` now resolves both declaratively for a data-only
+pack, from `pack.json`'s own ladder and `aliases.literal`). What Northstar's
+own fingerprint resolution (`resolve_vendor_fingerprint` below) still needs
+Python for is its RICHER matching: regex-pattern aliases for a per-entity name
+no literal table could enumerate (`\bu\\s?pak\b` catching OCR's inconsistent
+spacing), a sender-email-domain fallback, and aggregator exclusion
+(`is_aggregator`) - none of which a plain name-to-canonical-key table
+expresses. Reference-pattern collection (`collect_references`) is pack code
+rather than grammar for a different reason: F11's provenance data has no
+closed vocabulary to compile against.
 """
 
 from __future__ import annotations

@@ -16,11 +16,12 @@ must not become active because somebody dropped a folder on disk
 gets made.
 
 **What still needs Python, honestly.** A data pack gets the classification
-ladder, the tag rules, the claim guard, field sets, thresholds and aliases. It
-does NOT get pack-specific hooks — a bespoke reference-pattern collector or a
-billing-convention rule of the kind `northstar/references.py` and
-`digitaldirection/conventions.py` provide. A company needing one of those still
-needs a module. Both shipped packs would today need `references` and
+ladder, the tag rules, the claim guard, field sets, thresholds, aliases, and
+(see `_resolve_vendor_fingerprint` below) declarative vendor-fingerprint
+resolution. It does NOT get pack-specific hooks — a bespoke reference-pattern
+collector or a billing-convention rule of the kind `northstar/references.py`
+and `digitaldirection/conventions.py` provide. A company needing one of those
+still needs a module. Both shipped packs would today need `references` and
 `conventions`; nothing else about them is code.
 """
 
@@ -29,9 +30,11 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 from typing import Any
 
 from docintel.core.models import JobContext
+from docintel.core.senders import normalize_name
 from docintel.packs import claims, declarative
 from docintel.pipeline.hooks import HookRegistry, Next
 
@@ -42,6 +45,19 @@ class PackSpecError(ValueError):
 
 def _frozen(value: Any) -> frozenset[str]:
     return frozenset(value or ())
+
+
+def _primary_text(ctx: JobContext) -> str:
+    """`registry.primary_text`, imported lazily: `registry.py` imports this
+    module at its own top level (`from docintel.packs import datapack,
+    signals`), so a top-level import the other way would be a real cycle.
+    Both modules are fully loaded by the time any hook actually runs, so a
+    deferred import here is safe - the same pattern `pipeline.stages.
+    build_pipeline` already uses for its own late imports.
+    """
+    from docintel.packs.registry import primary_text
+
+    return primary_text(ctx)
 
 
 class DataPack:
@@ -164,12 +180,55 @@ class DataPack:
                     out.append(json.load(fh))
         return out
 
+    # -- vendor fingerprint ---------------------------------------------------
+
+    def _canonical_vendor(self, ctx: JobContext) -> str | None:
+        """The canonical vendor key for this document, from data alone.
+
+        Matches each `(printed, canonical)` pair in `aliases.literal` against
+        the primary-page text - substring, word-boundary safe, on normalized
+        names - so a pack author writes a plain company name, never a regex.
+        This is the same matching power `northstar.aliases`' `PATTERN_ALIASES`
+        gives it (its own `LITERAL_ALIASES` alone would need an exact
+        whole-page match to fire, which real page text never gives it); here
+        it comes for free from a name string.
+
+        Falls back to this pack's own single shipped persona when nothing
+        matched and there is exactly one - the common case for a newly
+        onboarded, single-vendor pack, where writing an alias table that maps
+        a name to itself would be pure ceremony. Safe specifically because
+        this method is only ever called from a hook `registry.
+        _ClaimGatedRegistry` has already gated on THIS pack having claimed the
+        document - so "this pack's one vendor" is not a guess, it is the only
+        vendor this pack could possibly mean.
+        """
+        text = normalize_name(_primary_text(ctx))
+        if text:
+            for printed, canonical in self._aliases.items():
+                needle = normalize_name(printed)
+                if needle and re.search(rf"\b{re.escape(needle)}\b", text):
+                    return canonical
+
+        personas = self.personas()
+        if len(personas) == 1:
+            fingerprint = str(personas[0].get("sender_fingerprint", ""))
+            _, _, vendor = fingerprint.partition("|")
+            return vendor or None
+        return None
+
+    def _resolve_vendor_fingerprint(self, ctx: JobContext, next_: Next) -> JobContext:
+        canonical = self._canonical_vendor(ctx)
+        if canonical is not None:
+            ctx.sender_fingerprint = f"{self.name}|{canonical}"
+        return next_(ctx)
+
     # -- hooks ---------------------------------------------------------------
 
     def register_hooks(self, registry: HookRegistry) -> None:
-        """Only the ladder. `registry._ClaimGatedRegistry` gates it on this pack
-        having claimed, so a data pack cannot overwrite another pack's doc_type -
-        the failure that cost DTSS 19 of its 23 passing assertions when the second
+        """The ladder, and vendor-fingerprint resolution. `registry.
+        _ClaimGatedRegistry` gates both on this pack having claimed, so a data
+        pack cannot overwrite another pack's doc_type or fingerprint - the
+        failure that cost DTSS 19 of its 23 passing assertions when the second
         pack was first registered."""
 
         def ladder_hook(ctx: JobContext, next_: Next) -> JobContext:
@@ -177,6 +236,12 @@ class DataPack:
 
         ladder_hook.__name__ = f"{self.name}_ladder"
         registry.register("classifySignals", ladder_hook, self.name)
+
+        def fingerprint_hook(ctx: JobContext, next_: Next) -> JobContext:
+            return self._resolve_vendor_fingerprint(ctx, next_)
+
+        fingerprint_hook.__name__ = f"{self.name}_fingerprint"
+        registry.register("beforePersonaLookup", fingerprint_hook, self.name)
 
 
 @functools.lru_cache(maxsize=None)

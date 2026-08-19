@@ -941,7 +941,7 @@ which is not in the section 2 enum (V3)</code></pre>
         </li>
         <li>
           <h4>Know the honest limit</h4>
-          <p>A data-only pack gets the classification ladder, tag rules, claim guard, field sets, thresholds, and aliases. It does <strong>not</strong> get pack-specific hooks — see <a class="inline" href="#pack-hooks">When you still need Python</a> for exactly what that costs.</p>
+          <p>A data-only pack gets the classification ladder, tag rules, claim guard, field sets, thresholds, aliases, and declarative vendor-fingerprint resolution (a plain alias table, or nothing at all for a single-vendor pack). It does <strong>not</strong> get bespoke pack-specific hooks — see <a class="inline" href="#pack-hooks">When you still need Python</a> for exactly what still costs one.</p>
         </li>
       </ol>
     </section>
@@ -1056,18 +1056,18 @@ sequenceDiagram
       </div>
 
       <h3 id="pack-hooks">When you still need Python</h3>
-      <p>A data-only pack (§<a class="inline" href="#new-company">above</a>) gets the ladder, tag rules, claim guard, field sets, thresholds, and aliases. It does not get pack-specific <strong>hooks</strong> — and both shipped packs today need every one of these:</p>
+      <p>A data-only pack (§<a class="inline" href="#new-company">above</a>) gets the ladder, tag rules, claim guard, field sets, thresholds, aliases, and — since this was the one that mattered most for actually running a new pack end to end — <strong>declarative vendor-fingerprint resolution</strong>: <code>DataPack</code> matches <code>aliases.literal</code> against the primary page text (substring, word-boundary safe, on normalized names — the same matching power a regex table gives Northstar, from a plain company name instead), and falls back to its own single shipped persona when nothing matches and there's only one to fall back to. Both shipped module packs still need a hand-written Python hook for everything below:</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Hook</th><th>What it does</th><th>Cost of not having it</th></tr></thead>
+          <thead><tr><th>Hook</th><th>What it does</th><th>Why it's still Python</th></tr></thead>
           <tbody>
-            <tr><td><code>resolve_vendor_fingerprint</code></td><td>Builds the <code>pack|vendor</code> key Stage 4 looks a persona up by.</td><td>No fingerprint → no persona ever matches → the cached fast lane is unreachable, every document falls to vision or a hard miss.</td></tr>
-            <tr><td><code>apply_billing_conventions</code></td><td>Supplies <code>prior_balance_basis</code> from the pack's table (<a class="inline" href="#basis-overlay">§ above</a>).</td><td>Without it the F1b refusal fires on every document with a prior balance — no CentraCom-style derivation is possible at all.</td></tr>
-            <tr><td><code>collect_references</code></td><td>Pack-specific match keys, with provenance, for cross-referencing.</td><td>No reference-based corroboration for this pack's documents.</td></tr>
+            <tr><td><code>resolve_vendor_fingerprint</code> (Northstar/Digital Direction's own)</td><td>The <em>richer</em> matching a data pack's generic version doesn't attempt: regex-pattern aliases for a per-entity name no literal table could enumerate (<code>\bu\s?pak\b</code>, catching OCR's inconsistent spacing), a sender-email-domain fallback, and aggregator exclusion.</td><td>None of that generalizes into a plain name-to-key table — a data pack with the same need would still write this one hook.</td></tr>
+            <tr><td><code>apply_billing_conventions</code></td><td>Supplies <code>prior_balance_basis</code> from the pack's table (<a class="inline" href="#basis-overlay">§ above</a>).</td><td>Without it the F1b refusal fires on every document with a prior balance — no CentraCom-style derivation is possible at all, and no declarative equivalent exists yet.</td></tr>
+            <tr><td><code>collect_references</code></td><td>Pack-specific match keys, with provenance, for cross-referencing.</td><td>F11's provenance data has no closed vocabulary to compile a data pack's version against.</td></tr>
           </tbody>
         </table>
       </div>
-      <p>Writing one of these means adding a Python module for the pack (the two shipped packs are each ~1,150–1,290 lines across ~8 modules) — a real engineering task, not a config edit. Whether to eventually add a declarative equivalent for these two hook kinds is an open question for this codebase, not yet solved.</p>
+      <p>Writing one of these means adding a Python module for the pack (the two shipped packs are each ~1,150–1,290 lines across ~8 modules) — a real engineering task, not a config edit. Basic vendor-fingerprint resolution no longer forces that step; a data-only pack with a simple alias table or a single vendor gets it for free.</p>
     </section>
 
     <section id="validate" class="wide">

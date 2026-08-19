@@ -159,6 +159,120 @@ def test_classify_sets_everything_the_record_needs() -> None:
 
 
 # --------------------------------------------------------------------------
+# Vendor-fingerprint resolution - declarative, no Python hook required
+# --------------------------------------------------------------------------
+
+
+def _pack_with_alias(tmp_path, literal: dict, doc_type: str = "standard_invoice") -> DataPack:
+    spec = _spec()
+    spec["name"] = "bluepine_testing"
+    spec["aliases"] = {"literal": literal, "display": {}}
+    return DataPack(spec, directory=str(tmp_path))
+
+
+def _write_persona(tmp_path, filename: str, sender_fingerprint: str, doc_type: str = "standard_invoice") -> None:
+    personas_dir = tmp_path / "personas"
+    personas_dir.mkdir(exist_ok=True)
+    (personas_dir / filename).write_text(json.dumps({
+        "sender_fingerprint": sender_fingerprint, "doc_type": doc_type,
+        "rule_version": "v1", "status": "draft", "field_selectors": [],
+    }))
+
+
+def test_canonical_vendor_matches_its_own_alias_table(tmp_path) -> None:
+    pack = _pack_with_alias(tmp_path, {"bluepine testing supplies": "bluepine_testing"})
+    ctx = _ctx("BLUEPINE TESTING SUPPLIES|INVOICE BP-1|TOTAL 100.00")
+    assert pack._canonical_vendor(ctx) == "bluepine_testing"
+
+
+def test_canonical_vendor_alias_match_is_word_boundary_safe(tmp_path) -> None:
+    """A short alias must not fire on a partial-word substring - the same
+    concern `northstar.aliases`' regex patterns are careful about (`\\bu\\s?pak\\b`,
+    not a bare substring search)."""
+    pack = _pack_with_alias(tmp_path, {"pak": "some_other_vendor"})
+    ctx = _ctx("BLUEPINE TESTING SUPPLIES|INVOICE BP-1|TOTAL 100.00")
+    assert pack._canonical_vendor(ctx) is None
+
+
+def test_canonical_vendor_falls_back_to_its_one_persona_with_no_alias_match(tmp_path) -> None:
+    """The common case for a newly-scaffolded, single-vendor pack: zero alias
+    entries required at all."""
+    pack = _pack_with_alias(tmp_path, {})
+    _write_persona(tmp_path, "bluepine_testing.json", "bluepine_testing|bluepine_testing")
+    ctx = _ctx("ANYTHING AT ALL ON THE PAGE|TOTAL 100.00")
+    assert pack._canonical_vendor(ctx) == "bluepine_testing"
+
+
+def test_canonical_vendor_does_not_guess_with_several_personas_and_no_alias_match(tmp_path) -> None:
+    """Multiple vendors under one pack genuinely need an alias table - falling
+    back to "the first persona" would silently misroute the others."""
+    pack = _pack_with_alias(tmp_path, {})
+    _write_persona(tmp_path, "vendor_a.json", "bluepine_testing|vendor_a")
+    _write_persona(tmp_path, "vendor_b.json", "bluepine_testing|vendor_b")
+    ctx = _ctx("ANYTHING AT ALL ON THE PAGE|TOTAL 100.00")
+    assert pack._canonical_vendor(ctx) is None
+
+
+def test_canonical_vendor_is_none_with_no_alias_match_and_no_personas_at_all(tmp_path) -> None:
+    pack = _pack_with_alias(tmp_path, {})
+    ctx = _ctx("ANYTHING AT ALL ON THE PAGE|TOTAL 100.00")
+    assert pack._canonical_vendor(ctx) is None
+
+
+def test_resolve_vendor_fingerprint_sets_the_full_pack_qualified_key(tmp_path) -> None:
+    pack = _pack_with_alias(tmp_path, {"bluepine testing supplies": "bluepine_testing"})
+    ctx = _ctx("BLUEPINE TESTING SUPPLIES|INVOICE BP-1|TOTAL 100.00")
+    result = pack._resolve_vendor_fingerprint(ctx, lambda c: c)
+    assert result.sender_fingerprint == "bluepine_testing|bluepine_testing"
+
+
+def test_resolve_vendor_fingerprint_leaves_it_unset_when_nothing_resolves(tmp_path) -> None:
+    pack = _pack_with_alias(tmp_path, {})
+    _write_persona(tmp_path, "vendor_a.json", "bluepine_testing|vendor_a")
+    _write_persona(tmp_path, "vendor_b.json", "bluepine_testing|vendor_b")
+    ctx = _ctx("ANYTHING AT ALL ON THE PAGE|TOTAL 100.00")
+    result = pack._resolve_vendor_fingerprint(ctx, lambda c: c)
+    assert result.sender_fingerprint is None
+
+
+def test_register_hooks_wires_fingerprint_resolution_gated_on_this_packs_own_claim(tmp_path) -> None:
+    """The exact failure class this file's own module docstring warns about:
+    a second pack's hook must never resolve a fingerprint for a document the
+    FIRST pack claimed."""
+    from docintel.packs.registry import register_all
+    from docintel.pipeline.hooks import HookRegistry
+
+    acme = _acme()
+    bluepine = _pack_with_alias(tmp_path, {"bluepine testing supplies": "bluepine_testing"})
+
+    hooks = HookRegistry()
+    register_all(hooks, [acme, bluepine])
+
+    ctx = _ctx("BLUEPINE TESTING SUPPLIES|INVOICE BP-1|TOTAL 100.00")
+    ctx.pack = acme  # acme claimed it, not bluepine
+
+    result = hooks.run("beforePersonaLookup", ctx)
+
+    assert result.sender_fingerprint is None
+
+
+def test_register_hooks_resolves_fingerprint_for_the_pack_that_actually_claimed(tmp_path) -> None:
+    from docintel.packs.registry import register_all
+    from docintel.pipeline.hooks import HookRegistry
+
+    bluepine = _pack_with_alias(tmp_path, {"bluepine testing supplies": "bluepine_testing"})
+    hooks = HookRegistry()
+    register_all(hooks, [bluepine])
+
+    ctx = _ctx("BLUEPINE TESTING SUPPLIES|INVOICE BP-1|TOTAL 100.00")
+    ctx.pack = bluepine
+
+    result = hooks.run("beforePersonaLookup", ctx)
+
+    assert result.sender_fingerprint == "bluepine_testing|bluepine_testing"
+
+
+# --------------------------------------------------------------------------
 # A malformed pack file fails at LOAD
 # --------------------------------------------------------------------------
 
