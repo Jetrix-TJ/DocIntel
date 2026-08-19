@@ -1,0 +1,945 @@
+<meta charset="UTF-8">
+<title>docintel · feature explorer</title>
+<style>
+  :root{
+    --bg:#0b0e13; --bg2:#0f141b; --panel:#0e131a; --panel2:#121922;
+    --ink:#e8eef5; --mut:#8a97a8; --dim:#5c6675; --line:#1d2530;
+    --amber:#ffb454; --amber-d:#d98a2b; --mint:#5ad1b4; --red:#ff7a85;
+    --blue:#79c0ff; --purp:#d2a8ff; --grn:#7ee787;
+    --c-com:#6c7787; --c-str:#a5d6ff; --c-num:#79c0ff; --c-kw:#ff7b9c; --c-fn:#d2a8ff;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"Liberation Mono",monospace;
+    --serif:ui-serif,Georgia,"Iowan Old Style","Palatino Linotype",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); line-height:1.5; -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(900px 500px at 12% -6%, rgba(255,180,84,.10), transparent 60%),
+      radial-gradient(800px 600px at 98% 8%, rgba(90,209,180,.08), transparent 55%),
+      linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+    background-size:auto, auto, 44px 44px, 44px 44px;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap{position:relative; z-index:1; max-width:1320px; margin:0 auto; padding:40px 28px 80px}
+
+  .jumpnav{position:sticky; top:0; z-index:20; margin:0 -28px 26px; padding:11px 28px;
+    background:rgba(11,14,19,.88); backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+    display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center}
+  .jumpnav a{font-family:var(--mono); font-size:11.5px; color:var(--mut); text-decoration:none; white-space:nowrap; padding:3px 0}
+  .jumpnav a:hover{color:var(--amber)}
+  .jumpnav .jn-sep{color:var(--line); font-size:11px}
+
+  header{display:flex; flex-wrap:wrap; align-items:flex-end; gap:20px 32px; margin-bottom:8px}
+  .brand{display:flex; align-items:baseline; gap:14px}
+  .logo{
+    font-family:var(--serif); font-size:60px; line-height:.9; letter-spacing:-.01em;
+    background:linear-gradient(94deg,var(--amber),#ffd9a0 55%,var(--mint));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .logo .dot{color:var(--amber); -webkit-text-fill-color:var(--amber)}
+  .ver{
+    font-family:var(--mono); font-size:12px; font-weight:700; letter-spacing:.06em;
+    color:var(--bg); background:var(--amber); padding:4px 9px; border-radius:999px; transform:translateY(-10px);
+  }
+  .tag{max-width:600px; color:var(--mut); font-size:15.5px; margin:6px 0 0}
+  .tag b{color:var(--ink); font-weight:600}
+  .legend{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--dim); text-align:right; line-height:1.9}
+  .legend .k{display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin-right:6px}
+
+  .rule{height:1px; background:linear-gradient(90deg,transparent,var(--line) 12%,var(--line) 88%,transparent); margin:26px 0}
+
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin-bottom:14px}
+  .stage{
+    flex:1 1 0; min-width:80px; text-align:center; padding:12px 6px 11px; position:relative;
+    border:1px solid var(--line); border-right:none; background:var(--panel);
+    transition:.35s; font-family:var(--mono);
+  }
+  .stage:first-child{border-radius:12px 0 0 12px}
+  .stage:last-child{border-right:1px solid var(--line); border-radius:0 12px 12px 0}
+  .stage .s-name{font-size:11.5px; font-weight:600; color:var(--mut); transition:.3s}
+  .stage .s-sub{font-size:9px; color:var(--dim); margin-top:2px; letter-spacing:.03em; text-transform:uppercase}
+  .stage.lit{background:linear-gradient(180deg,rgba(90,209,180,.16),rgba(90,209,180,.04)); border-color:rgba(90,209,180,.5)}
+  .stage.lit .s-name{color:var(--mint)}
+  .stage::after{
+    content:"→"; position:absolute; right:-9px; top:50%; transform:translateY(-50%);
+    color:var(--dim); font-size:14px; z-index:2; background:var(--bg); padding:0 1px;
+  }
+  .stage:last-child::after{display:none}
+
+  .always{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:30px; align-items:center}
+  .always .lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin-right:4px}
+  .chip{
+    font-family:var(--mono); font-size:11px; color:var(--mut);
+    border:1px solid var(--line); border-radius:999px; padding:4px 11px; background:var(--panel);
+    cursor:default; transition:.2s;
+  }
+  .chip:hover{border-color:var(--amber-d); color:var(--amber)}
+  .chip::before{content:"●"; color:var(--grn); font-size:8px; margin-right:6px; vertical-align:1px}
+
+  .grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:26px; align-items:start}
+
+  .col-h{display:flex; align-items:center; gap:10px; margin:2px 0 14px}
+  .col-h h2{font-family:var(--serif); font-size:27px; font-weight:400; margin:0; letter-spacing:.01em}
+  .col-h .hint{font-size:12.5px; color:var(--mut); font-family:var(--mono)}
+
+  .seg-row{display:flex; flex-wrap:wrap; gap:18px; margin-bottom:22px}
+  .seg{flex:1 1 170px}
+  .seg .seg-lbl{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:7px}
+  .seg .seg-lbl span{text-transform:none; letter-spacing:0; opacity:.7}
+  .seg .opts{display:flex; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:3px; gap:3px}
+  .seg button{
+    flex:1; border:0; background:transparent; color:var(--mut); cursor:pointer;
+    font-family:var(--mono); font-size:12px; font-weight:500; padding:7px 6px; border-radius:7px; transition:.2s;
+  }
+  .seg button:hover:not(.on){color:var(--ink)}
+  .seg button.on{background:linear-gradient(180deg,var(--amber),var(--amber-d)); color:#1a1206; font-weight:700; box-shadow:0 2px 10px rgba(255,180,84,.22)}
+
+  .fgroup{margin-bottom:24px}
+  .fgroup-h{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); margin:0 0 10px; display:flex; align-items:center; gap:8px}
+  .fgroup-h::after{content:""; flex:1; height:1px; background:var(--line)}
+
+  .feat{border:1px solid var(--line); border-radius:12px; background:var(--panel); margin-bottom:9px; overflow:hidden; transition:.22s}
+  .feat.active{border-color:rgba(90,209,180,.45); background:linear-gradient(180deg,rgba(90,209,180,.05),transparent)}
+  .feat-head{display:flex; align-items:center; gap:13px; padding:12px 14px}
+  .sw{
+    flex:none; width:42px; height:24px; border-radius:999px; border:1px solid var(--line);
+    background:var(--panel2); position:relative; cursor:pointer; transition:.25s; padding:0;
+  }
+  .sw::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--dim); transition:.25s}
+  .feat.active .sw{background:linear-gradient(90deg,var(--mint),#7ee0c6); border-color:transparent}
+  .feat.active .sw::after{left:20px; background:#072018}
+  .feat-meta{flex:1; min-width:0}
+  .feat-name{font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .feat-name code{font-family:var(--mono); font-size:12.5px; color:var(--amber); background:rgba(255,180,84,.08); padding:1px 6px; border-radius:5px; font-weight:500}
+  .stag{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--mint); border:1px solid rgba(90,209,180,.3); border-radius:5px; padding:1px 6px}
+  .feat-desc{font-size:12.8px; color:var(--mut); margin-top:3px}
+  .ex-btn{flex:none; background:transparent; border:1px solid var(--line); color:var(--mut); border-radius:7px; cursor:pointer; font-family:var(--mono); font-size:11px; padding:5px 9px; transition:.2s}
+  .ex-btn:hover{border-color:var(--amber-d); color:var(--amber)}
+  .ex-wrap{max-height:0; overflow:hidden; transition:max-height .3s ease; border-top:1px solid transparent}
+  .ex-wrap.open{max-height:340px; border-top-color:var(--line)}
+  .ex-wrap pre{margin:0; padding:13px 16px; font-family:var(--mono); font-size:12px; line-height:1.65; overflow-x:auto; color:var(--ink); background:rgba(0,0,0,.22)}
+
+  .code-col{position:sticky; top:18px}
+  .editor{border:1px solid var(--line); border-radius:var(--radius); background:linear-gradient(180deg,var(--panel2),var(--panel)); overflow:hidden; box-shadow:0 24px 60px -28px rgba(0,0,0,.8)}
+  .ed-bar{display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--line); background:rgba(0,0,0,.2)}
+  .dots{display:flex; gap:6px}
+  .dots i{width:11px; height:11px; border-radius:50%; display:block}
+  .dots i:nth-child(1){background:#ff5f57} .dots i:nth-child(2){background:#febc2e} .dots i:nth-child(3){background:#28c840}
+  .ed-file{font-family:var(--mono); font-size:12px; color:var(--mut); margin-left:6px}
+  .ed-file b{color:var(--ink); font-weight:500}
+  .ed-actions{margin-left:auto; display:flex; gap:7px}
+  .ed-actions button{background:var(--panel); border:1px solid var(--line); color:var(--mut); border-radius:7px; cursor:pointer; font-family:var(--mono); font-size:11px; padding:5px 10px; transition:.18s}
+  .ed-actions button:hover{border-color:var(--amber-d); color:var(--amber)}
+  #copyBtn.done{border-color:var(--mint); color:var(--mint)}
+  .code{counter-reset:l; margin:0; padding:16px 4px 18px 0; font-family:var(--mono); font-size:12.5px; line-height:1.62; overflow-x:auto; max-height:74vh; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#2a3442 transparent}
+  .code::-webkit-scrollbar,.ex-wrap pre::-webkit-scrollbar{width:9px; height:9px}
+  .code::-webkit-scrollbar-thumb,.ex-wrap pre::-webkit-scrollbar-thumb{background:#2a3442; border-radius:999px; border:2px solid transparent; background-clip:padding-box}
+  .code::-webkit-scrollbar-track,.ex-wrap pre::-webkit-scrollbar-track{background:transparent}
+  .ln{display:flex; white-space:pre; transition:background .2s}
+  .ln::before{
+    counter-increment:l; content:counter(l); width:40px; flex:none; text-align:right; padding-right:14px;
+    color:#3c4654; user-select:none; font-size:11.5px;
+  }
+  .ln .lc{flex:1; padding-right:18px}
+  .ln.flash{animation:flash 1.1s ease}
+  @keyframes flash{
+    0%{background:rgba(90,209,180,.28)} 20%{background:rgba(90,209,180,.22)} 100%{background:transparent}
+  }
+  .c-com{color:var(--c-com); font-style:italic} .c-str{color:var(--c-str)}
+  .c-num{color:var(--c-num)} .c-kw{color:var(--c-kw)} .c-fn{color:var(--c-fn)}
+
+  .ed-foot{display:flex; align-items:center; gap:14px; padding:10px 14px; border-top:1px solid var(--line); background:rgba(0,0,0,.18); font-family:var(--mono); font-size:11px; color:var(--dim); flex-wrap:wrap}
+  .ed-foot b{color:var(--mint)}
+  .runline{color:var(--mut)}
+  .runline .sym{color:var(--amber)}
+
+  footer{margin-top:40px; border-top:1px solid var(--line); padding-top:22px; color:var(--mut); font-size:13px}
+  footer h3{font-family:var(--serif); font-weight:400; font-size:21px; margin:0 0 10px; color:var(--ink)}
+  footer ul{margin:0; padding-left:18px} footer li{margin:4px 0}
+  footer code{font-family:var(--mono); font-size:12px; color:var(--amber)}
+  footer a{color:var(--blue)}
+  .note{font-style:italic; color:var(--dim); margin-top:14px}
+
+  .cfg{margin-top:42px; border-top:1px solid var(--line); padding-top:26px}
+  .cfg-lead{color:var(--mut); font-size:14.5px; max-width:900px; margin:0 0 18px}
+  .cfg-lead code{font-family:var(--mono); font-size:12px; color:var(--amber); background:rgba(255,180,84,.08); padding:1px 5px; border-radius:5px}
+  .cli-table{width:100%; border-collapse:collapse; margin:0 0 18px; font-size:12.8px}
+  .cli-table th,.cli-table td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  .cli-table th{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600}
+  .cli-table td code{font-family:var(--mono); font-size:12px; color:var(--amber); background:rgba(255,180,84,.08); padding:1px 6px; border-radius:5px; white-space:nowrap}
+  .cli-table td{color:var(--mut)}
+  .note2{font-size:12.8px; color:var(--mut); margin:14px 0 0; line-height:1.55}
+  .note2 b{color:var(--ink)}
+  .cfg-code{margin:0 0 16px; padding:15px 17px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(180deg,var(--panel2),var(--panel)); font-family:var(--mono); font-size:12.5px; line-height:1.62; overflow-x:auto; color:var(--ink); box-shadow:0 18px 50px -30px rgba(0,0,0,.8)}
+
+  .cfg-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:18px}
+  .knob{border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:13px 15px}
+  .knob-h{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:7px}
+  .knob-h code{font-family:var(--mono); font-size:12.5px; color:var(--mint); background:none; padding:0}
+  .knob-h .dflt{font-family:var(--mono); font-size:10px; letter-spacing:.03em; color:var(--dim); border:1px solid var(--line); border-radius:5px; padding:1px 6px}
+  .knob p{margin:0; font-size:12.6px; color:var(--mut); line-height:1.55}
+  .warn{border:1px solid rgba(255,122,133,.32); background:rgba(255,122,133,.06); border-radius:12px; padding:12px 15px; font-size:12.8px; color:var(--mut); line-height:1.55; margin:14px 0}
+  .warn b{color:var(--red)}
+  .pillrow{display:flex; flex-wrap:wrap; gap:7px; margin:10px 0 18px}
+  .pillrow .pill{font-family:var(--mono); font-size:11px; color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:4px 11px; background:var(--panel)}
+  .qs{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:18px 0 30px}
+  .qs-card{border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:15px 17px}
+  .qs-card h4{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--mint); margin:0 0 9px}
+  .qs-card pre{margin:0; padding:0; border:none; background:none; box-shadow:none; font-family:var(--mono); font-size:12px; line-height:1.6; color:var(--ink); white-space:pre-wrap}
+
+  @media (max-width:980px){
+    .grid{grid-template-columns:1fr}
+    .code-col{position:static}
+    .logo{font-size:48px} .legend{display:none}
+    .cli-table{font-size:12px}
+    .cfg-grid{grid-template-columns:1fr}
+    .qs{grid-template-columns:1fr}
+  }
+</style>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="brand">
+        <span class="logo">docintel<span class="dot">.</span></span>
+        <span class="ver">0.1 · classification-correctness-v2</span>
+      </div>
+      <p class="tag">Turn a vendor invoice or bill into a confidence-scored structured record. <b>Toggle a feature</b> and watch its real code drop into the script on the right — toggle it off and it's gone. Every snippet is the actual API, verified against a real running install.</p>
+    </div>
+    <div class="legend">
+      <div><span class="k" style="background:var(--mint)"></span>added to script</div>
+      <div><span class="k" style="background:var(--amber)"></span>structural / selectable</div>
+      <div><span class="k" style="background:var(--grn)"></span>always-on (no code needed)</div>
+    </div>
+  </header>
+
+  <nav class="jumpnav">
+    <a href="#install">Install</a><span class="jn-sep">/</span>
+    <a href="#stages">Pipeline</a><span class="jn-sep">/</span>
+    <a href="#vision">Vision</a><span class="jn-sep">/</span>
+    <a href="#compose">Compose</a><span class="jn-sep">/</span>
+    <a href="#vendors">Vendors</a><span class="jn-sep">/</span>
+    <a href="#cli">CLI</a><span class="jn-sep">/</span>
+    <a href="#classification">Classification</a><span class="jn-sep">/</span>
+    <a href="#persona">Persona</a><span class="jn-sep">/</span>
+    <a href="#gold">Gold data</a><span class="jn-sep">/</span>
+    <a href="#trouble">Troubleshooting</a>
+  </nav>
+
+  <div class="rule"></div>
+
+  <div class="qs" id="install">
+    <div class="qs-card">
+      <h4>Install</h4>
+      <pre>python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install "docintel[ui] @ git+https://github.com/jeevatechjays/DocIntel.git"</pre>
+    </div>
+    <div class="qs-card">
+      <h4>First run</h4>
+      <pre>docintel process invoice.pdf --json
+# --vision fake for a document with no recorded test cassette</pre>
+    </div>
+    <div class="qs-card">
+      <h4>As a library</h4>
+      <pre>from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision
+
+pipeline = build_pipeline(vision=FakeVision())
+record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
+    </div>
+    <div class="qs-card">
+      <h4>Web UI</h4>
+      <pre>docintel serve
+# upload one PDF, see the result, work the review queue</pre>
+    </div>
+  </div>
+
+  <div class="flow" id="stages">
+    <div class="stage" data-stage="intake"><div class="s-name">intake</div><div class="s-sub">read</div></div>
+    <div class="stage" data-stage="filter"><div class="s-name">filter</div><div class="s-sub">attachments</div></div>
+    <div class="stage" data-stage="classify"><div class="s-name">classify</div><div class="s-sub">company+type</div></div>
+    <div class="stage" data-stage="persona"><div class="s-name">persona</div><div class="s-sub">lookup</div></div>
+    <div class="stage" data-stage="profile"><div class="s-name">profile</div><div class="s-sub">route</div></div>
+    <div class="stage" data-stage="5a"><div class="s-name">5a</div><div class="s-sub">cached rules</div></div>
+    <div class="stage" data-stage="5b"><div class="s-name">5b</div><div class="s-sub">vision</div></div>
+    <div class="stage" data-stage="5c"><div class="s-name">5c</div><div class="s-sub">escalate</div></div>
+    <div class="stage" data-stage="capture"><div class="s-name">capture</div><div class="s-sub">fields</div></div>
+    <div class="stage" data-stage="gate"><div class="s-name">gate</div><div class="s-sub">confidence</div></div>
+    <div class="stage" data-stage="emit"><div class="s-name">emit</div><div class="s-sub">always</div></div>
+  </div>
+  <div class="always">
+    <span class="lbl">always on:</span>
+    <span class="chip" title="Every document that goes in produces exactly one record out - processed, skipped, or dead_letter. count(intaken) == count(emitted) is a machine-checked invariant.">emit-always</span>
+    <span class="chip" title="Every selector a persona writes is checked against 14 closed rules before it can ship - no anchor may restate the value it's meant to find, no selector may target a derived-only field.">14-rule persona validator</span>
+    <span class="chip" title="A new persona defaults to status=draft, applying an automatic 0.85 confidence penalty - it can never reach the high lane until a human promotes it.">draft confidence penalty</span>
+    <span class="chip" title="An unrecognized vendor is tagged no_persona / unclaimed_document and routed to review - never guessed at.">safe unclaimed-vendor path</span>
+    <span class="chip" title="Within one run, a document whose derived identity matches one already seen is flagged possible_duplicate_of.">in-run duplicate detection</span>
+    <span class="chip" title="PDF, .eml/.msg (every attachment processed in its own right), and .docx/.xlsx via LibreOffice - all through the same intake stage.">multi-format intake</span>
+    <span class="chip" title="Gemini vision only ever answers specific field questions a persona's field_hints pose - it never decides classification or invents structure.">vision, never structure</span>
+    <span class="chip" title="A field name must come from a closed, live vocabulary (scorecard.CHECKED_FIELDS) - nothing invents a name nothing else can score.">closed field vocabulary</span>
+    <span class="chip" title="pip install --upgrade wipes site-packages, so a vendor/company added via DOCINTEL_EXTRA_PERSONAS_DIR or extra_packs= lives entirely in your own project and survives every upgrade.">upgrade-safe external onboarding</span>
+  </div>
+
+  <section class="cfg">
+    <div class="col-h"><h2>The pipeline, stage by stage</h2><span class="hint">// one document, start to finish</span></div>
+    <p class="cfg-lead">Follow a single document from <code>.process()</code> to a delivered record. <code>build_pipeline()</code> wires all eleven stages from one call — you never hand-assemble the sequence.</p>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h"><code>1 · intake</code></div><p>A plain call, no queue required — <code>pipeline.process(document_id, source_path)</code>. Your own inbox rule or upload handler decides when this fires.</p></div>
+      <div class="knob"><div class="knob-h"><code>2 · filter</code></div><p>An <code>.eml</code>/<code>.msg</code> is unwrapped into one item per real attachment; <code>.docx</code>/<code>.xlsx</code> converts to PDF first. Non-document attachments drop before anything expensive runs.</p></div>
+      <div class="knob"><div class="knob-h"><code>3 · classify</code></div><p>Claim rules (markers + vetoes) decide whose document this is; a doc_type ladder — ordered rungs, first match wins — decides what kind it is.</p></div>
+      <div class="knob"><div class="knob-h"><code>4 · persona</code></div><p><code>(sender_fingerprint, doc_type)</code> resolves to a persona — a hit, or a hard_miss that escalates rather than guessing.</p></div>
+      <div class="knob"><div class="knob-h"><code>4b · profile</code></div><p>Resolves the persona's <code>processing_profile</code> — which export layouts and reconciliation behavior apply automatically.</p></div>
+      <div class="knob"><div class="knob-h"><code>5a · cached rules</code></div><p>The persona's saved selectors run — zero AI calls. The high-volume path for any company already onboarded.</p></div>
+      <div class="knob"><div class="knob-h"><code>5b · vision</code></div><p>Gemini answers only the specific fields a persona's <code>field_hints</code> name — never classification, never document structure.</p></div>
+      <div class="knob"><div class="knob-h"><code>5c · escalate</code></div><p>A genuine hard miss becomes a real, persistent review-queue job — never a silent drop.</p></div>
+      <div class="knob"><div class="knob-h"><code>6 · capture</code></div><p>Adjust ops run: alias resolution, sign normalization, derived-value computation — from the closed op registry.</p></div>
+      <div class="knob"><div class="knob-h"><code>7 · gate</code></div><p>Decides <code>lane</code>/<code>review_flag</code>/<code>regen_flag</code>. Any <code>beforeEmit</code> hook fires right after, seeing the real decision.</p></div>
+      <div class="knob"><div class="knob-h"><code>8 · emit</code></div><p>Always exactly one record — even a dead-lettered document. <code>count(intaken) == count(emitted)</code> is machine-checked, not a convention.</p></div>
+    </div>
+    <div class="warn"><b>Why this order matters.</b> Classification and persona lookup happen BEFORE any AI call — a company with no configuration yet is caught cheaply at Stage 4, not after an expensive vision round-trip. The confidence gate runs AFTER extraction finishes, so a real-time notification hook always sees the finished routing decision, never a partial one.</div>
+  </section>
+
+  <section class="cfg" id="vision">
+    <div class="col-h"><h2>Gemini vision extraction</h2><span class="hint">// the fallback, and its boundary</span></div>
+    <p class="cfg-lead">Stage 5b calls Gemini <i>only</i> for fields a persona's own <code>field_hints</code> name — it is never given free rein to decide what a document contains or how it should classify. Sanitizing whatever it returns (<code>adapters/vision/policy.py</code>) is a dedicated boundary, not a trust assumption.</p>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h">fake</div><p>Returns nothing — wiring checks, no API key, no network call.</p></div>
+      <div class="knob"><div class="knob-h">cassette <span class="dflt">default</span></div><p>Replays recorded responses offline — deterministic, reproducible, no billing.</p></div>
+      <div class="knob"><div class="knob-h">record</div><p>Calls Gemini once and writes the response into a cassette fixture — how new fixtures get made.</p></div>
+      <div class="knob"><div class="knob-h">live</div><p>Actually calls Gemini. Different answer every run, costs money — used deliberately, never as a silent default.</p></div>
+    </div>
+    <p class="note2"><b>The boundary that matters:</b> classification, routing, and lane decisions are made entirely outside the vision call. A field registered as money/currency that comes back the wrong Python type raises loudly at score time rather than silently comparing wrong.</p>
+  </section>
+
+  <div class="grid" id="compose">
+    <div>
+      <div class="col-h"><h2>Compose</h2><span class="hint">// click to add / remove</span></div>
+
+      <div class="seg-row">
+        <div class="seg">
+          <div class="seg-lbl">Vision</div>
+          <div class="opts" id="segVision">
+            <button data-v="fake" class="on">fake · demo</button>
+            <button data-v="cassette">cassette · offline</button>
+            <button data-v="live">live · gemini</button>
+          </div>
+        </div>
+        <div class="seg">
+          <div class="seg-lbl">Packs</div>
+          <div class="opts" id="segPacks">
+            <button data-v="shipped" class="on">shipped only</button>
+            <button data-v="extra">+ my company</button>
+          </div>
+        </div>
+        <div class="seg">
+          <div class="seg-lbl">Jobs queue</div>
+          <div class="opts" id="segJobs">
+            <button data-v="none" class="on">none</button>
+            <button data-v="sqlite">sqlite</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="features"></div>
+    </div>
+
+    <div class="code-col">
+      <div class="col-h"><h2>Your script</h2><span class="hint" id="lineCount"></span></div>
+      <div class="editor">
+        <div class="ed-bar">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span class="ed-file"><b>run_pipeline.py</b> — built live</span>
+          <div class="ed-actions">
+            <button id="copyBtn">copy</button>
+            <button id="clearBtn">clear all</button>
+          </div>
+        </div>
+        <div class="code" id="code"></div>
+        <div class="ed-foot">
+          <span class="runline"><span class="sym">$</span> python run_pipeline.py</span>
+          <span>·</span>
+          <span><b id="featCount">0</b> features composed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="cfg" id="vendors">
+    <div class="col-h"><h2>Current vendors — what's live today</h2><span class="hint">// four packs, four onboarding shapes</span></div>
+    <table class="cli-table">
+      <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Vendors</th></tr></thead>
+      <tbody>
+        <tr><td><code>northstar</code></td><td>Full Python module</td><td>complete_beverage_destruction, dtss, edco, federal_recycling, upak, veritiv</td></tr>
+        <tr><td><code>digitaldirection</code></td><td>Full Python module</td><td>centracom, comcast, lumen, windstream (+ spectrum, draft)</td></tr>
+        <tr><td><code>spt_metals</code></td><td>Hybrid — DataPack + one custom hook</td><td>spt_metals (single-vendor pack)</td></tr>
+        <tr><td><code>acme_freight</code></td><td>Pure data — zero Python</td><td>redline, summit</td></tr>
+      </tbody>
+    </table>
+    <p class="cfg-lead">Four genuinely different shapes, and the choice depends on exactly one question: <b>does this company need a fact or a rule the page can never print, that no existing op already supplies?</b></p>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h">Pure data</div><p>One <code>pack.json</code>, a <code>personas/</code> folder, zero Python. Gets the ladder, claim guard, field sets, aliases. Right when a company's logic is fully covered by the shared op registry.</p></div>
+      <div class="knob"><div class="knob-h">Hybrid</div><p>A thin class wrapping a <code>DataPack</code>, adding exactly one hook for a non-printed fact (e.g. SPT Metals' weight-tier margins). ~120 lines, not ~1,200.</p></div>
+      <div class="knob"><div class="knob-h">Full module</div><p>A bespoke Python package (~1,150–1,290 lines): fingerprint resolution, billing-convention tables, reference collection. Right when a company needs several bespoke hooks.</p></div>
+    </div>
+    <p class="note2"><b>A fifth vantage point, not a fifth shape:</b> the same pure-data pattern authored entirely outside this repo — see "Onboarding — no repo access" in <a href="#compose">Compose</a> above.</p>
+  </section>
+
+  <section class="cfg" id="cli">
+    <div class="col-h"><h2>Command-line operations</h2><span class="hint">// the `docintel` CLI</span></div>
+    <p class="cfg-lead">Everything above is the <code>build_pipeline()</code> library surface for your own process. A few things are operational tasks instead — a human or a cron job running them, not something your ingestion code calls.</p>
+
+    <table class="cli-table">
+      <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>docintel process &lt;pdf|dir&gt; --json</code></td><td>The everyday entry point — read, classify, extract, emit one record per document.</td></tr>
+        <tr><td><code>docintel new-pack &lt;slug&gt; --company … --doc-type …</code></td><td>Scaffold a starter <code>pack.json</code> + persona for a brand-new company. Never registered anywhere on its own.</td></tr>
+        <tr><td><code>docintel validate-persona &lt;persona.json&gt; --pack-file &lt;pack.json&gt;</code></td><td>Self-checks a persona against the 14 validation rules — standalone, no registration required first.</td></tr>
+        <tr><td><code>docintel replay-gold</code></td><td>Scores the whole pipeline against the hand-labelled gold corpus — the "did I just break something" check.</td></tr>
+        <tr><td><code>docintel accuracy-report</code></td><td>The same numbers as <code>replay-gold</code>, rendered for a non-engineer: percent correct by company and doc type.</td></tr>
+        <tr><td><code>docintel draft-gold &lt;id&gt; --source &lt;pdf&gt;</code></td><td>Drafts a new gold fixture from one clean run — <code>expected_routing</code> always left for a human to set.</td></tr>
+        <tr><td><code>docintel serve [--port N]</code></td><td>Local web UI — upload one PDF, see the result, work the review queue.</td></tr>
+        <tr><td><code>docintel queue-status [--fail-if-older-than-hours N]</code></td><td>Review queue depth + oldest-open-job age. Exits 1 only past the age threshold — built for cron.</td></tr>
+        <tr><td><code>docintel export &lt;records.jsonl&gt; --out out.xlsx</code></td><td>Renders already-processed records into a spreadsheet, by registered column layout.</td></tr>
+        <tr><td><code>docintel reconcile &lt;records.jsonl&gt;</code></td><td>Cross-checks processed invoices against contracts on file — flags mismatches into the review queue.</td></tr>
+      </tbody>
+    </table>
+    <p class="note2"><b>Same install, every command.</b> None of these need repo access — they all run against whatever <code>pip install docintel</code> put in your venv.</p>
+  </section>
+
+  <section class="cfg" id="classification">
+    <div class="col-h"><h2>Writing classification — pack.json</h2><span class="hint">// which company, which document type</span></div>
+    <p class="cfg-lead">A pack claims a document when <b>any rule holds and no veto holds</b>, then an ordered <b>ladder</b> of rungs — first whose condition holds wins — decides the <code>doc_type</code>. Both are plain JSON; nothing here is Python.</p>
+
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h"><code>markers</code></div><p>A name/address specific enough that no other business prints it — the primary guard for an AP department claiming by bill-to.</p></div>
+      <div class="knob"><div class="knob-h"><code>corroborated_markers</code></div><p>A weak marker (a bare ZIP) that only counts alongside a second co-occurring token — avoids over-claiming on the weak marker alone.</p></div>
+      <div class="knob"><div class="knob-h"><code>alias_table</code></div><p>Claims by <i>sender</i>, reading the pack's own vendor alias table — compiled once at load, so it's the shipped table only. <code>DOCINTEL_EXTRA_PERSONAS_DIR</code>'s overlay does NOT reach this (tested) — a brand-new carrier needs a real table edit to be claimed, not just an overlay file.</p></div>
+      <div class="knob"><div class="knob-h"><code>roster_on_short_line</code></div><p>A client name, but only on a short line (a bill-to block) — not a line-item description that happens to mention the client.</p></div>
+    </div>
+    <p class="cfg-lead"><b>Vetoes</b> exist because a marker can be present for the wrong reason: <code>every_marker_hit_in_block</code> refuses the claim if every marker hit sits inside a <code>SHIP TO</code> block — a delivery address says where goods went, not who owes the money.</p>
+
+    <pre class="cfg-code">"claim": {
+  "rules": [
+    { "kind": "markers", "scope": "primary", "values": ["ACME WIDGETS", "ap@acmewidgets.example"] }
+  ],
+  "vetoes": [
+    { "kind": "every_marker_hit_in_block", "anchor": "\\bship\\s*to\\b" }
+  ]
+},
+"ladder": {
+  "default": "invoice",
+  "rungs": [{
+    "name": "credit_memo_title", "doc_type": "credit_memo",
+    "when": { "all_of": [
+      { "signal": "title_near_top", "params": {"pattern": "credit memo", "max_words": 7, "max_line_index": 10} },
+      { "not": { "signal": "money_table_present" } }
+    ]}
+  }]
+}</pre>
+
+    <p class="cfg-lead">All 12 signals a rung's <code>when</code> can name (composed with <code>all_of</code> / <code>any_of</code> / <code>not</code>):</p>
+    <table class="cli-table">
+      <thead><tr><th>Signal</th><th>Params</th><th>Asks</th></tr></thead>
+      <tbody>
+        <tr><td><code>pattern_in_scope</code></td><td>pattern, scope</td><td>Does this regex appear anywhere in scope's text?</td></tr>
+        <tr><td><code>short_label_line</code></td><td>pattern, max_words</td><td>On a line no longer than max_words? (a banner, not buried prose)</td></tr>
+        <tr><td><code>title_near_top</code></td><td>pattern, max_words, max_line_index</td><td>A genuine title: short AND near the top of page 1?</td></tr>
+        <tr><td><code>text_near_top</code></td><td>pattern, max_line_index</td><td>Near the top, no length limit — a letterhead block.</td></tr>
+        <tr><td><code>label_with_corroborating_value</code></td><td>label, same_line/next_line predicate</td><td>Is a label match backed by a real value near it?</td></tr>
+        <tr><td><code>all_matches_negative</code></td><td>pattern, scope</td><td>Matches at least once, and every match is negative?</td></tr>
+        <tr><td><code>role_shape</code></td><td>primary_exactly, supporting_at_least</td><td>Does the page-role shape match (e.g. 1 primary + ≥1 supporting)?</td></tr>
+        <tr><td><code>shared_pagination_footer</code></td><td>—</td><td>Does every page share one "N of M" footer sequence?</td></tr>
+        <tr><td><code>money_table_present</code></td><td>min_money_tokens</td><td>Used as a NEGATIVE: a titled "statement" with a charges table is still a bill.</td></tr>
+        <tr><td><code>text_source_is</code></td><td>value ("native"/"ocr")</td><td>PDF text layer or OCR? A trust signal, not a content fact.</td></tr>
+        <tr><td><code>noise_ratio_above</code></td><td>threshold, role, ocr_only</td><td>Does a page read as handwriting rather than print?</td></tr>
+        <tr><td><code>distinct_printed_aliases_at_least</code></td><td>count, scope</td><td>Does the alias table match ≥ count distinct printed names?</td></tr>
+      </tbody>
+    </table>
+    <div class="warn"><b>Fail-loud, at load time.</b> An unknown signal name, region, or misspelled param raises the moment the pack loads — never a rung that silently never fires.</div>
+  </section>
+
+  <section class="cfg" id="persona">
+    <div class="col-h"><h2>Writing extraction — persona.json</h2><span class="hint">// where each field sits, and what shape it is</span></div>
+    <p class="cfg-lead">One persona per vendor: <code>rule_version</code>, <code>status</code>, <code>doc_type</code>, <code>sender_fingerprint</code>, and a <code>field_selectors</code> list mixing three selector shapes.</p>
+
+    <pre class="cfg-code">{
+  "rule_version": "v1", "status": "draft",
+  "doc_type": "invoice", "sender_fingerprint": "acme_widgets|acme_widgets",
+  "field_selectors": [
+    { "field": "vendor_name", "region": "top-left", "pattern": "text" },
+    { "field": "bill_to_name", "anchor": "BILL TO", "region": "near-anchor", "pattern": "text" },
+    { "field": "total_printed", "anchor": "TOTAL", "region": "near-anchor", "pattern": "currency",
+      "adjust": ["derive_amount_payable"] }
+  ]
+}</pre>
+
+    <p class="cfg-lead"><code>field_selector</code> — every key:</p>
+    <table class="cli-table">
+      <thead><tr><th>Key</th><th>Required</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>field</code></td><td>yes</td><td>Must be in the pack's registered field set for this doc_type.</td></tr>
+        <tr><td><code>anchor</code></td><td>usually</td><td>A literal printed label to locate the value near.</td></tr>
+        <tr><td><code>anchor_alts</code></td><td>no</td><td>Fallback anchor strings, tried in order after <code>anchor</code> misses.</td></tr>
+        <tr><td><code>anchor_occurrence</code></td><td>no · default first</td><td><code>first</code>/<code>last</code> (ordinal) or <code>mid_line</code> (positional — withheld on OCR).</td></tr>
+        <tr><td><code>region</code></td><td>usually</td><td>Where to look — see the region enum below.</td></tr>
+        <tr><td><code>pattern</code></td><td>yes</td><td>A named pattern or a restricted regex.</td></tr>
+        <tr><td><code>capture</code></td><td>no · default first</td><td><code>first</code> stops at the first match; <code>all_matches</code> collects every one.</td></tr>
+        <tr><td><code>scope</code></td><td>no · default line</td><td><code>line</code>: cells then words then row. <code>block</code>: one candidate, column-cut — the two-column-layout idiom.</td></tr>
+        <tr><td><code>adjust</code></td><td>no</td><td>One or more op names from the closed registry, run in dependency order.</td></tr>
+        <tr><td><code>required</code></td><td>no · default true</td><td><code>false</code> → absence is an ordinary miss, not a failure.</td></tr>
+      </tbody>
+    </table>
+    <div class="warn"><b>Never target <code>amount_payable</code> directly.</b> It's computed by an <code>adjust</code> op from <code>prior_balance</code> + <code>current_charges</code> + <code>total_printed</code> — a selector naming it is rejected outright (validation rule V10). On 7 of the original 10 corpus documents, reading the printed total straight onto it would look perfectly correct and still be wrong.</div>
+
+    <p class="cfg-lead">Closed region enum:</p>
+    <div class="pillrow">
+      <span class="pill">near-anchor</span><span class="pill">same-row</span><span class="pill">same-cell</span>
+      <span class="pill">top-left</span><span class="pill">top-center</span><span class="pill">top-right</span>
+      <span class="pill">header-block</span><span class="pill">label-block</span><span class="pill">totals-block</span>
+      <span class="pill">remittance-block</span><span class="pill">line_items</span><span class="pill">last-table-row</span>
+      <span class="pill">first-page</span><span class="pill">last-page</span><span class="pill">any-page</span><span class="pill">page:N</span>
+    </div>
+    <p class="cfg-lead">Closed pattern enum (or a restricted regex — bounded quantifiers, ≤1 capture group, 50ms budget):</p>
+    <div class="pillrow">
+      <span class="pill">text</span><span class="pill">text_block</span><span class="pill">currency</span><span class="pill">currency_signed</span>
+      <span class="pill">integer</span><span class="pill">decimal</span><span class="pill">date</span><span class="pill">date_loose</span>
+      <span class="pill">account_number</span><span class="pill">phone</span><span class="pill">postal_code</span><span class="pill">tax_id</span><span class="pill">digits_run</span>
+    </div>
+    <p class="cfg-lead">The <code>adjust</code> op registry — a selector may only reference these, never invent one:</p>
+    <table class="cli-table">
+      <thead><tr><th>Op</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>derive_amount_payable</code></td><td>What's actually owed from prior balance + current charges + printed total. Refuses (never guesses) when the arithmetic doesn't close.</td></tr>
+        <tr><td><code>resolve_carried_balance</code></td><td>Works out whether the prior balance was already net of payments, or still gross.</td></tr>
+        <tr><td><code>normalize_credit_sign</code></td><td>Forces a payment/credit negative regardless of printed notation (parens, trailing CR, unsigned).</td></tr>
+        <tr><td><code>resolve_vendor_alias</code> / <code>resolve_bill_to_alias</code></td><td>Supplies vendor/bill-to name from the pack's own table when no label anchors it on the page.</td></tr>
+        <tr><td><code>crosscheck_line_sum</code> / <code>_total_composition</code> / <code>_balance_composition</code></td><td>Scoring only — do the numbers actually add up? Boosts confidence or flags a mismatch.</td></tr>
+        <tr><td><code>normalize_date_iso</code> · <code>strip_currency_symbols</code> · <code>parens_to_negative</code> · <code>uppercase</code>/<code>lowercase</code>/<code>trim</code></td><td>Plain value normalization — the base ops every pack gets for free.</td></tr>
+      </tbody>
+    </table>
+    <p class="note2"><b>26 ops total.</b> A genuinely new one — a new kind of arithmetic no existing op expresses — is a reviewed Python change with a test, never a config edit.</p>
+
+    <p class="cfg-lead">Confidence modifiers — one multiplicative mechanism, every one that fired listed on the record. No other way to lower confidence exists:</p>
+    <table class="cli-table">
+      <thead><tr><th>Modifier</th><th>×</th><th>Fires when</th></tr></thead>
+      <tbody>
+        <tr><td><code>draft_rules</code></td><td>0.85</td><td>The persona's own <code>status</code> is <code>"draft"</code>.</td></tr>
+        <tr><td><code>soft_miss</code></td><td>0.80</td><td>The document's layout diverged from the persona's <code>layout_fingerprint</code>.</td></tr>
+        <tr><td><code>ocr_source</code></td><td>0.90</td><td><code>text_source</code> is <code>"ocr"</code>, not native text.</td></tr>
+        <tr><td><code>ambiguous_anchor</code></td><td>0.90</td><td>The anchor occurs more than once, no <code>region</code> to disambiguate.</td></tr>
+        <tr><td><code>anchor_alt_used</code></td><td>0.95</td><td>The primary anchor missed; an <code>anchor_alts</code> fallback matched.</td></tr>
+        <tr><td><code>pattern_timeout</code></td><td>0.50</td><td>The regex hit its 50ms budget.</td></tr>
+        <tr><td><code>arith_lines_mismatch</code></td><td>0.85</td><td>Line items don't sum to the printed subtotal.</td></tr>
+        <tr><td><code>arith_total_mismatch</code></td><td>0.85</td><td>Subtotal + charges ≠ printed total.</td></tr>
+        <tr><td><code>arith_balance_mismatch</code></td><td>0.80</td><td>Prior + current doesn't close to the printed total — also forces review, always.</td></tr>
+        <tr><td><code>scanline_mismatch</code></td><td>0.85</td><td>A scanline assertion disagreed with the extracted value.</td></tr>
+        <tr><td><code>filename_disagree</code></td><td>0.95</td><td>The filename's own stated amount disagrees with the total.</td></tr>
+        <tr><td><code>currency_inferred_weak</code></td><td>0.90</td><td>Currency came from address or pack default, not the printed page.</td></tr>
+        <tr><td><code>ambiguous_two_digit_year</code></td><td>0.95</td><td>A date like <code>03/31/25</code> — the century is inferred.</td></tr>
+        <tr><td><code>handwriting_detected</code></td><td>0.60</td><td>The primary page shows handwriting.</td></tr>
+        <tr><td><code>high_skew</code></td><td>0.85</td><td>The scanned page is skewed beyond a safe threshold.</td></tr>
+        <tr><td><code>flattened_annotations</code></td><td>0.75</td><td>A scanned-in handwritten correction — also FORCES review, unconditionally.</td></tr>
+      </tbody>
+    </table>
+    <p class="note2">Boosts (a cross-check agreeing) are capped: the product of every boost on one field may never exceed 1.10, and a boost can never lift a field above 0.99.</p>
+
+    <p class="cfg-lead">The 14 validation rules (V1–V14) — run at persona-write time, any single failure rejects the WHOLE write:</p>
+    <table class="cli-table">
+      <tbody>
+        <tr><td><code>V1</code></td><td>Every <code>field</code> is in the pack's registered field set for that doc_type.</td></tr>
+        <tr><td><code>V2</code></td><td>Every <code>adjust</code> op is registered (base + pack).</td></tr>
+        <tr><td><code>V3</code></td><td>Every <code>region</code> is in the closed enum.</td></tr>
+        <tr><td><code>V4</code></td><td>Every <code>pattern</code> is a named pattern or passes the restricted-regex rules.</td></tr>
+        <tr><td><code>V5</code></td><td>A selector with a non-unique anchor and no region is rejected.</td></tr>
+        <tr><td><code>V6</code></td><td>A bare-digit regex needs a narrowing region or column_headers.</td></tr>
+        <tr><td><code>V7</code></td><td><code>scanline_selector.asserts[].field</code> is within the permitted set.</td></tr>
+        <tr><td><code>V8</code></td><td><code>sub_group</code> nesting depth ≤ 1.</td></tr>
+        <tr><td><code>V9</code></td><td><code>row_count</code> is a range, never an equality.</td></tr>
+        <tr><td><code>V10</code></td><td>No selector produces a field the pack marks <code>derived_only</code> — the F1 footgun guard.</td></tr>
+        <tr><td><code>V11</code></td><td>Total serialized persona size ≤ 64 KB.</td></tr>
+        <tr><td><code>V12</code></td><td><code>few_shot_examples</code> ≤ 3 entries, none from a <code>flattened_annotations</code> document.</td></tr>
+        <tr><td><code>V13</code></td><td>Every <code>required</code> field is covered — by a selector, an op, or the persona is draft-only.</td></tr>
+        <tr><td><code>V14</code></td><td>A pattern capturing only fixed text needs an anchor/region — no anchor may restate a captured value.</td></tr>
+      </tbody>
+    </table>
+    <p class="note2">Run explicitly with <code>docintel validate-persona &lt;persona.json&gt; --pack-file &lt;pack.json&gt;</code> — it does not run automatically at <code>docintel process</code> startup.</p>
+  </section>
+
+  <section class="cfg" id="gold">
+    <div class="col-h"><h2>Gold data &amp; the scorecard</h2><span class="hint">// how correctness is actually measured</span></div>
+    <p class="cfg-lead">One JSON file per real document, hand-labelled with the correct answer in advance. <b>Gold is the only source of truth this project trusts</b> — no fixture is ever authored from the pipeline's own output.</p>
+    <pre class="cfg-code">{
+  "gold_id": "acme-widgets-inv-0001", "source_file": "invoice.pdf", "pack": "acme_widgets",
+  "fields": { "vendor_name": "ACME WIDGETS", "total_printed": 4250.00 },
+  "expected_routing": { "lane": "medium", "review_flag": true, "regen_flag": false }
+}</pre>
+    <p class="cfg-lead">Reuse the exact same scoring engine from your own project — the gold folder and PDF lookup are plain relative paths, not hardcoded to this repo:</p>
+    <pre class="cfg-code">from docintel.scorecard import replay_gold
+card = replay_gold(runner_factory=lambda: pipeline)
+print(card["summary"])   # {'total': N, 'passed': N, 'failed': 0, ...}
+
+# faster than hand-writing the fixture — auto-fill from one clean run:
+from docintel.evals.draft_gold import draft_gold_fixture
+fixture = draft_gold_fixture(record, "acme-0001", source_file="invoice.pdf")
+# fixture["expected_routing"] is deliberately left for a human to set by hand -
+# that's the one thing gold data exists to check INDEPENDENTLY of the pipeline</pre>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h"><code>replay-gold</code></div><p>The whole pipeline, end to end — "did this change break anything," full stop.</p></div>
+      <div class="knob"><div class="knob-h"><code>accuracy-report</code></div><p>Same numbers, rendered for a non-engineer: percent correct by company and doc type.</p></div>
+      <div class="knob"><div class="knob-h"><code>eval-gate</code> / <code>eval-vision</code></div><p>Classification alone, or Gemini alone — isolates which stage broke.</p></div>
+    </div>
+  </section>
+
+  <section class="cfg" id="trouble">
+    <div class="col-h"><h2>Troubleshooting — real gotchas we actually hit</h2><span class="hint">// found while building this against real invoices</span></div>
+    <h3 style="font-family:var(--serif);font-weight:400;font-size:19px;margin:18px 0 6px;">A field grabbed the wrong text</h3>
+    <p class="cfg-lead"><code>region: "near-anchor"</code> is a wide box (300pt right, 40pt below the anchor) — a label at the same height in a neighboring column can leak in. The <code>"text"</code> pattern makes this worse: it accepts whatever candidate it sees FIRST.</p>
+    <div class="warn"><b>Fix:</b> use a targeted regex instead of the generic shortcuts. For a party name, an ANCHORED Title Case shape (<code>^([A-Z][a-z]{1,15}\.?(?: [A-Z][a-z]{1,15}\.?)?...)$</code>) rejects an all-caps label like <code>INVOICE NO.</code> outright, letting the pattern loop fall through to the real value on the next line.</div>
+    <h3 style="font-family:var(--serif);font-weight:400;font-size:19px;margin:18px 0 6px;">A date field came back empty</h3>
+    <p class="cfg-lead">The named <code>"date"</code> pattern only parses month-first strings (<code>Aug 19, 2026</code>). A day-first date (<code>19 Aug 2026</code>) silently fails — the field is missing, not wrong.</p>
+    <div class="warn"><b>Fix:</b> a plain regex instead — <code>([0-9]{1,2}\s{1,3}[A-Za-z]{3,9}\s{1,3}[0-9]{4})</code> — records the raw printed text rather than failing to normalize it.</div>
+    <h3 style="font-family:var(--serif);font-weight:400;font-size:19px;margin:18px 0 6px;">A brand-new carrier isn't claimed, even with a correct persona in the overlay</h3>
+    <p class="cfg-lead"><code>digitaldirection</code> claims via <code>alias_table</code>, compiled once at import from the shipped table — <code>DOCINTEL_EXTRA_PERSONAS_DIR</code>'s overlay reaches persona lookup and fingerprinting but never that claim decision.</p>
+    <div class="warn"><b>Fix:</b> either the carrier already bills an existing <code>MANAGED_CLIENTS</code> client (the secondary claim rule), or add it to the real <code>LITERAL_ALIASES</code> table — a genuine code change. <code>northstar</code> doesn't have this gap: it claims by its own fixed identity, never the vendor's name. Check a pack's claim rule <code>kind</code> before assuming the overlay alone is enough.</div>
+    <h3 style="font-family:var(--serif);font-weight:400;font-size:19px;margin:18px 0 6px;">Everything lands in the review lane</h3>
+    <p class="cfg-lead">Normal for a brand-new persona — <code>"status": "draft"</code> applies an automatic confidence penalty on every document. Promote to <code>"active"</code> once you've checked real coverage.</p>
+  </section>
+
+  <footer>
+    <h3>How to read this</h3>
+    <ul>
+      <li><b>One front door:</b> <code>build_pipeline(vision=…)</code> returns a <code>Runner</code>. Pick a <b>Vision</b> mode, whether you're loading <b>Packs</b> beyond the shipped four, and whether a <b>Jobs queue</b> should persist review-worthy documents — then layer in optional features.</li>
+      <li><b>The two extension points compose independently:</b> <code>DOCINTEL_EXTRA_PERSONAS_DIR</code> adds a vendor to a pack that already ships; <code>extra_packs=</code> adds a whole new company. Neither ever touches the installed package, so <code>pip install --upgrade</code> can't wipe them.</li>
+      <li><b>Vision only ever answers questions a persona already poses</b> — it never decides classification or invents document structure. <code>fake</code> is for wiring checks, <code>cassette</code> replays recorded responses offline (the default, reproducible), <code>live</code> actually calls Gemini.</li>
+      <li><b>The "always on" row is not optional — it's the point.</b> Emit-always, the 14-rule validator, the draft confidence penalty, the safe unclaimed-vendor path, and in-run dedup all run automatically. You don't wire correctness guarantees — the pipeline provides them.</li>
+      <li><b>Operational tasks live in the CLI, not your code.</b> Draining the review queue, exporting a spreadsheet, reconciling against contracts, checking queue health — see <b>Command-line operations</b> above.</li>
+    </ul>
+    <p class="note">Generated for sharing — a single self-contained HTML file, no build step. Every toggle's generated code, every table, and every gotcha above reflects a real, verified <code>docintel</code> API surface — install to onboarding to gold-data scoring, all in this one page.</p>
+  </footer>
+</div>
+
+<script>
+/* ----------------------------------------------------------------------
+   FEATURE CATALOG — single source of truth.
+---------------------------------------------------------------------- */
+const FEATURES = [
+  // ---- Onboarding: no repo access ----
+  {id:"extra_persona_dir", group:"Onboarding — no repo access", name:"Vendor for a shipped pack", code:"DOCINTEL_EXTRA_PERSONAS_DIR", stage:"persona",
+   desc:"Add a vendor to northstar, spt_metals, or acme_freight from a directory you own — zero code. digitaldirection is the one exception: it claims by alias_table, compiled once from the shipped table, so a brand-new carrier still needs either an existing managed client or a real code change to be CLAIMED (fingerprint/persona still resolve fine via the overlay).",
+   example:`# my_docintel_config/northstar/aliases.local.json
+#   {"widget vendor llc": "widget_vendor"}
+# my_docintel_config/northstar/widget_vendor.json
+#   (a persona - same shape as any shipped one)
+# tested: northstar claims by ITS OWN bill-to identity, never the vendor's
+# name, so a brand-new vendor here is claimed correctly with zero code edits
+
+import os
+os.environ["DOCINTEL_EXTRA_PERSONAS_DIR"] = r"C:\\my_docintel_config"
+# every pack's personas()/alias lookup now consults this directory too`},
+
+  {id:"extra_packs", group:"Onboarding — no repo access", name:"A whole new company", code:"extra_packs=[pack]", stage:"classify",
+   desc:"No shipped pack claims this company at all. Load your own pack.json + personas/ folder and hand it to build_pipeline().",
+   example:`from docintel.packs.datapack import load_pack_file
+pack = load_pack_file("my_packs/acme_widgets/pack.json")
+pipeline = build_pipeline(vision=FakeVision(), extra_packs=[pack])
+# claim rules, ladder, field sets, thresholds, aliases - all data,
+# living entirely in my_packs/, never inside the installed package`},
+
+  // ---- Hooks & notification ----
+  {id:"hooks_before_emit", group:"Hooks & notification", name:"Real-time review notification", code:"beforeEmit hook", stage:"gate",
+   desc:"Fires the instant lane/review_flag/regen_flag are decided - inline, no polling, for every document the pipeline emits.",
+   example:`def notify_if_needs_review(ctx, nxt):
+    ctx = nxt(ctx)  # let the pipeline finish deciding lane/review_flag first
+    if ctx.review_flag or ctx.lane == "low":
+        my_own_notifier(ctx.document_id, ctx.lane)  # your Slack/email/webhook
+    return ctx
+
+hooks = HookRegistry()
+hooks.register("beforeEmit", notify_if_needs_review, pack="my_integration")`},
+
+  // ---- Multi-format intake ----
+  {id:"email_intake", group:"Multi-format intake", name:"Email containers", code:"EmailIntake", stage:"intake",
+   desc:"An .eml or Outlook .msg is unwrapped and every real attachment processed in its own right - one IntakeItem per attachment.",
+   example:`from docintel.adapters.intake.email import EmailIntake
+for item in EmailIntake(["inbox/message.eml"]).items():
+    record = pipeline.process(document_id=item.document_id,
+                               source_path=item.source_path,
+                               sender_email=item.sender_email,
+                               email_id=item.email_id)`},
+
+  {id:"directory_intake", group:"Multi-format intake", name:"Scan a whole folder", code:"FilesystemIntake([dir])", stage:"intake",
+   desc:"Point intake at a directory instead of one file - every document inside (and in subfolders) is processed independently.",
+   example:`from docintel.adapters.intake.filesystem import FilesystemIntake
+for item in FilesystemIntake(["invoices"]).items():
+    record = pipeline.process(document_id=item.document_id,
+                               source_path=item.source_path,
+                               sender_email=item.sender_email,
+                               email_id=item.email_id)
+    print(record["disposition"], record["lane"], item.source_path)`},
+
+  // ---- Evaluation & gold data ----
+  {id:"replay_gold", group:"Evaluation & gold data", name:"Score against gold data", code:"scorecard.replay_gold", stage:"emit",
+   desc:"Reuses docintel's own scoring engine from your own project - docs/corpus/gold/ and the source-PDF lookup are plain relative paths, not hardcoded to this repo.",
+   example:`from docintel.scorecard import replay_gold
+card = replay_gold(runner_factory=lambda: pipeline)
+print(card["summary"])   # {'total': N, 'passed': N, 'failed': 0, ...}
+# checks docs/corpus/gold/*.json from wherever this script runs`},
+
+  {id:"draft_gold", group:"Evaluation & gold data", name:"Auto-draft a gold fixture", code:"draft_gold_fixture", stage:"emit",
+   desc:"Fills fields/derived/line_items straight from one clean run. Never auto-fills expected_routing - that's the one thing gold data exists to check independently.",
+   example:`from docintel.evals.draft_gold import draft_gold_fixture
+record = pipeline.process(document_id="acme-0001", source_path="invoice.pdf")
+fixture = draft_gold_fixture(record, "acme-0001", source_file="invoice.pdf")
+# fixture["expected_routing"] is left for a human to set by hand`},
+];
+
+const GROUPS = ["Onboarding — no repo access","Hooks & notification","Multi-format intake","Evaluation & gold data"];
+
+/* ---- state ---- */
+const active = new Set();
+let vision = "fake";
+let packsMode = "shipped";
+let jobsMode = "none";
+
+/* ====================================================================
+   PYTHON SYNTAX HIGHLIGHTER (tiny, dependency-free)
+==================================================================== */
+const KW = ["from","import","for","in","if","else","return","None","True","False","lambda","def","as","not","and","or","with"];
+const FN = ["build_pipeline","FakeVision","CassetteVision","GeminiVision","HookRegistry","SQLiteJobQueue",
+  "load_pack_file","EmailIntake","FilesystemIntake","replay_gold","draft_gold_fixture","process","print",
+  "register","items","my_own_notifier"];
+const HLRE = new RegExp(
+  "(#.*)$"
+  + "|([bfru]?\"(?:\\\\.|[^\"\\\\])*\"|[bfru]?'(?:\\\\.|[^'\\\\])*')"
+  + "|\\b(\\d[\\d_]*)\\b"
+  + "|\\b(" + KW.join("|") + ")\\b"
+  + "|\\b(" + FN.join("|") + ")\\b", "g");
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function highlight(line){
+  return esc(line).replace(HLRE,(m,com,str,num,kw,fn)=>{
+    if(com) return `<span class="c-com">${com}</span>`;
+    if(str) return `<span class="c-str">${str}</span>`;
+    if(num) return `<span class="c-num">${num}</span>`;
+    if(kw)  return `<span class="c-kw">${kw}</span>`;
+    if(fn)  return `<span class="c-fn">${fn}</span>`;
+    return m;
+  });
+}
+
+/* ====================================================================
+   PROGRAM GENERATOR — returns [{text, feat}]
+==================================================================== */
+function genLines(){
+  const L=[]; const add=(t,f="base")=>L.push({text:t,feat:f});
+  const has = id => active.has(id);
+
+  add("from docintel import build_pipeline");
+  if(vision==="fake") add("from docintel.adapters.vision.fake import FakeVision");
+  if(vision==="cassette") add("from docintel.adapters.vision.cassette import CassetteVision");
+  if(vision==="live") add("from docintel.adapters.vision.gemini_adapter import GeminiVision");
+  if(has("hooks_before_emit")) add("from docintel.pipeline.hooks import HookRegistry","hooks_before_emit");
+  if(jobsMode==="sqlite") add("from docintel.jobs.store import SQLiteJobQueue","jobs");
+  if(packsMode==="extra" || has("extra_packs")) add("from docintel.packs.datapack import load_pack_file","extra_packs");
+  if(has("email_intake")) add("from docintel.adapters.intake.email import EmailIntake","email_intake");
+  if(has("directory_intake")) add("from docintel.adapters.intake.filesystem import FilesystemIntake","directory_intake");
+  if(has("replay_gold")) add("from docintel.scorecard import replay_gold","replay_gold");
+  if(has("draft_gold")) add("from docintel.evals.draft_gold import draft_gold_fixture","draft_gold");
+  add("");
+
+  if(has("extra_persona_dir")){
+    add("import os","extra_persona_dir");
+    add('os.environ["DOCINTEL_EXTRA_PERSONAS_DIR"] = r"C:\\my_docintel_config"','extra_persona_dir');
+    add("# adds a vendor to a pack that already ships - zero code, picked up below","extra_persona_dir");
+    add("","extra_persona_dir");
+  }
+
+  if(has("hooks_before_emit")){
+    add("def notify_if_needs_review(ctx, nxt):","hooks_before_emit");
+    add('    ctx = nxt(ctx)  # let the pipeline finish deciding lane/review_flag first',"hooks_before_emit");
+    add('    if ctx.review_flag or ctx.lane == "low":',"hooks_before_emit");
+    add('        my_own_notifier(ctx.document_id, ctx.lane)  # your Slack/email/webhook',"hooks_before_emit");
+    add("    return ctx","hooks_before_emit");
+    add("","hooks_before_emit");
+    add("hooks = HookRegistry()","hooks_before_emit");
+    add('hooks.register("beforeEmit", notify_if_needs_review, pack="my_integration")',"hooks_before_emit");
+    add("","hooks_before_emit");
+  }
+
+  if(packsMode==="extra" || has("extra_packs")){
+    add('pack = load_pack_file("my_packs/acme_widgets/pack.json")',"extra_packs");
+    add("# claim rules, ladder, fields, aliases - all data, none of it in site-packages","extra_packs");
+    add("","extra_packs");
+  }
+
+  if(jobsMode==="sqlite"){
+    add('jobs = SQLiteJobQueue(path="var/jobs.sqlite3")',"jobs");
+    add("# a hard-miss vendor or an unresolved billing convention gets a real,","jobs");
+    add("# persistent job here instead of a line nobody reads","jobs");
+    add("","jobs");
+  }
+
+  // vision instantiation
+  let visionExpr = "FakeVision()";
+  if(vision==="cassette") visionExpr = 'CassetteVision(inner=None, path="tests/fixtures/cassettes/corpus.json", mode="replay")';
+  if(vision==="live") visionExpr = "GeminiVision()";
+
+  // build_pipeline() call, kwargs assembled from active state
+  const kwargs = [`vision=${visionExpr}`];
+  if(jobsMode==="sqlite") kwargs.push("jobs=jobs");
+  if(has("hooks_before_emit")) kwargs.push("hooks=hooks");
+  if(packsMode==="extra" || has("extra_packs")) kwargs.push("extra_packs=[pack]");
+
+  if(kwargs.length<=2){
+    add(`pipeline = build_pipeline(${kwargs.join(", ")})`);
+  } else {
+    add("pipeline = build_pipeline(");
+    kwargs.forEach((k,i)=>add(`    ${k}${i<kwargs.length-1?",":""}`));
+    add(")");
+  }
+  add("");
+
+  if(has("email_intake") && has("directory_intake")){
+    add("for source in (EmailIntake([\"inbox\"]), FilesystemIntake([\"invoices\"])):","email_intake");
+    add("    for item in source.items():","email_intake");
+    add("        record = pipeline.process(document_id=item.document_id, source_path=item.source_path,","email_intake");
+    add("                                   sender_email=item.sender_email, email_id=item.email_id)","email_intake");
+    add('        print(record["disposition"], record["lane"], item.source_path)',"email_intake");
+  } else if(has("email_intake")){
+    add('for item in EmailIntake(["inbox"]).items():',"email_intake");
+    add("    record = pipeline.process(document_id=item.document_id, source_path=item.source_path,","email_intake");
+    add("                               sender_email=item.sender_email, email_id=item.email_id)","email_intake");
+    add('    print(record["disposition"], record["lane"], item.source_path)',"email_intake");
+  } else if(has("directory_intake")){
+    add('for item in FilesystemIntake(["invoices"]).items():',"directory_intake");
+    add("    record = pipeline.process(document_id=item.document_id, source_path=item.source_path,","directory_intake");
+    add("                               sender_email=item.sender_email, email_id=item.email_id)","directory_intake");
+    add('    print(record["disposition"], record["lane"], item.source_path)',"directory_intake");
+  } else {
+    add('record = pipeline.process(document_id="d1", source_path="invoice.pdf")');
+    add('print(record["disposition"], record["lane"], record["fields"])');
+  }
+
+  if(has("replay_gold")){
+    add("");
+    add("card = replay_gold(runner_factory=lambda: pipeline)","replay_gold");
+    add('print(card["summary"])  # {\'total\': N, \'passed\': N, \'failed\': 0, ...}',"replay_gold");
+  }
+  if(has("draft_gold")){
+    add("");
+    add('fixture = draft_gold_fixture(record, "acme-0001", source_file="invoice.pdf")',"draft_gold");
+    add('# fixture["expected_routing"] is left for a human to set by hand',"draft_gold");
+  }
+
+  return L;
+}
+
+/* ====================================================================
+   RENDER
+==================================================================== */
+let prevTexts = [];
+function render(){
+  const lines = genLines();
+  const codeEl = document.getElementById("code");
+  codeEl.innerHTML = lines.map((l,i)=>{
+    const changed = prevTexts[i] !== l.text;
+    return `<div class="ln${changed?" flash":""}"><span class="lc">${highlight(l.text)}</span></div>`;
+  }).join("");
+  prevTexts = lines.map(l=>l.text);
+  document.getElementById("lineCount").textContent = `// ${lines.length} lines`;
+  document.getElementById("featCount").textContent = active.size;
+
+  document.querySelectorAll(".stage").forEach(s=>s.classList.remove("lit"));
+  const litStages = new Set();
+  FEATURES.forEach(f=>{ if(active.has(f.id)) litStages.add(f.stage); });
+  if(packsMode==="extra") litStages.add("classify");
+  if(jobsMode==="sqlite") litStages.add("5c");
+  litStages.forEach(s=>{
+    const el = document.querySelector(`.stage[data-stage="${s}"]`);
+    if(el) el.classList.add("lit");
+  });
+}
+
+function buildFeatureList(){
+  const root = document.getElementById("features");
+  root.innerHTML = "";
+  GROUPS.forEach(g=>{
+    const items = FEATURES.filter(f=>f.group===g);
+    if(!items.length) return;
+    const wrap = document.createElement("div");
+    wrap.className = "fgroup";
+    wrap.innerHTML = `<div class="fgroup-h">${g}</div>`;
+    items.forEach(f=>{
+      const card = document.createElement("div");
+      card.className = "feat";
+      card.dataset.id = f.id;
+      card.innerHTML = `
+        <div class="feat-head">
+          <button class="sw" data-id="${f.id}" aria-label="toggle ${f.name}"></button>
+          <div class="feat-meta">
+            <div class="feat-name">${f.name} <code>${f.code}</code> <span class="stag">${f.stage}</span></div>
+            <div class="feat-desc">${f.desc}</div>
+          </div>
+          <button class="ex-btn" data-id="${f.id}">example</button>
+        </div>
+        <div class="ex-wrap" id="ex-${f.id}"><pre>${highlight(f.example)}</pre></div>
+      `;
+      wrap.appendChild(card);
+    });
+    root.appendChild(wrap);
+  });
+
+  root.querySelectorAll(".sw").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.dataset.id;
+      if(active.has(id)) active.delete(id); else active.add(id);
+      btn.closest(".feat").classList.toggle("active", active.has(id));
+      render();
+    });
+  });
+  root.querySelectorAll(".ex-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.getElementById("ex-"+btn.dataset.id).classList.toggle("open");
+    });
+  });
+}
+
+function wireSeg(id, apply){
+  document.querySelectorAll(`#${id} button`).forEach(b=>{
+    b.addEventListener("click", ()=>{
+      document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      apply(b.dataset.v);
+      render();
+    });
+  });
+}
+wireSeg("segVision", v=>vision=v);
+wireSeg("segPacks", v=>packsMode=v);
+wireSeg("segJobs", v=>jobsMode=v);
+
+document.getElementById("copyBtn").addEventListener("click", ()=>{
+  const text = genLines().map(l=>l.text).join("\\n");
+  navigator.clipboard?.writeText(text).then(()=>{
+    const btn = document.getElementById("copyBtn");
+    btn.textContent = "copied"; btn.classList.add("done");
+    setTimeout(()=>{ btn.textContent="copy"; btn.classList.remove("done"); }, 1400);
+  });
+});
+document.getElementById("clearBtn").addEventListener("click", ()=>{
+  active.clear();
+  document.querySelectorAll(".feat").forEach(f=>f.classList.remove("active"));
+  render();
+});
+
+buildFeatureList();
+render();
+</script>

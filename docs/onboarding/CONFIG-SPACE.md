@@ -92,6 +92,34 @@ A reviewer:
   that, anything the system isn't confident about still goes to a review queue rather than
   guessing.
 
+### If you don't have commit access to this repo
+
+Everything above assumes the reviewer can add files under `src/docintel/packs/` and merge a PR.
+A team that only `pip install`s the library has a fully-supported alternative that needs **no
+repo access at all** — same `pack.json`/persona JSON shape, same `docintel validate-persona`
+self-check, living entirely in your own project instead:
+
+- **A new vendor for a pack that already ships** (`northstar`, `spt_metals`, `acme_freight`, or
+  `digitaldirection` when the carrier already bills an existing managed client): set
+  `DOCINTEL_EXTRA_PERSONAS_DIR` to a directory you own, laid out `<dir>/<pack_name>/*.json`
+  (personas) plus an optional `aliases.local.json`. Picked up automatically by the CLI, no
+  script needed. **Tested exception:** `digitaldirection` claims by carrier via an
+  `alias_table` rule compiled once from the shipped table at import — the overlay reaches
+  persona lookup and fingerprint resolution but not that claim decision, so a genuinely new
+  carrier billing a client *not* already in `MANAGED_CLIENTS` still needs a real edit to the
+  shipped alias table (a PR). Confirmed with a live test against both packs; check a pack's
+  claim rule `kind` before assuming the overlay alone is enough.
+- **A brand-new company no shipped pack claims**: build a `pack.json` + `personas/` folder in
+  your own project (`docintel new-pack` scaffolds it the same way), load it with
+  `docintel.packs.datapack.load_pack_file()`, and pass it to
+  `build_pipeline(vision=..., extra_packs=[pack])`.
+- Gold-corpus scoring works the same way too: `docintel.scorecard.replay_gold` and
+  `docintel.evals.draft_gold.draft_gold_fixture` both take a plain `runner_factory`/`record`, so
+  the exact same eval machinery this repo uses works from your own project's `docs/corpus/gold/`.
+
+Full detail, real commands, and a worked example (three real invoices, three different clients,
+onboarded with zero repo edits): `docs/DOCINTEL-ARCHITECTURE-GUIDE.html#external`.
+
 ## Where each piece lives, for anyone extending this
 
 | Piece | File |
@@ -106,6 +134,8 @@ A reviewer:
 | Where a reviewed draft's hints actually get used | `adapters.vision.hints.hints_for_persona` — the same `{field: hint}` shape, feeding Stage 5b's vision fallback, which already runs unconditionally for a company with no persona yet |
 | The real, hand-reviewed personas the pipeline actually reads | `src/docintel/packs/<company>/personas/*.json` |
 | Growing the gold corpus from a real run | `docintel draft-gold <gold_id> --source <pdf>` — auto-fills a new gold fixture from one clean pipeline run, no review-queue correction needed first; see `docs/DOCINTEL-ARCHITECTURE-GUIDE.html#eval-layer` |
+| No repo access: a vendor added to a shipped pack | `DOCINTEL_EXTRA_PERSONAS_DIR` env var — `src/docintel/packs/registry.py` (`load_extra_personas`/`load_extra_aliases`) |
+| No repo access: a wholly new company | `build_pipeline(vision=..., extra_packs=[pack])` — `src/docintel/pipeline/stages/__init__.py` |
 
 ## Why "draft" is a real status, not a suggestion
 

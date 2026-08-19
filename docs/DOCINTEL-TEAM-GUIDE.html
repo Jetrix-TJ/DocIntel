@@ -1,0 +1,570 @@
+<title>docintel — Team Guide: Install, Run, Onboard a Vendor</title>
+<style>
+:root {
+  --paper: #f5f3ee;
+  --paper-raised: #ffffff;
+  --ink: #201f2b;
+  --ink-soft: #55536a;
+  --ink-faint: #8a8798;
+  --line: #ddd8ca;
+  --line-soft: #eae6d9;
+  --accent: #34459c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e7e9f5;
+  --good: #1f7a45;
+  --good-soft: #e1f3e7;
+  --bad: #a3402e;
+  --bad-soft: #f7e6e1;
+  --step-num: #34459c;
+  --code-bg: #211f2c;
+  --code-ink: #e9e7f2;
+  --code-accent: #9fb2ff;
+  --shadow: 0 1px 2px rgba(32,31,43,0.06), 0 6px 20px rgba(32,31,43,0.06);
+  --serif: Iowan Old Style, "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1b1a22;
+    --paper-raised: #242330;
+    --ink: #ece9f2;
+    --ink-soft: #b3aec2;
+    --ink-faint: #837e94;
+    --line: #38364a;
+    --line-soft: #2c2a3a;
+    --accent: #8fa1ff;
+    --accent-ink: #14152a;
+    --accent-soft: #262b4a;
+    --good: #5fd393;
+    --good-soft: #17321f;
+    --bad: #ee9784;
+    --bad-soft: #3a2420;
+    --code-bg: #131220;
+    --code-ink: #e9e7f2;
+    --code-accent: #9fb2ff;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1b1a22;
+  --paper-raised: #242330;
+  --ink: #ece9f2;
+  --ink-soft: #b3aec2;
+  --ink-faint: #837e94;
+  --line: #38364a;
+  --line-soft: #2c2a3a;
+  --accent: #8fa1ff;
+  --accent-ink: #14152a;
+  --accent-soft: #262b4a;
+  --good: #5fd393;
+  --good-soft: #17321f;
+  --bad: #ee9784;
+  --bad-soft: #3a2420;
+  --code-bg: #131220;
+  --code-ink: #e9e7f2;
+  --code-accent: #9fb2ff;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px rgba(0,0,0,0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--accent); }
+code, pre { font-family: var(--mono); }
+code {
+  background: var(--accent-soft);
+  color: var(--ink);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 16px 18px;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.86em;
+  line-height: 1.55;
+  box-shadow: var(--shadow);
+}
+pre code { background: none; color: inherit; padding: 0; font-size: 1em; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 780px);
+  gap: 48px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 24px 100px;
+  justify-content: center;
+}
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { position: static !important; }
+}
+
+aside {
+  position: sticky;
+  top: 40px;
+  align-self: start;
+  font-size: 0.86em;
+}
+aside .brand {
+  font-family: var(--serif);
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+aside .brand-sub {
+  color: var(--ink-faint);
+  font-size: 0.82em;
+  margin-bottom: 22px;
+}
+aside nav a {
+  display: block;
+  text-decoration: none;
+  color: var(--ink-soft);
+  padding: 5px 0;
+  border-left: 2px solid transparent;
+  padding-left: 12px;
+  margin-left: -13px;
+}
+aside nav a:hover { color: var(--accent); }
+aside nav a.step-link { font-weight: 600; color: var(--ink); margin-top: 10px; }
+aside nav a.step-link:first-child { margin-top: 0; }
+
+main { min-width: 0; }
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 0.74em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+h1 {
+  font-family: var(--serif);
+  font-size: 2.3em;
+  line-height: 1.18;
+  margin: 0 0 14px;
+  text-wrap: balance;
+  font-weight: 600;
+}
+.intro {
+  font-size: 1.12em;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin-bottom: 36px;
+}
+
+.step {
+  margin: 56px 0;
+  scroll-margin-top: 24px;
+}
+.step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.step-num {
+  font-family: var(--serif);
+  font-size: 1.5em;
+  font-weight: 600;
+  color: var(--step-num);
+  flex-shrink: 0;
+  line-height: 1;
+}
+h2 {
+  font-family: var(--serif);
+  font-size: 1.55em;
+  font-weight: 600;
+  margin: 0;
+  text-wrap: balance;
+}
+h3 {
+  font-size: 1.08em;
+  font-weight: 700;
+  margin: 26px 0 8px;
+}
+p { margin: 12px 0; }
+.step > p:first-of-type { margin-top: 0; }
+
+ul, ol { padding-left: 1.3em; }
+li { margin: 6px 0; }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 18px 0;
+  font-size: 0.95em;
+}
+.callout.good { border-color: var(--good); background: var(--good-soft); }
+.callout.warn { border-color: var(--bad); background: var(--bad-soft); }
+.callout .label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.82em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.callout.good .label { color: var(--good); }
+.callout.warn .label { color: var(--bad); }
+.callout:not(.good):not(.warn) .label { color: var(--accent); }
+
+.tree {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: var(--shadow);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  margin: 14px 0;
+}
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+th { color: var(--ink-faint); font-weight: 700; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.03em; }
+td code, th code { font-size: 0.95em; }
+
+.divider { border: none; border-top: 1px solid var(--line); margin: 44px 0; }
+
+.footer {
+  margin-top: 60px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 0.88em;
+}
+.footer a { color: var(--ink-soft); }
+
+.badge {
+  display: inline-block;
+  font-size: 0.76em;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-left: 8px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+</style>
+
+<div class="layout">
+  <aside>
+    <div class="brand">docintel</div>
+    <div class="brand-sub">Team guide — install to first result</div>
+    <nav>
+      <a class="step-link" href="#install">1. Install</a>
+      <a class="step-link" href="#process">2. Process a document</a>
+      <a class="step-link" href="#onboard">3. Onboard a new vendor</a>
+      <a href="#onboard-existing">→ vendor of a known company</a>
+      <a href="#onboard-new">→ a whole new company</a>
+      <a class="step-link" href="#verify">4. Verify at scale</a>
+      <a class="step-link" href="#gold">5. Gold data &amp; scoring</a>
+      <a class="step-link" href="#trouble">6. Troubleshooting</a>
+      <a class="step-link" href="#reference">Reference &amp; further reading</a>
+    </nav>
+  </aside>
+
+  <main>
+    <p class="eyebrow">Document Intelligence · Getting started</p>
+    <h1>Install it, run one document, onboard your first vendor</h1>
+    <p class="intro">
+      This is the practical path, in order: get the library running, process a real document,
+      then teach it a vendor your team cares about — without ever touching the installed
+      package's own source. Everything here was run for real while writing it; nothing is
+      theoretical.
+    </p>
+
+    <section class="step" id="install">
+      <div class="step-head"><span class="step-num">1</span><h2>Install</h2></div>
+      <p>A fresh, isolated environment — this never touches anything else on the machine:</p>
+      <pre><code>python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install "git+https://github.com/jeevatechjays/DocIntel.git@classification-correctness-v2"</code></pre>
+      <p>Confirm it's a real, installed package (not pointing at some other checkout):</p>
+      <pre><code>python -c "import docintel; print(docintel.__file__)"
+pip show docintel</code></pre>
+      <div class="callout">
+        <span class="label">Branch note</span>
+        Drop <code>@classification-correctness-v2</code> once this branch merges to <code>main</code> —
+        the same command then installs the default branch.
+      </div>
+    </section>
+
+    <section class="step" id="process">
+      <div class="step-head"><span class="step-num">2</span><h2>Process a document</h2></div>
+      <pre><code>docintel process "C:\path\to\some-invoice.pdf" --vision fake --json</code></pre>
+      <p>
+        <code>--vision fake</code> is correct for any document with no pre-recorded test
+        cassette — which is every real document you didn't build a fixture for. It skips the
+        vision fallback and shows exactly what the deterministic rules capture on their own.
+      </p>
+      <p>Read the result by checking three things first:</p>
+      <table>
+        <thead><tr><th>Key</th><th>What it tells you</th></tr></thead>
+        <tbody>
+          <tr><td><code>disposition</code></td><td><code>processed</code> is normal. <code>dead_letter</code> means something broke — read <code>reason</code>.</td></tr>
+          <tr><td><code>extraction_coverage</code></td><td><code>complete: true</code> means every declared field for this doc_type was found.</td></tr>
+          <tr><td><code>lane</code> / <code>review_flag</code></td><td><code>review</code> or <code>flag: true</code> isn't a bug — it means the pipeline isn't confident enough to auto-approve. A brand-new <code>"status": "draft"</code> persona always does this, on purpose.</td></tr>
+        </tbody>
+      </table>
+      <p>An unrecognized vendor comes back tagged <code>no_persona</code>/<code>unclaimed_document</code>, not guessed at — that's the safe path working, not a gap to panic about.</p>
+    </section>
+
+    <section class="step" id="onboard">
+      <div class="step-head"><span class="step-num">3</span><h2>Onboard a new vendor</h2></div>
+      <p>
+        Two different situations, two different mechanisms — both live entirely in <strong>your
+        own project folder</strong>, never inside the installed package, so
+        <code>pip install --upgrade</code> can never wipe them out.
+      </p>
+
+      <h3 id="onboard-existing">A vendor for a company docintel already knows<span class="badge">simplest</span></h3>
+      <p>
+        Adding another AP vendor to <code>northstar</code> (or another vendor to
+        <code>spt_metals</code>/<code>acme_freight</code>). One environment variable, zero scripts:
+      </p>
+      <div class="tree">my_docintel_config\
+  northstar\
+    aliases.local.json      {"widget vendor llc": "widget_vendor"}
+    widget_vendor.json        (a persona)</div>
+      <pre><code>$env:DOCINTEL_EXTRA_PERSONAS_DIR = "C:\path\to\my_docintel_config"
+docintel process "widget-vendor-invoice.pdf" --vision fake --json</code></pre>
+      <p>The CLI picks this up automatically through the env var — nothing else to wire.</p>
+      <div class="callout warn">
+        <span class="label">Tested — one real exception: digitaldirection</span>
+        Confirmed by an actual run: this works cleanly for <code>northstar</code> because it claims by
+        its <em>own</em> fixed bill-to identity — the vendor's name never enters the claim decision.
+        <code>digitaldirection</code> claims by <em>carrier</em> instead, via an <code>alias_table</code>
+        rule compiled once from the shipped, hardcoded alias table — the overlay's
+        <code>aliases.local.json</code> never reaches it. A brand-new carrier added only through the
+        overlay comes back <code>unclaimed_document</code> unless it happens to bill an existing
+        managed client (the secondary roster rule), or its name is added to the real
+        <code>LITERAL_ALIASES</code> table — a genuine code change, the same one Spectrum needed this
+        session. Check a pack's claim rule <code>kind</code> before assuming the overlay alone is
+        enough for it.
+      </div>
+
+      <h3 id="onboard-new">A whole new company — nothing claims it yet</h3>
+      <p>Project layout:</p>
+      <div class="tree">my_project\
+  venv\                          ← untouched install
+  invoices\                      ← your real PDFs
+  my_packs\
+    &lt;company_slug&gt;\
+      pack.json
+      personas\
+        &lt;vendor_slug&gt;.json
+  run_pipeline.py</div>
+      <p><code>pack.json</code> — the claim rule, doc types, field set, and a one-rung ladder (real, working example):</p>
+      <pre><code>{
+  "name": "acme_widgets",
+  "default_currency": "USD",
+  "doc_types": ["invoice"],
+  "thresholds": { "total_printed": 0.90, "invoice_number": 0.90, "bill_to_name": 0.90 },
+  "fields": {
+    "invoice": {
+      "all": ["vendor_name", "bill_to_name", "invoice_number", "total_printed"],
+      "required": ["bill_to_name"],
+      "any_of": [["invoice_number"]],
+      "derived_only": []
+    }
+  },
+  "claim": {
+    "rules": [{ "kind": "markers", "scope": "primary", "values": ["ACME WIDGETS"] }],
+    "vetoes": []
+  },
+  "ladder": {
+    "default": "invoice",
+    "rungs": [{
+      "name": "invoice_confirmed", "doc_type": "invoice",
+      "when": { "signal": "pattern_in_scope",
+                "params": { "pattern": "ACME WIDGETS", "scope": "primary" } }
+    }]
+  }
+}</code></pre>
+      <p><code>personas/&lt;vendor_slug&gt;.json</code> — where each field sits on the page (full region/pattern vocabulary: <a href="#reference">reference</a>):</p>
+      <pre><code>{
+  "rule_version": "v1",
+  "status": "draft",
+  "doc_type": "invoice",
+  "sender_fingerprint": "acme_widgets|acme_widgets",
+  "field_selectors": [
+    { "field": "vendor_name", "region": "top-left", "pattern": "text" },
+    { "field": "bill_to_name", "anchor": "BILL TO", "region": "near-anchor", "pattern": "text" },
+    { "field": "invoice_number", "anchor": "INVOICE NO.", "region": "near-anchor", "pattern": "text" },
+    { "field": "total_printed", "anchor": "TOTAL", "region": "near-anchor", "pattern": "currency" }
+  ]
+}</code></pre>
+      <p>Validate before running it for real:</p>
+      <pre><code>docintel validate-persona my_packs\acme_widgets\personas\acme.json --pack-file my_packs\acme_widgets\pack.json</code></pre>
+      <p><code>run_pipeline.py</code> — ties it together via <code>extra_packs=</code>, scans the whole <code>invoices\</code> folder:</p>
+      <pre><code>import json, os
+from collections import Counter
+from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision
+from docintel.adapters.intake.filesystem import FilesystemIntake
+from docintel.packs.datapack import load_pack_file
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+pack = load_pack_file(os.path.join(HERE, "my_packs", "acme_widgets", "pack.json"))
+pipeline = build_pipeline(vision=FakeVision(), extra_packs=[pack])
+
+dispositions = Counter(); records = []
+for item in FilesystemIntake([os.path.join(HERE, "invoices")]).items():
+    record = pipeline.process(document_id=item.document_id, source_path=item.source_path,
+                               sender_email=item.sender_email, email_id=item.email_id)
+    dispositions[record["disposition"]] += 1
+    records.append(record)
+    print(f"{record['disposition']:&lt;12} {record['lane'] or '-':&lt;7} "
+          f"{record['doc_type'] or '-':&lt;15} {item.source_path}")
+
+json.dump(records, open(os.path.join(HERE, "results.json"), "w"), indent=2)
+print(f"\n{len(records)} processed ({', '.join(f'{n} {d}' for d, n in dispositions.items())})")</code></pre>
+      <div class="callout good">
+        <span class="label">Proven, not just described</span>
+        Built and run this exact way against three real invoices from three different clients:
+        24/24 field values correct against hand-checked ground truth, correct claim, correct
+        persona lookup, zero repo edits, zero dead letters.
+      </div>
+    </section>
+
+    <section class="step" id="verify">
+      <div class="step-head"><span class="step-num">4</span><h2>Verify at scale</h2></div>
+      <p>Drop more PDFs into <code>invoices\</code> (subfolders are fine) and rerun the same script:</p>
+      <pre><code>.\venv\Scripts\python.exe run_pipeline.py</code></pre>
+      <p>
+        The terminal prints one line per document; <code>results.json</code> next to the script
+        gets full field-level detail for every one. If a new document comes back with
+        <code>missing_required</code> fields or lands in <code>review</code>/<code>no_persona</code>,
+        that's real signal — either a selector needs adjusting for a slightly different layout, or
+        it's genuinely a different vendor that needs its own persona.
+      </p>
+    </section>
+
+    <section class="step" id="gold">
+      <div class="step-head"><span class="step-num">5</span><h2>Gold data &amp; automated scoring</h2></div>
+      <p>
+        Checking output by eye doesn't scale past a handful of documents. <strong>Gold data</strong>
+        is a hand-confirmed JSON file per document holding the correct answer — the same mechanism
+        this project's own test suite uses, reusable from your own project with zero code changes,
+        since the gold folder and PDF lookup are both plain relative paths:
+      </p>
+      <pre><code>from docintel.scorecard import replay_gold
+from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision
+from docintel.packs.datapack import load_pack_file
+
+pack = load_pack_file("my_packs/acme_widgets/pack.json")
+card = replay_gold(runner_factory=lambda: build_pipeline(vision=FakeVision(), extra_packs=[pack]))
+print(card["summary"])   # {'total': N, 'passed': N, 'failed': 0, ...}</code></pre>
+      <p>Two ways to write the gold file itself:</p>
+      <ol>
+        <li><strong>Hand-write it</strong> — a JSON file under <code>docs\corpus\gold\</code>, naming the source PDF and every expected field value.</li>
+        <li><strong>Auto-draft it</strong> from one clean run, then just review it — much less typing:
+          <pre><code>from docintel.evals.draft_gold import draft_gold_fixture
+fixture = draft_gold_fixture(record, "acme-widgets-inv-0001", source_file="invoice.pdf")</code></pre>
+          This fills in <code>fields</code>/<code>derived</code>/line items straight from the record.
+          It <em>never</em> auto-fills <code>expected_routing</code> (lane/review_flag) — that's the
+          one thing gold data exists to check independently, so a human sets it by hand after
+          looking at the record.
+        </li>
+      </ol>
+      <p>Rerun <code>replay_gold</code> after any persona change — it's the "did I just break something" check.</p>
+    </section>
+
+    <section class="step" id="trouble">
+      <div class="step-head"><span class="step-num">6</span><h2>Troubleshooting — real gotchas we actually hit</h2></div>
+
+      <h3>A field grabbed the wrong text</h3>
+      <p>
+        <code>region: "near-anchor"</code> is a wide box (300pt right, 40pt below the anchor) — a
+        label sitting at the same height in a neighbouring column can leak into it. The
+        <code>"text"</code> pattern makes this worse: it accepts whatever candidate it sees
+        <em>first</em>, even if that's the wrong column.
+      </p>
+      <div class="callout warn">
+        <span class="label">Fix</span>
+        Use a targeted regex instead of the generic <code>"text"</code>/<code>"date"</code>
+        shortcuts. For a party name, an <em>anchored</em> Title Case shape
+        (<code>^([A-Z][a-z]{1,15}\.?(?: [A-Z][a-z]{1,15}\.?)?...)$</code>) rejects an all-caps
+        label like <code>INVOICE NO.</code> outright, letting the pattern loop fall through to
+        the real value on the next line down.
+      </div>
+
+      <h3>A date field came back empty</h3>
+      <p>
+        The named <code>"date"</code> pattern only parses month-first strings
+        (<code>Aug 19, 2026</code>). A day-first date (<code>19 Aug 2026</code>) silently fails
+        to parse — the field is simply missing, not wrong.
+      </p>
+      <div class="callout warn">
+        <span class="label">Fix</span>
+        Use a plain regex instead: <code>([0-9]{1,2}\s{1,3}[A-Za-z]{3,9}\s{1,3}[0-9]{4})</code> —
+        records the raw printed text rather than trying (and failing) to normalize it.
+      </div>
+
+      <h3>A persona won't validate</h3>
+      <p>Two rules on regex patterns, enforced by <code>docintel validate-persona</code>:</p>
+      <ul>
+        <li>No unbounded quantifiers — <code>\s+</code> fails, use <code>\s{1,3}</code>.</li>
+        <li>No quantified group containing another quantifier — <code>(?:X{1,15}){1,4}</code>
+          fails; write out repetition as separate optional groups instead
+          (<code>(?:X{1,15})?(?:X{1,15})?</code>).</li>
+      </ul>
+
+      <h3>Everything lands in <code>review</code> lane</h3>
+      <p>
+        Normal for a brand-new persona: <code>"status": "draft"</code> applies an automatic
+        confidence penalty on every document. Promote to <code>"active"</code> once you've
+        checked real coverage across enough samples.
+      </p>
+    </section>
+
+    <hr class="divider">
+
+    <section id="reference">
+      <h2 style="font-family: var(--serif);">Reference &amp; further reading</h2>
+      <p>This guide is the practical path. For the full picture — every region/pattern/adjust-op
+        name, the pipeline's 10 stages, claim rules, the classification ladder, why each design
+        decision was made — see the architecture guide:</p>
+      <p><a href="https://claude.ai/code/artifact/a1d4c08b-b187-4a9a-a60c-36e16e5d1f84">DOCINTEL-ARCHITECTURE-GUIDE.html</a> (also in the repo at <code>docs/DOCINTEL-ARCHITECTURE-GUIDE.html</code>)</p>
+      <p>Repo-side onboarding docs (for a reviewer with commit access): <code>docs/onboarding/CONFIG-SPACE.md</code>, <code>docs/onboarding/COMPANY-CONFIG-TEMPLATE.md</code>.</p>
+    </section>
+
+    <div class="footer">
+      Written against a real, live install of <code>docintel</code> — every command on this page
+      was actually run while writing it, against real invoices, not a hypothetical.
+    </div>
+  </main>
+</div>

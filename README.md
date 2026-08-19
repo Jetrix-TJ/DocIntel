@@ -88,17 +88,26 @@ versus what a human always checks — see
 **[`docs/onboarding/ONBOARDING-EXPLAINER.html`](docs/onboarding/ONBOARDING-EXPLAINER.html)** (open
 directly in a browser).
 
-## Go deeper
+**No commit access to this repo?** A vendor, or a whole new company, can be onboarded entirely
+from your own project — `DOCINTEL_EXTRA_PERSONAS_DIR` for a vendor under a company docintel
+already ships, `build_pipeline(..., extra_packs=[pack])` for a wholly new one. Neither touches
+the installed package, so `pip install --upgrade` never wipes them out. Full step-by-step, with
+a worked example (three real invoices, three different clients, zero repo edits), is in the one
+doc below.
 
-**[`docs/DOCINTEL-TECHNICAL-OVERVIEW.html`](docs/DOCINTEL-TECHNICAL-OVERVIEW.html)** — written for a
-reviewing engineer deciding whether to adopt this: the two ideas that explain the whole design, a
-walkthrough of one document end to end, per-mechanism Q&A, and an honest table of what's
-deliberately not shipped yet. Open it directly in a browser.
+## Go deeper — one page, everything
 
-**[`docs/DOCINTEL-ARCHITECTURE-GUIDE.html`](docs/DOCINTEL-ARCHITECTURE-GUIDE.html)** — the full
-reference: every pipeline stage, how classification and extraction actually work, when and how
-the vision fallback runs, every currently-configured vendor, and how correctness is measured
-against a hand-labelled gold corpus (`docintel replay-gold`). Open it directly in a browser.
+**[`docs/DOCINTEL-FEATURE-EXPLORER.html`](docs/DOCINTEL-FEATURE-EXPLORER.html)** (open directly in
+a browser) — the single, complete reference: install, the 11-stage pipeline explained, when and
+how the Gemini vision fallback runs, an interactive composer that assembles real code live as you
+toggle features, every currently-configured vendor, the full CLI, the complete `pack.json` and
+`persona.json` JSON schema (every field, every closed vocabulary, all 14 validation rules), gold
+data & scoring, and a troubleshooting section built from the real gotchas hit while building this.
+
+**[`docs/DOCINTEL-TECHNICAL-OVERVIEW.html`](docs/DOCINTEL-TECHNICAL-OVERVIEW.html)** — a shorter,
+narrative companion for a reviewing engineer deciding whether to adopt this: the two ideas that
+explain the whole design, a walkthrough of one document end to end, per-mechanism Q&A, and an
+honest table of what's deliberately not shipped yet.
 
 ## Everyday commands
 

@@ -311,6 +311,9 @@ footer.doc {
       <p class="group-label">Configuring vendors</p>
       <a href="#new-vendor">New vendor, known company</a>
       <a href="#new-company">New company (no code)</a>
+      <a href="#external">External onboarding (pip install only)</a>
+      <a class="sub" href="#extra-personas">A vendor, no repo access</a>
+      <a class="sub" href="#extra-packs">A new company, no repo access</a>
       <a href="#basis-overlay">A vendor's billing convention</a>
       <p class="group-label">Authoring</p>
       <a href="#business-logic">Writing business logic</a>
@@ -318,9 +321,17 @@ footer.doc {
       <a class="sub" href="#ladder">The doc_type ladder</a>
       <a class="sub" href="#ops">The ops registry</a>
       <a class="sub" href="#pack-hooks">When you still need Python</a>
+      <a href="#persona-schema">persona.json, field by field</a>
+      <a class="sub" href="#field-selector">field_selector</a>
+      <a class="sub" href="#row-group">row_group_selector</a>
+      <a class="sub" href="#scanline">scanline_selector</a>
+      <a class="sub" href="#confidence-modifiers">Confidence modifiers</a>
+      <a class="sub" href="#layout-fingerprint">Layout fingerprint &amp; page roles</a>
       <a href="#validate">Validating &amp; testing</a>
+      <a class="sub" href="#validation-rules">The 14 validation rules</a>
       <a href="#eval-layer">The evaluation layer</a>
       <a class="sub" href="#gold">Gold fixtures &amp; the scorecard</a>
+      <a class="sub" href="#external-gold">Gold data outside this repo</a>
       <a class="sub" href="#eval-commands">The eval commands</a>
       <a href="#reference">Quick reference</a>
     </nav>
@@ -786,6 +797,7 @@ for p in load_packs():
         <div class="card"><h4>Pure data — <code>acme_freight</code></h4><p>One <code>pack.json</code>, a <code>personas/</code> folder, zero Python. Gets the ladder, claim guard, field sets, thresholds, aliases. Cannot register a pack-specific hook. Right when a company's business logic is fully covered by the shared op registry.</p></div>
         <div class="card"><h4>Hybrid — <code>spt_metals</code></h4><p>A thin class wrapping a <code>DataPack</code> for everything a data-only pack already does, adding exactly one <code>afterExtraction</code> hook to supply weight-tier margins, a CTL adder, and per-state freight rates — none ever printed on the invoice. ~120 lines, not ~1,200. Right when one non-printed fact is missing and nothing else is.</p></div>
         <div class="card"><h4>Full module — <code>northstar</code>, <code>digitaldirection</code></h4><p>A bespoke Python package per pack (~1,150–1,290 lines across ~8 modules): fingerprint resolution, billing-convention tables, reference collection, aliasing. Right when a company needs several bespoke hooks, not just one.</p></div>
+        <div class="card"><h4>External — <code>extra_packs=</code> / <code>DOCINTEL_EXTRA_PERSONAS_DIR</code></h4><p>Not a fifth pack shape so much as a fifth <em>vantage point</em>: the same pure-data pattern <code>acme_freight</code> proves, but authored entirely outside this repo by someone who only <code>pip install</code>s the library — no commit, no PR, survives every upgrade. See <a class="inline" href="#external">External onboarding</a>.</p></div>
       </div>
       <div class="callout good">
         <span class="label">SPT Metals, worked end to end</span>
@@ -946,6 +958,120 @@ which is not in the section 2 enum (V3)</code></pre>
       </ol>
     </section>
 
+    <section id="external" class="wide">
+      <h2>External onboarding — extending the library without repo access</h2>
+      <p>
+        Everything in the two sections above assumes you can edit files inside
+        <code>src/docintel/packs/</code> and commit to this repo. A team that only
+        <code>pip install</code>s the library needs a different answer — add a vendor, or a whole
+        new company, from files that live entirely in <strong>their own</strong> project, never
+        inside the installed package. <code>pip install --upgrade</code> silently wipes anything
+        written into <code>site-packages</code>, which is the whole reason this exists as a real,
+        supported extension point rather than "just edit the installed files."
+      </p>
+
+      <h3 id="extra-personas">Adding a vendor to an existing pack — <code>DOCINTEL_EXTRA_PERSONAS_DIR</code></h3>
+      <p>
+        Set one environment variable to a directory you own, laid out as
+        <code>&lt;dir&gt;/&lt;pack_name&gt;/*.json</code> (personas) plus an optional
+        <code>aliases.local.json</code> (a plain printed-name → canonical-key dict). Read fresh on
+        every call, exactly like the <a class="inline" href="#basis-overlay">billing-convention
+        overlay</a> below — the same "external, gitignored data extends a pack's own table without
+        touching its source" idiom, generalized from one fact (a billing convention) to personas and
+        aliases.
+      </p>
+      <pre><code>my_docintel_config/
+  digitaldirection/
+    aliases.local.json      {"spectrum": "spectrum", "spectrum business": "spectrum"}
+    spectrum.json            (a persona — exact same shape as any shipped one)</code></pre>
+      <pre><code>$env:DOCINTEL_EXTRA_PERSONAS_DIR = "C:\path\to\my_docintel_config"
+docintel process "Spectrum - 133432501.pdf" --json</code></pre>
+      <p>
+        No script needed — the CLI picks this up through the env var directly, because every
+        pack's <code>personas()</code>/alias lookup consults it internally
+        (<code>registry.load_extra_personas</code> / <code>load_extra_aliases</code>). This reaches
+        <strong>persona lookup and vendor-fingerprint resolution</strong> for every data-backed pack
+        today (<code>digitaldirection</code>, <code>northstar</code>, <code>spt_metals</code>,
+        <code>acme_freight</code>) — and for a <code>DataPack</code> specifically, it's also how
+        <code>sender_fingerprint</code> gets resolved declaratively (<code>DataPack._canonical_vendor</code>),
+        the same alias-table matching a module-backed pack's own <code>aliases.py</code> does.
+      </p>
+      <div class="callout bad">
+        <span class="label">Tested limitation: this does NOT extend the CLAIM decision for every pack</span>
+        Verified against a real run: a brand-new carrier added purely via the overlay is correctly
+        <em>fingerprinted</em> but never reaches extraction on <code>digitaldirection</code>, because
+        that pack's claim rule is <code>alias_table</code> — compiled <strong>once, at import</strong>,
+        from the hardcoded <code>LITERAL_ALIASES</code> table (<code>digitaldirection/__init__.py</code>:
+        <code>compile_claim(spec["claim"], aliases=aliases.LITERAL_ALIASES)</code>). The overlay's
+        <code>aliases.local.json</code> is never consulted there, so the document comes back
+        <code>unclaimed_document</code> unless either (a) it's billed to a client already in
+        <code>MANAGED_CLIENTS</code> (the roster-based secondary claim rule, unaffected by this gap —
+        this is exactly why the isolated Spectrum test above worked: City of Dublin was already a
+        listed managed client), or (b) the carrier's name is added to the real, shipped
+        <code>LITERAL_ALIASES</code> table — a genuine code change and PR, the same one this project's
+        own Spectrum onboarding required.
+        <br><br>
+        <code>northstar</code> does not have this gap: its claim rule is <code>markers</code> on
+        Northstar's own fixed bill-to identity, never on the vendor's name — confirmed by a live test,
+        a brand-new vendor claimed correctly through the overlay alone with zero code changes. Check
+        which claim <code>kind</code> a pack's <code>classification.json</code>/<code>pack.json</code>
+        declares (<a class="inline" href="#claim-rules">§ Claim rules</a>) before assuming the overlay
+        alone is enough — <code>alias_table</code> needs the code-side table too; <code>markers</code>,
+        <code>corroborated_markers</code>, and <code>roster_on_short_line</code> do not.
+      </div>
+
+      <h3 id="extra-packs"><code>extra_packs=</code> — a wholly new company, no shipped pack claims it</h3>
+      <p>
+        <code>build_pipeline()</code> accepts a list of caller-supplied <code>Pack</code>-protocol
+        objects, appended after the shipped ones. A <code>pack.json</code> + <code>personas/</code>
+        folder living entirely in your own project, loaded with the same <code>load_pack_file()</code>
+        the shipped packs use internally:
+      </p>
+      <pre><code>my_project/
+  venv/                          ← pip install docintel, untouched
+  invoices/                      ← your real PDFs
+  my_packs/
+    acme_widgets/
+      pack.json
+      personas/
+        acme.json
+  run_pipeline.py</code></pre>
+      <pre><code>from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision
+from docintel.adapters.intake.filesystem import FilesystemIntake
+from docintel.packs.datapack import load_pack_file
+
+pack = load_pack_file("my_packs/acme_widgets/pack.json")
+pipeline = build_pipeline(vision=FakeVision(), extra_packs=[pack])
+
+for item in FilesystemIntake(["invoices"]).items():
+    record = pipeline.process(document_id=item.document_id, source_path=item.source_path,
+                               sender_email=item.sender_email, email_id=item.email_id)
+    print(record["disposition"], record["fields"])</code></pre>
+      <div class="callout good">
+        <span class="label">Verified end to end, not just designed</span>
+        Built and proven this way against three real invoices from three different clients, all
+        onboarded with zero edits to the installed package: 24/24 field values correct against
+        hand-checked ground truth, correct claim, correct <code>doc_type</code>, correct persona
+        lookup, no dead letters. One gotcha worth knowing before you hit it:
+        <code>region: "near-anchor"</code> is a wide box (300pt right, 40pt below an anchor) — a
+        same-height label in a neighbouring column can leak into a bare <code>"text"</code>
+        pattern's <em>first</em> candidate, since <code>_text</code> accepts whatever non-empty
+        string it sees first. A targeted regex — for a party name, an ANCHORED Title Case shape
+        that rejects all-caps label words — fixes it by rejecting the wrong candidate so the
+        executor's per-line loop falls through to the real value, the same idiom
+        <code>northstar/upak.json</code>'s <code>bill_to_name</code> selector already uses for its
+        own two-column layout.
+      </div>
+      <p>
+        <code>region</code>/<code>pattern</code> use the exact same closed vocabularies as any
+        shipped persona — see the <a class="inline" href="#reference">quick reference</a>. One more
+        real gotcha: the named <code>"date"</code> pattern only parses month-first strings
+        (<code>Aug 19, 2026</code>); a day-first date (<code>19 Aug 2026</code>) needs a plain regex
+        instead, same as any other format the closed date parser doesn't cover.
+      </p>
+    </section>
+
     <section id="basis-overlay" class="wide">
       <h2>Confirming a vendor's billing convention without a restart</h2>
       <p>
@@ -1009,7 +1135,27 @@ sequenceDiagram
     ]
   }
 }</code></pre>
-      <p>A condition is a small closed algebra: a named signal, or <code>all_of</code> / <code>any_of</code> / <code>not</code> composing other conditions. Signals used across today's packs include <code>pattern_in_scope</code>, <code>title_near_top</code>, <code>text_near_top</code>, <code>role_shape</code>, <code>all_matches_negative</code>, <code>money_table_present</code>, <code>shared_pagination_footer</code>, <code>noise_ratio_above</code>, <code>label_with_corroborating_value</code>, <code>short_label_line</code>, <code>text_source_is</code>, <code>distinct_printed_aliases_at_least</code>. Adding a genuinely new signal is a code change with a test and a named real document behind it — that's what keeps "declarative" from becoming a second, unreviewed way to write regexes.</p>
+      <p>A condition is a small closed algebra: <code>{"signal": "…", "params": {…}}</code>, or <code>all_of</code> / <code>any_of</code> / <code>not</code> composing other conditions. All 12 signals, with the params each one takes:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Signal</th><th>Params</th><th>What it asks</th></tr></thead>
+          <tbody>
+            <tr><td><code>pattern_in_scope</code></td><td><code>pattern</code>, <code>scope</code></td><td>Does this regex appear anywhere in <code>scope</code>'s text? The blunt primitive — right only when a match <em>anywhere</em> is genuinely the finding (a scanline, a sub-account marker).</td></tr>
+            <tr><td><code>short_label_line</code></td><td><code>pattern</code>, <code>max_words</code>, <code>primary_only</code> (default <code>true</code>)</td><td>Does <code>pattern</code> appear on a line no longer than <code>max_words</code>? Separates a standalone banner (<code>PAST DUE</code>) from the same phrase buried in boilerplate prose.</td></tr>
+            <tr><td><code>title_near_top</code></td><td><code>pattern</code>, <code>max_words</code>, <code>max_line_index</code></td><td>A genuine document TITLE: short <em>and</em> near the top of page 1 — literal page 1 only, narrower than <code>primary_pages</code>.</td></tr>
+            <tr><td><code>text_near_top</code></td><td><code>pattern</code>, <code>max_line_index</code></td><td><code>title_near_top</code> without the length constraint — for matching something legitimately long near the top (a letterhead block), not a title.</td></tr>
+            <tr><td><code>label_with_corroborating_value</code></td><td><code>label</code>, <code>same_line</code> and/or <code>next_line</code> (a named value predicate), <code>primary_only</code></td><td>Is a label match corroborated by a real value near it? A printed column label isn't a fact by itself — <code>Total Tax</code> prints whether or not tax was charged.</td></tr>
+            <tr><td><code>all_matches_negative</code></td><td><code>pattern</code> (sign as its first capture group), <code>scope</code></td><td>Matches at least once, and every match is negative — the discriminator for a contra/credit document vs. an ordinary invoice with one rebate line.</td></tr>
+            <tr><td><code>role_shape</code></td><td><code>primary_exactly</code>, <code>supporting_at_least</code> (either optional)</td><td>Does the page-role shape Stage 2 assigned match (e.g. exactly one primary page plus ≥1 supporting)?</td></tr>
+            <tr><td><code>shared_pagination_footer</code></td><td>none</td><td>Does every page carry a matching "N of M" footer with M == the real page count? Tells a genuine multi-page invoice from an attachment stapled behind it.</td></tr>
+            <tr><td><code>money_table_present</code></td><td><code>min_money_tokens</code> (default 3)</td><td>Is there a line carrying several money-shaped tokens? Used as a <em>negative</em> condition — a "statement of account" that also prints a charges table is a bill regardless of its header.</td></tr>
+            <tr><td><code>text_source_is</code></td><td><code>value</code> (<code>"native"</code>/<code>"ocr"</code>)</td><td>Did these words come from the PDF text layer or OCR? A trust signal for every other signal on the page, not a content fact — this is why it's a tag, never a doc_type.</td></tr>
+            <tr><td><code>noise_ratio_above</code></td><td><code>threshold</code>, <code>role</code> (default <code>"supporting"</code>), <code>ocr_only</code> (default <code>true</code>)</td><td>Does any page in <code>role</code> read as handwriting rather than print? Three cheap OCR-failure signals (short fragments, missing vowels, invented punctuation) combined into one ratio.</td></tr>
+            <tr><td><code>distinct_printed_aliases_at_least</code></td><td><code>count</code>, <code>scope</code> (default <code>"primary"</code>)</td><td>Does the pack's own alias table match at least <code>count</code> distinct printed names? Drives <code>multi_brand_sender</code> — a carrier printing three names for itself.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><code>same_line</code>/<code>next_line</code> take one of three named value predicates (not a raw regex — what counts as "the value" is layout-specific, but the closed set is small): <code>middle_tokens_nonzero</code> (an aging row's 30/60/90 buckets, excluding both end columns), <code>second_to_last_token_nonzero</code> (the token immediately before a trailing grand total), <code>money_after_label_nonzero</code> (the first money token following a label on the same line). Adding a genuinely new signal or predicate is a code change with a test and a named real document behind it — that's what keeps "declarative" from becoming a second, unreviewed way to write regexes.</p>
       <div class="callout good">
         <span class="label">Fail-loud, at load time</span>
         An unknown signal name, an unknown region, a misspelled parameter — each raises when the pack loads, not silently evaluating to false at classify time. A rung that silently never fires is a document type that silently never gets recognized, and this system refuses to let that happen quietly.
@@ -1070,6 +1216,129 @@ sequenceDiagram
       <p>Writing one of these means adding a Python module for the pack (the two shipped packs are each ~1,150–1,290 lines across ~8 modules) — a real engineering task, not a config edit. Basic vendor-fingerprint resolution no longer forces that step; a data-only pack with a simple alias table or a single vendor gets it for free.</p>
     </section>
 
+    <section id="persona-schema" class="wide">
+      <h2>The persona.json schema, field by field</h2>
+      <p>
+        A persona has exactly three top-level keys beyond bookkeeping (<code>rule_version</code>,
+        <code>status</code>, <code>notes</code>): <code>doc_type</code>, <code>sender_fingerprint</code>,
+        and <code>field_selectors</code> — a list mixing three selector shapes. This is the exhaustive
+        reference; <a class="inline" href="#new-vendor">§ Configuring a new vendor</a> above is the
+        worked walkthrough.
+      </p>
+
+      <h3 id="field-selector"><code>field_selector</code> — one value</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Key</th><th>Required</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>field</code></td><td>yes</td><td>Must be in the pack's registered field set for this <code>doc_type</code> (V1).</td></tr>
+            <tr><td><code>anchor</code></td><td>usually</td><td>A literal printed label to locate the value near. Required unless the region is provably unique on the page without one (V5).</td></tr>
+            <tr><td><code>anchor_alts</code></td><td>no</td><td>A list of fallback anchor strings, tried in order after <code>anchor</code> misses. Using one applies the <code>anchor_alt_used</code> confidence modifier.</td></tr>
+            <tr><td><code>anchor_occurrence</code></td><td>no — default <code>"first"</code></td><td><code>"first"</code>/<code>"last"</code> (ordinal — the Nth hit in reading order) or <code>"mid_line"</code> (positional — the last hit that does <em>not</em> begin its visual line; withheld on OCR-sourced documents, where line-band geometry isn't preserved).</td></tr>
+            <tr><td><code>region</code></td><td>usually</td><td>Where to look — see the <a class="inline" href="#reference">closed region enum</a> below. Required unless the anchor alone is provably unique (V5).</td></tr>
+            <tr><td><code>pattern</code></td><td>yes</td><td>A named pattern (<code>currency</code>, <code>date</code>, <code>text</code>, …) or a restricted regex (V4) — see <a class="inline" href="#reference">Quick reference</a>.</td></tr>
+            <tr><td><code>capture</code></td><td>no — default <code>"first"</code></td><td><code>"first"</code> stops at the first matching candidate; <code>"all_matches"</code> collects every one (then usually paired with <code>dedupe_preserve_order</code>).</td></tr>
+            <tr><td><code>scope</code></td><td>no — default <code>"line"</code></td><td><code>"line"</code> offers the region's cells, then individual words, then the whole row, most-specific-first. <code>"block"</code> offers exactly one candidate — every line joined, cut at the first column gutter right of the anchor — the idiom for a party name on a two-column layout where <code>"line"</code> would leak the neighboring column in. Implied by <code>pattern: "text_block"</code> regardless of what's declared.</td></tr>
+            <tr><td><code>adjust</code></td><td>no</td><td>One op name, or a list, from the closed registry (<a class="inline" href="#ops">§ above</a>) — run in declaration order (with a few pinned dependencies, e.g. <code>resolve_carried_balance</code> before <code>derive_amount_payable</code>).</td></tr>
+            <tr><td><code>required</code></td><td>no — default <code>true</code></td><td><code>false</code> means this field's absence is an ordinary miss, not a failure — for a value that's genuinely optional on this vendor's documents.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout bad">
+        <span class="label">The one field a selector may never target</span>
+        <code>amount_payable</code> (and any field a pack marks <code>derived_only</code>) is computed
+        by an <code>adjust</code> op, never read off the page — a selector naming it is rejected (V10).
+        On 7 of the 10 original corpus documents, a selector reading the printed total straight onto
+        <code>amount_payable</code> would look perfectly correct and still be wrong — that's the exact
+        bug this rule exists to make structurally impossible.
+      </div>
+
+      <h3 id="row-group"><code>row_group_selector</code> — a repeating line-items table</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Key</th><th>Required</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>row_group</code></td><td>yes</td><td>A name for this table (e.g. <code>"line_items"</code>).</td></tr>
+            <tr><td><code>table_anchor</code></td><td>yes</td><td>Header-row text used to locate the table.</td></tr>
+            <tr><td><code>region</code></td><td>no</td><td>Narrows the page search before looking for the header.</td></tr>
+            <tr><td><code>columns</code></td><td>yes</td><td><code>{"col_name": "pattern"}</code> — columns are matched by their <strong>header text</strong>, never by position/index, so a vendor reordering columns doesn't silently misalign the data.</td></tr>
+            <tr><td><code>column_headers</code></td><td>no</td><td>An explicit <code>{"col_name": "printed header text"}</code> map, when the header text differs from the column name you want in the record.</td></tr>
+            <tr><td><code>sub_group</code></td><td>no</td><td>One extra level of nesting <em>only</em> (V8) — <code>{"anchor", "field", "pattern"}</code>, a value read from each row's own sub-line (e.g. a work-order number under each line item).</td></tr>
+            <tr><td><code>row_count</code></td><td>yes</td><td><code>{"min", "max"}</code> — always a <em>range</em>, never an exact count (V9): a real vendor's line-item count varies invoice to invoice.</td></tr>
+            <tr><td><code>allow_empty_cells</code></td><td>no — default <code>true</code></td><td>Whether a row may have some columns blank.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="scanline"><code>scanline_selector</code> — the remittance OCR-A line</h3>
+      <p>Scoring-only: it produces no field value on its own, only raises or lowers confidence on fields already extracted by cross-checking them against the printed scanline digits.</p>
+      <pre><code>{
+  "scanline": true,
+  "region": "last-page" | "page:1" | "remittance-block",
+  "asserts": [
+    { "field": "total_printed",  "as": "digits_no_decimal" },
+    { "field": "account_number", "as": "digits_only" }
+  ]
+}</code></pre>
+      <div class="callout bad">
+        <span class="label">A hard, validator-enforced constraint</span>
+        <code>asserts[].field</code> may only name <code>total_printed</code>, <code>account_number</code>,
+        <code>invoice_number</code>, or <code>due_date</code>. Naming <code>amount_payable</code> or
+        <code>current_charges</code> is a validation error — Centracom's scanline encodes its own
+        <em>misleading</em> headline total, so binding the scanline to the payable would cement the
+        exact F1 bug this whole grammar exists to prevent.
+      </div>
+
+      <h3 id="confidence-modifiers">Confidence modifiers — the closed enum</h3>
+      <p>One mechanism, multiplicative, every one that fired listed on the emitted record. No other way to lower confidence exists — an author cannot invent a new penalty from inside a persona.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Modifier</th><th>×</th><th>Fires when</th></tr></thead>
+          <tbody>
+            <tr><td><code>draft_rules</code></td><td>0.85</td><td>The persona's own <code>status</code> is <code>"draft"</code> — the mechanism that makes "review every new persona" a provable guarantee, not a policy.</td></tr>
+            <tr><td><code>soft_miss</code></td><td>0.80</td><td>The document's actual layout diverged from the persona's <code>layout_fingerprint</code>.</td></tr>
+            <tr><td><code>ocr_source</code></td><td>0.90</td><td><code>text_source</code> is <code>"ocr"</code> rather than native text.</td></tr>
+            <tr><td><code>ambiguous_anchor</code></td><td>0.90</td><td>The anchor phrase occurs more than once with no <code>region</code> to disambiguate.</td></tr>
+            <tr><td><code>anchor_alt_used</code></td><td>0.95</td><td>The primary <code>anchor</code> missed; an <code>anchor_alts</code> fallback matched instead.</td></tr>
+            <tr><td><code>pattern_timeout</code></td><td>0.50</td><td>The regex hit its 50ms budget — a miss, not a wedged worker.</td></tr>
+            <tr><td><code>arith_lines_mismatch</code></td><td>0.85</td><td>Line items don't sum to the printed subtotal.</td></tr>
+            <tr><td><code>arith_total_mismatch</code></td><td>0.85</td><td>Subtotal + charges doesn't equal the printed total.</td></tr>
+            <tr><td><code>arith_balance_mismatch</code></td><td>0.80</td><td>Prior + current doesn't close to the printed total — also forces a review flag, always.</td></tr>
+            <tr><td><code>scanline_mismatch</code></td><td>0.85</td><td>A scanline assertion disagreed with the extracted value.</td></tr>
+            <tr><td><code>filename_disagree</code></td><td>0.95</td><td>The filename's own stated amount disagrees with the extracted total.</td></tr>
+            <tr><td><code>currency_inferred_weak</code></td><td>0.90</td><td>Currency came from the vendor's address or the pack's bare default, not the printed page.</td></tr>
+            <tr><td><code>ambiguous_two_digit_year</code></td><td>0.95</td><td>A date like <code>03/31/25</code> — the century is inferred, not printed.</td></tr>
+            <tr><td><code>handwriting_detected</code></td><td>0.60</td><td>The primary page shows handwriting (a real annotation, not print).</td></tr>
+            <tr><td><code>high_skew</code></td><td>0.85</td><td>The scanned page is skewed beyond a safe threshold.</td></tr>
+            <tr><td><code>flattened_annotations</code></td><td>0.75</td><td>A scanned-in handwritten correction was detected — also <strong>forces</strong> review, unconditionally, regardless of the numeric score.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Boosts (a cross-check agreeing) are capped: the product of every boost on one field may never exceed 1.10, and a boost can never lift a field above 0.99 — corroboration raises confidence, it never manufactures certainty.</p>
+
+      <h3 id="layout-fingerprint">Layout fingerprint &amp; page roles</h3>
+      <p>Document-level, never page-level — a persona describes one document shape, not a page-by-page map.</p>
+      <pre><code>{
+  "page_count":       { "min": 1, "max": 6 },      // a RANGE, never equality
+  "has_table":        true,
+  "header_signature": "logo-left|addr-right",       // from page 1 only
+  "totals_page_role":  "last" | "first",            // a page ROLE, not a page number
+  "column_signature":  ["Description","Qty","Rate","Amount"],
+  "text_source":       "native" | "ocr" | "either"
+}</code></pre>
+      <p>Divergence on <code>column_signature</code> or <code>header_signature</code> triggers a <code>soft_miss</code>; divergence on <code>page_count</code> alone does not — real bills legitimately vary in length month to month. Every page also carries a role, assigned before extraction runs:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Role</th><th>Heuristic</th><th>Extraction behavior</th></tr></thead>
+          <tbody>
+            <tr><td><code>primary</code></td><td>Carries the document-number anchor <em>and</em> a totals block.</td><td>Field values come from here.</td></tr>
+            <tr><td><code>supporting</code></td><td>High skew / handwriting / photocopy noise, no totals block.</td><td>Reference patterns run here; field values are <strong>never</strong> taken from here.</td></tr>
+            <tr><td><code>unknown</code></td><td>Neither of the above.</td><td>Treated as <code>supporting</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="validate" class="wide">
       <h2>Validating &amp; testing a change</h2>
       <ol class="steps">
@@ -1079,6 +1348,31 @@ sequenceDiagram
         <li><h4>Score against the labelled corpus</h4><code>docintel replay-gold</code> — confirms nothing else regressed. This is the number that matters more than any single document looking right.</li>
         <li><h4>Run the test suite</h4><code>python -m pytest -q</code> — full pipeline, pack, and grammar tests.</li>
       </ol>
+
+      <h3 id="validation-rules">The 14 validation rules (V1–V14)</h3>
+      <p>Run at persona-write time. Any single failure rejects the <strong>whole</strong> persona write — never a partial application, so a persona can't end up half-migrated to a bad rule set.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr><td>V1</td><td>Every <code>field</code> is in the pack's registered field set for that <code>doc_type</code>.</td></tr>
+            <tr><td>V2</td><td>Every <code>adjust</code> op is registered (base + pack).</td></tr>
+            <tr><td>V3</td><td>Every <code>region</code> is in the closed enum.</td></tr>
+            <tr><td>V4</td><td>Every <code>pattern</code> is a named pattern or passes the restricted-regex rules (linear-time, bounded quantifiers, ≤1 capture group, ≤200 chars, 50ms budget).</td></tr>
+            <tr><td>V5</td><td>A selector with a non-unique <code>anchor</code> and no <code>region</code> is rejected.</td></tr>
+            <tr><td>V6</td><td>A bare-digit regex needs a narrowing <code>region</code> or <code>column_headers</code> — unscoped, it would also match phone numbers and zip+4.</td></tr>
+            <tr><td>V7</td><td><code>scanline_selector.asserts[].field</code> is within the permitted set (<code>total_printed</code>/<code>account_number</code>/<code>invoice_number</code>/<code>due_date</code>).</td></tr>
+            <tr><td>V8</td><td><code>sub_group</code> nesting depth ≤ 1.</td></tr>
+            <tr><td>V9</td><td><code>row_count</code> is a range, never an equality.</td></tr>
+            <tr><td>V10</td><td>No selector produces a field the pack marks <code>derived_only</code> (e.g. <code>amount_payable</code>) — the single most important rule, closing the F1 footgun.</td></tr>
+            <tr><td>V11</td><td>Total serialized persona size ≤ 64 KB.</td></tr>
+            <tr><td>V12</td><td>Any <code>few_shot_examples</code> list has ≤ 3 entries, and none is drawn from a document tagged <code>flattened_annotations</code>.</td></tr>
+            <tr><td>V13</td><td>Every field the pack marks <code>required</code> is covered — by a selector, or by an op that supplies it — or the persona is <code>draft</code> only.</td></tr>
+            <tr><td>V14</td><td>A pattern capturing <em>only</em> fixed literal text needs an <code>anchor</code> or a narrowing <code>region</code> — a capture with no shape makes no claim about location, and no <code>anchor</code> may restate a value the same persona already captures as a field.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Full reasoning, corpus evidence, and the worked EDCO example behind each rule: <code>docs/architecture/selector-grammar.md</code>.</p>
     </section>
 
     <section id="eval-layer" class="wide">
@@ -1150,6 +1444,38 @@ sequenceDiagram
       </p>
       <p><code>docs/corpus/validate_gold.py</code> is a separate, narrower check: no pipeline call at all, just "does this gold file agree with itself" — do the line items sum to the subtotal, does prior + current close to the printed total, is <code>amount_payable</code> ever accidentally placed under <code>fields</code> instead of <code>derived</code>. Catches a contradiction in the labels before it ever reaches a real eval run.</p>
 
+      <h3 id="external-gold">Building a gold corpus outside this repo</h3>
+      <p>
+        <code>GOLD_DIR</code> (<code>docs/corpus/gold</code>) and the source-PDF lookup
+        (<code>DOCS_DIR</code>, <code>docs</code>) are both plain relative paths, resolved from
+        wherever the process runs — not hardcoded to this repository. A team using
+        <a class="inline" href="#extra-packs"><code>extra_packs=</code></a>/
+        <a class="inline" href="#extra-personas"><code>DOCINTEL_EXTRA_PERSONAS_DIR</code></a> from
+        their own project can reuse the exact same scoring engine,
+        <code>docintel.scorecard.replay_gold</code>, by giving it a <code>runner_factory</code>
+        that builds their own pipeline instead of the shipped one:
+      </p>
+      <pre><code>from docintel.scorecard import replay_gold
+from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision
+from docintel.packs.datapack import load_pack_file
+
+pack = load_pack_file("my_packs/acme_widgets/pack.json")
+card = replay_gold(runner_factory=lambda: build_pipeline(vision=FakeVision(), extra_packs=[pack]))
+print(card["summary"])  # {'total': N, 'passed': N, 'failed': 0, ...}</code></pre>
+      <p>
+        Writing the gold fixture by hand (the shape above) is one option — a faster one is
+        <code>docintel.evals.draft_gold.draft_gold_fixture(record, gold_id, source_file=...)</code>,
+        which auto-fills <code>fields</code>/<code>derived</code>/<code>line_items</code>/
+        <code>charges</code>/<code>sub_account</code>/<code>reference_list</code> straight from one
+        clean <code>pipeline.process(...)</code> call — the CLI's own <code>docintel draft-gold</code>
+        command wraps exactly this. It deliberately never auto-fills <code>expected_routing</code>
+        (<code>lane</code>/<code>review_flag</code>/<code>regen_flag</code>) — that is the one thing
+        a gold fixture exists to check <em>independently</em> of what the pipeline itself decided,
+        so copying its own answer back at itself would make the check trivially true. A human sets
+        that field by hand after reviewing the record's actual routing.
+      </p>
+
       <h3 id="eval-commands">The eval commands, and why there are four of them</h3>
       <p>
         A single number ("73% of assertions pass") cannot say <em>which stage</em> broke.
@@ -1180,8 +1506,28 @@ sequenceDiagram
       <h4>Pattern kinds</h4>
       <div class="pillrow">
         <span class="pill">text</span><span class="pill">text_block</span><span class="pill">currency</span>
-        <span class="pill">date</span><span class="pill">integer</span>
+        <span class="pill">currency_signed</span><span class="pill">integer</span><span class="pill">decimal</span>
+        <span class="pill">date</span><span class="pill">date_loose</span>
+        <span class="pill">account_number</span><span class="pill">phone</span><span class="pill">postal_code</span>
+        <span class="pill">tax_id</span><span class="pill">digits_run</span>
         <span class="pill">a raw regex, when nothing named fits</span>
+      </div>
+      <h4>pack.json top-level keys</h4>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td><code>name</code></td><td>required — the pack's identifier, e.g. <code>"acme_freight"</code>.</td></tr>
+            <tr><td><code>doc_types</code></td><td>required, non-empty list — every document type this pack handles.</td></tr>
+            <tr><td><code>default_currency</code></td><td>optional, defaults <code>"USD"</code> — the F14 ladder's last-resort rung.</td></tr>
+            <tr><td><code>thresholds</code></td><td><code>{"field_name": 0.0-1.0}</code> — per-field confidence floor for the <code>high</code> lane.</td></tr>
+            <tr><td><code>fields</code></td><td><code>{"doc_type": {"all", "required", "any_of", "derived_only"}}</code> — the field vocabulary V1/V10/V13 check every selector against.</td></tr>
+            <tr><td><code>aliases</code></td><td><code>{"literal": {"printed name": "canonical_key"}, "display": {"canonical_key": "Display Name"}}</code>.</td></tr>
+            <tr><td><code>bill_to_roster</code></td><td>optional list — every rendering of this pack's own AP department's name, for a bill-to guard/alias fallback.</td></tr>
+            <tr><td><code>claim</code></td><td>required — <code>{"rules": [...], "vetoes": [...]}</code>, see <a class="inline" href="#claim-rules">§ Claim rules</a>.</td></tr>
+            <tr><td><code>ladder</code></td><td>required — <code>{"default": "doc_type", "rungs": [...]}</code>, see <a class="inline" href="#ladder">§ The doc_type ladder</a>.</td></tr>
+            <tr><td><code>tags</code></td><td>optional list — <code>{"tag": "name", "when": {condition}}</code>, same condition algebra as a ladder rung.</td></tr>
+          </tbody>
+        </table>
       </div>
       <h4>The closed classification signal registry</h4>
       <div class="pillrow">
