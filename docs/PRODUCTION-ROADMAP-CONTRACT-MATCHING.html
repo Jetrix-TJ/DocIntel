@@ -1,0 +1,335 @@
+<title>From Prototype to Production — Readiness, Contract↔Invoice Matching, and Real-World Grounding</title>
+<style>
+:root {
+  --paper: #f6f5f1;
+  --paper-raised: #ffffff;
+  --ink: #20242b;
+  --ink-soft: #565f6b;
+  --ink-faint: #8b93a0;
+  --line: #ddd9d0;
+  --line-soft: #e8e5dd;
+  --accent: #2b6e77;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4eeef;
+  --good: #1f7a45;
+  --good-soft: #e1f3e7;
+  --human: #9a6b0c;
+  --human-soft: #fdf1d9;
+  --bad: #a02a37;
+  --bad-soft: #fbe6e8;
+  --code-bg: #ece9e1;
+  --code-ink: #2a2f38;
+  --serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --radius: 5px;
+  --shadow: 0 1px 2px rgba(30, 30, 20, 0.06), 0 4px 14px rgba(30, 30, 20, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #171a1f; --paper-raised: #1f232a; --ink: #e7e5df; --ink-soft: #a8afb9;
+    --ink-faint: #6d7480; --line: #333941; --line-soft: #292e35; --accent: #5fb3bd;
+    --accent-ink: #0d1114; --accent-soft: #1c2e31; --good: #5cc98a; --good-soft: #16261d;
+    --human: #e0ac3d; --human-soft: #2b2410; --bad: #e3707c; --bad-soft: #2c1719;
+    --code-bg: #23272e; --code-ink: #dcdad2;
+    --shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 20px rgba(0,0,0,0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #171a1f; --paper-raised: #1f232a; --ink: #e7e5df; --ink-soft: #a8afb9;
+  --ink-faint: #6d7480; --line: #333941; --line-soft: #292e35; --accent: #5fb3bd;
+  --accent-ink: #0d1114; --accent-soft: #1c2e31; --good: #5cc98a; --good-soft: #16261d;
+  --human: #e0ac3d; --human-soft: #2b2410; --bad: #e3707c; --bad-soft: #2c1719;
+  --code-bg: #23272e; --code-ink: #dcdad2;
+  --shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 20px rgba(0,0,0,0.3);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.6; }
+.shell { display: grid; grid-template-columns: 268px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+@media (max-width: 920px) { .shell { grid-template-columns: 1fr; } .toc { display: none; } }
+.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 2.2rem 1.4rem 2rem 1.6rem; border-right: 1px solid var(--line-soft); }
+.toc .kicker { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 0.9rem; }
+.toc nav { display: flex; flex-direction: column; gap: 0.15rem; }
+.toc a { color: var(--ink-soft); text-decoration: none; font-size: 0.88rem; padding: 0.32rem 0.6rem; border-radius: var(--radius); }
+.toc a:hover { color: var(--ink); background: var(--line-soft); }
+.toc .sub { padding-left: 1.5rem; font-size: 0.82rem; }
+.toc .group-label { margin-top: 1.1rem; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); padding: 0 0.6rem; }
+main { padding: 3rem clamp(1.2rem, 4vw, 4rem) 6rem; min-width: 0; }
+.title-block { margin-bottom: 3rem; max-width: 780px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.7rem; }
+h1 { font-family: var(--serif); font-size: clamp(1.8rem, 3.6vw, 2.5rem); line-height: 1.15; margin: 0 0 0.9rem; text-wrap: balance; }
+.lede { font-size: 1.08rem; color: var(--ink-soft); max-width: 68ch; }
+section { max-width: 820px; margin-bottom: 3.4rem; scroll-margin-top: 1.5rem; }
+section.wide { max-width: 1000px; }
+h2 { font-family: var(--serif); font-size: 1.5rem; border-bottom: 1px solid var(--line); padding-bottom: 0.5rem; margin: 0 0 1.1rem; scroll-margin-top: 1.2rem; }
+h3 { font-family: var(--serif); font-size: 1.15rem; margin: 1.8rem 0 0.7rem; scroll-margin-top: 1.2rem; }
+h4 { font-size: 0.92rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); margin: 1.3rem 0 0.5rem; }
+p { margin: 0 0 1rem; }
+ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+li { margin-bottom: 0.4rem; }
+a.inline { color: var(--accent); }
+strong { color: var(--ink); }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); color: var(--code-ink); padding: 0.12em 0.4em; border-radius: 4px; }
+pre { background: var(--code-bg); color: var(--code-ink); padding: 1rem 1.2rem; border-radius: var(--radius); overflow-x: auto; font-family: var(--mono); font-size: 0.82rem; line-height: 1.55; margin: 0 0 1.2rem; border: 1px solid var(--line-soft); }
+pre code { background: none; padding: 0; }
+.table-wrap { overflow-x: auto; margin: 0 0 1.3rem; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); background: var(--paper-raised); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 0.9rem 1.1rem; border-radius: 0 var(--radius) var(--radius) 0; margin: 0 0 1.3rem; font-size: 0.92rem; }
+.callout.human { border-color: var(--human); background: var(--human-soft); }
+.callout.good { border-color: var(--good); background: var(--good-soft); }
+.callout.bad { border-color: var(--bad); background: var(--bad-soft); }
+.callout p:last-child { margin-bottom: 0; }
+.callout .label { font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+.steps { counter-reset: step; list-style: none; padding-left: 0; margin: 0 0 1.3rem; }
+.steps > li { position: relative; padding: 0.15rem 0 0.15rem 2.6rem; margin-bottom: 1.1rem; counter-increment: step; }
+.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-family: var(--mono); font-size: 0.82rem; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+.steps h4 { margin: 0 0 0.3rem; text-transform: none; letter-spacing: 0; font-size: 1rem; color: var(--ink); }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin: 0 0 1.3rem; }
+.card { background: var(--paper-raised); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow); }
+.card h4 { margin-top: 0; }
+.card p { margin-bottom: 0; font-size: 0.88rem; color: var(--ink-soft); }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0 0 1.3rem; }
+.metric { background: var(--paper-raised); padding: 1rem 0.8rem; text-align: center; }
+.metric .num { font-family: var(--serif); font-size: 1.5rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.metric .gap { color: var(--bad); }
+.metric .lbl { font-size: 0.68rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.3rem; }
+.mermaid { background: var(--paper-raised); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 1.2rem; margin: 0 0 1.3rem; overflow-x: auto; }
+.pill { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 20px; white-space: nowrap; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.human { background: var(--human-soft); color: var(--human); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.src { font-size: 0.8rem; color: var(--ink-faint); }
+.src a { color: var(--ink-soft); }
+footer.doc { max-width: 820px; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--ink-faint); font-size: 0.82rem; }
+::selection { background: var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<div class="shell">
+  <aside class="toc">
+    <p class="kicker">docintel — roadmap</p>
+    <nav>
+      <a href="#today">Where we stand today</a>
+      <a href="#readiness">Production readiness</a>
+      <a class="sub" href="#stp-gap">The STP gap, measured</a>
+      <a class="sub" href="#missing-layers">What doesn't exist yet</a>
+      <p class="group-label">Next feature</p>
+      <a href="#why-matching">Why contract↔invoice matching</a>
+      <a href="#matching-design">Architecture</a>
+      <a href="#matching-flags">Flags it raises</a>
+      <a href="#test-matrix">Test case matrix</a>
+      <p class="group-label">Grounding</p>
+      <a href="#research">Real-world research digest</a>
+      <a href="#phases">Recommended phase plan</a>
+      <a href="#sources">Sources</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="title-block">
+      <p class="eyebrow">Document Intelligence · Roadmap to Production</p>
+      <h1>What's actually left, how contract↔invoice matching should work, and how real companies run this today</h1>
+      <p class="lede">
+        Three things in one place: an honest gap analysis measured against real
+        industry benchmarks (not vibes), a concrete design for the one feature
+        this system doesn't have yet — cross-checking an invoice against the
+        contract that's supposed to govern it — with a full test case matrix,
+        and a digest of how production AP-automation vendors actually handle
+        this problem today, so the design isn't invented in a vacuum.
+      </p>
+    </div>
+
+    <section id="today">
+      <h2>Where we stand today</h2>
+      <p>From the last full status pass (<code>docs/STATUS-2026-08-09.md</code>) plus this session's human-in-the-loop work — the honest baseline everything below is measured against.</p>
+      <div class="metric-grid">
+        <div class="metric"><div class="num">111/111</div><div class="lbl">held-out docs emitted, 0 crashes</div></div>
+        <div class="metric"><div class="num">62/111</div><div class="lbl">auto-approved, no human</div></div>
+        <div class="metric"><div class="num">33/33</div><div class="lbl">payable-critical assertions correct</div></div>
+        <div class="metric"><div class="num">1/11</div><div class="lbl">gold docs 100% all-assertions-green</div></div>
+      </div>
+      <p>Three companies configured, ten vendor personas, a real job queue and reviewer UI for the two things the pipeline refuses to guess (a hard-miss sender, an unknown billing convention). What's <em>not</em> proven yet: generalization beyond the billing-document family, and — the subject of this doc — whether what an invoice says lines up with what was actually contracted.</p>
+    </section>
+
+    <section id="readiness" class="wide">
+      <h2>Production readiness — measured against real benchmarks, not guessed</h2>
+      <p>Every AP-automation vendor publishes roughly the same three numbers. Measuring this system against them, honestly, is more useful than another qualitative checklist.</p>
+
+      <h3 id="stp-gap">The straight-through-processing gap</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Industry benchmark</th><th>This system, measured</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>Straight-through processing (no human touch)</td><td>70% target, 90%+ best-in-class<span class="src"><sup>1</sup></span></td><td>55.9% (62/111 held-out)</td><td><span class="pill bad">Below target</span></td></tr>
+            <tr><td>Exception rate (needs a human)</td><td>9% top performers, 22% average<span class="src"><sup>2</sup></span></td><td>44.1% (49/111)</td><td><span class="pill bad">Well above average</span></td></tr>
+            <tr><td>First-time field accuracy</td><td>95%+ is "strong," 98% top-performer<span class="src"><sup>2</sup></span></td><td>95.4% mean field coverage; 100% on payable-critical fields</td><td><span class="pill good">In range</span></td></tr>
+            <tr><td>Invoice-level exact match</td><td>not typically reported this way — most vendors report per-field</td><td>9.1% (1/11) — a much stricter all-or-nothing bar</td><td><span class="pill human">Not directly comparable</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <span class="label">Read the exception-rate gap carefully before treating it as a defect</span>
+        This system's review bar is deliberately conservative — it refuses to guess rather than auto-approving a plausible-looking wrong answer (the entire point of the F1 trap work). Some of that 44% is a genuine coverage gap; some of it is the system correctly declining to guess in situations a looser competitor would auto-approve incorrectly. The STP number is real and worth closing, but closing it by loosening the refusal logic would trade a measured gap for an unmeasured, worse one.
+      </div>
+
+      <h3 id="missing-layers">What doesn't exist yet — the layers between "review" and "paid"</h3>
+      <p>The review queue this session built solves "a human needs to look at this" — it does not solve what happens after. Every production AP platform has these; this system currently has none of them:</p>
+      <div class="card-grid">
+        <div class="card"><h4>Approval workflow</h4><p>Once a reviewer resolves a job, nothing routes the underlying invoice to an approver, tracks approval status, or blocks payment until approved.</p></div>
+        <div class="card"><h4>Payment scheduling</h4><p>No integration point to an AP/ERP system to actually schedule the payment once a record is auto-approved or manually cleared.</p></div>
+        <div class="card"><h4>Audit trail / SoD</h4><p>Who resolved what, when, and whether the same person who flagged an exception can also clear it — not modeled at all today.</p></div>
+        <div class="card"><h4>Multi-worker scaling</h4><p><code>PackPersonaStore</code> is parsed once per process; a real deployment needs shared, persistent persona/job storage the moment there's more than one worker (already noted in the production plan).</p></div>
+        <div class="card"><h4>Cost/concurrency cap on vision calls</h4><p>No budget guard before the vision fallback path sees real production volume.</p></div>
+        <div class="card"><h4>Contract↔invoice matching</h4><p>The subject of the rest of this document — the one substantive extraction/reconciliation capability that's missing, not just an ops-maturity gap.</p></div>
+      </div>
+    </section>
+
+    <section id="why-matching" class="wide">
+      <h2>Why contract↔invoice matching is the next real feature</h2>
+      <p>This isn't a hypothetical priority — it's already in this repo's own feature plan (<code>docs/BUGS-FEATURES-PRODUCTION.md</code>, items 5–6), triggered by a real finding: of 18 real documents that processed cleanly in the corpus sample, <strong>16 were contracts, amendments, or Customer Service Records</strong> — none of them bills — matched to a carrier's billing persona purely because the carrier's name appears on the page, then run through billing-shaped extraction that has nothing to reconcile against. The document type doesn't exist in the domain model yet.</p>
+
+      <div class="callout human">
+        <span class="label">This is a known, well-understood industry problem — not a novel one</span>
+        Telecom expense audits are specifically defined as checking billed rates against contracted rates, line by line, and industry data puts the error rate at <strong>7–12% of enterprise telecom invoices</strong> — a $50/month rate mismatch on one circuit is nothing, but across 200 circuits that's <strong>$120,000/year</strong> in exposure from rate errors alone.<span class="src"><sup>3</sup></span> This is exactly the domain the shipped packs already operate in (telecom, recycling/waste AP) — so this feature isn't a detour, it's completing the loop the corpus is already pointing at.
+      </div>
+
+      <p>The broader industry pattern this maps onto is <strong>N-way invoice matching</strong>: 2-way (PO vs. invoice) for service contracts with no physical delivery, 3-way (PO + invoice + goods receipt) where something is physically received.<span class="src"><sup>4</sup></span> This system has no purchase-order concept — its analogue is <strong>invoice ↔ contract</strong>, the 2-way case, which is exactly right for telecom/recycling service billing where nothing is "received," only billed.</p>
+    </section>
+
+    <section id="matching-design" class="wide">
+      <h2>Architecture — reusing what already exists, not inventing a parallel system</h2>
+      <p>The design constraint from the existing feature plan is explicit: <strong>a downstream consumer, not inside the fast lane.</strong> That's correct, and it matches how every production system actually does this — matching runs <em>after</em> both documents are individually extracted, never woven into single-document extraction.<span class="src"><sup>5</sup></span></p>
+
+      <div class="mermaid">
+flowchart TD
+    A["Contract PDF"] --> B["Same pipeline, new doc_type: contract<br/>same persona/selector grammar bills already use"]
+    C["Invoice PDF"] --> D["Existing pipeline, unchanged"]
+    B --> E[("Contract store<br/>keyed by (pack, account/circuit_id)<br/>holds ALL contracts per key, not just latest")]
+    D --> F["ContractReconciliation<br/>a new downstream stage, not in the fast lane"]
+    E --> F
+    F -- "clean match" --> G["record.reconciliation = matched<br/>no change to amount_payable"]
+    F -- "rate outside tolerance" --> H["tag: rate_mismatch<br/>enqueue job: contract_reconciliation"]
+    F -- "no contract found for key" --> I["tag: no_matching_contract<br/>enqueue job: contract_reconciliation"]
+    F -- "invoice date after contract end,<br/>no active amendment" --> J["tag: billed_after_contract_expiry<br/>enqueue job: contract_reconciliation"]
+    F -- "2+ contracts active,<br/>ambiguous which applies" --> K["tag: multiple_active_contracts_ambiguous<br/>refuse to pick, enqueue job"]
+    H --> L[("Same SQLiteJobQueue<br/>this session already built")]
+    I --> L
+    J --> L
+    K --> L
+    L --> M["Same /review UI<br/>one new job kind, same routes"]
+
+    classDef good fill:#e1f3e7,stroke:#1f7a45,color:#123a20
+    classDef human fill:#fdf1d9,stroke:#9a6b0c,color:#4a3505
+    class G good
+    class H,I,J,K,M human
+      </div>
+
+      <h4>What's genuinely new</h4>
+      <ul>
+        <li><strong>A <code>contract</code> doc_type</strong> — one new classification signal, one new field set (account/circuit ID, rate table, term start/end, signatory). Reuses the identical selector-grammar mechanism bills already use; zero new extraction machinery.</li>
+        <li><strong>A contract store</strong> — same shape as <code>PackPersonaStore</code>, but keyed by <code>(pack, account_or_circuit_id)</code> → a <em>list</em> of contract records, not one. This is the load-bearing design decision: the existing "latest wins" instinct is already known-wrong (the Golub Corporation relationship in this repo's own test data has a 24-month contract, a 36-month contract, and several amendments layered on top — see the open item already logged in <code>docs/BUGS-FEATURES-PRODUCTION.md</code>).</li>
+        <li><strong>A reconciliation stage</strong> — takes an already-emitted invoice record plus whatever the contract store returns for its match key, applies a tolerance band (see below), and either finds a clean match or raises exactly one of the four flags in the diagram.</li>
+      </ul>
+      <h4>What's reused, unchanged</h4>
+      <ul>
+        <li>The alias/canonicalization mechanism (<code>aliases.py</code>) resolves "Circuit# 12345" and "CKT-12345" to the same key — no new matching logic needed, same as vendor-name canonicalization today.</li>
+        <li>The job queue and <code>/review</code> UI this session built — one new <code>kind="contract_reconciliation"</code>, same schema, same routes, same overlay-vs-audited-table precedence pattern (a reviewer's manual match confirmation is the lower trust tier; a corrected contract record is the audited one).</li>
+        <li>The <code>fields</code>/<code>derived</code> separation — reconciliation output is <strong>additive</strong> (a new <code>record["reconciliation"]</code> block), never a rewrite of <code>derived.amount_payable</code>. The existing derivation logic (F1) answers "what do we owe on this invoice alone"; reconciliation answers a separate question ("does that number agree with what was contracted") and must not blend the two, for the same reason <code>fields</code> and <code>derived</code> are already kept apart.</li>
+      </ul>
+
+      <h4 id="matching-flags">The tolerance band — borrowed directly from industry practice</h4>
+      <p>Real AP teams don't flag every cent of variance — that would make the exception queue unusable. The industry-standard default is <strong>±2% price variance</strong>, tightened for new/unproven vendors and loosened for trusted recurring ones, set <em>per vendor</em> rather than globally.<span class="src"><sup>6</sup></span> This maps directly onto this codebase's existing per-pack <code>thresholds</code> mechanism (already used for confidence, already pack-scoped) — the same config surface, one more key.</p>
+      <pre><code>// packs/&lt;pack&gt;/pack.json or conventions.py — same pattern as existing thresholds
+"reconciliation_tolerance": {
+  "rate_variance_pct": 2.0,      // industry default; tighten for new vendors
+  "new_vendor_rate_variance_pct": 0.5
+}</code></pre>
+    </section>
+
+    <section id="test-matrix" class="wide">
+      <h2>Test case matrix</h2>
+      <p>Every case a real telecom/recycling AP relationship actually produces, grounded in what this repo's own corpus already contains (the Golub multi-contract case is real data, not hypothetical) plus the industry patterns above.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Case</th><th>Setup</th><th>Expected outcome</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Exact match</td><td>Invoice rate == contract rate, byte for byte</td><td>Clean match, no flag, no job</td></tr>
+            <tr><td>2</td><td>Within tolerance</td><td>Rate differs by 1.2%, tolerance set to 2%</td><td>Clean match — variance logged, not flagged</td></tr>
+            <tr><td>3</td><td>Outside tolerance</td><td>Rate differs by 6%, tolerance 2%</td><td><code>rate_mismatch</code> tag; job enqueued with both figures in context</td></tr>
+            <tr><td>4</td><td>No contract for this key</td><td>Invoice's (carrier, account_id) matches nothing in the contract store</td><td><code>no_matching_contract</code> tag; job enqueued — distinct from case 5</td></tr>
+            <tr><td>5</td><td>Contracts loaded, this account isn't</td><td>Store has other contracts for this carrier, none for this account_id</td><td>Same tag as case 4, but the job context should say "0 contracts for this key, N for this carrier" — the difference matters for triage</td></tr>
+            <tr><td>6</td><td>Billed after expiry</td><td>Invoice date is after contract <code>term_end</code>, no renewal/amendment covers the date</td><td><code>billed_after_contract_expiry</code> tag; job enqueued (real legal-risk exposure, not just a bookkeeping flag<span class="src"><sup>7</sup></span>)</td></tr>
+            <tr><td>7</td><td>Amendment supersedes base rate</td><td>Base contract: $100/unit from Jan; amendment: $120/unit from Jul. Invoice dated Aug.</td><td>Reconciles against the amendment's $120, not the base $100 — tests date-aware rate resolution, not "latest contract wins"</td></tr>
+            <tr><td>8</td><td>Multiple active, ambiguous</td><td>Two contracts both claim to be active for the same date range (the real Golub 24-month + 36-month overlap case)</td><td><code>multiple_active_contracts_ambiguous</code> — refuses to pick either, same "refuse rather than guess" posture as F1b</td></tr>
+            <tr><td>9</td><td>Circuit ID alias mismatch</td><td>Contract prints "CKT-12345," invoice prints "Circuit# 12345"</td><td>Matches correctly via the alias table — same mechanism as vendor-name canonicalization, not a new lookup</td></tr>
+            <tr><td>10</td><td>Currency mismatch</td><td>Contract in USD, invoice line item in CAD (multi-national account)</td><td><code>currency_mismatch</code> tag — never silently convert</td></tr>
+            <tr><td>11</td><td>Tiered/volume rate</td><td>Contract: first 500 units at $X, next 500 at $Y</td><td>Reconciliation applies the tier boundary correctly, not a flat blended rate</td></tr>
+            <tr><td>12</td><td>Partial line-item coverage</td><td>Invoice has 5 line items; contract covers 3 of them, 2 are one-time fees not in any contract</td><td>Per-line-item verdict, not one document-level flag — 3 matched, 2 tagged <code>no_contract_for_item</code></td></tr>
+            <tr><td>13</td><td>Early termination</td><td>Contract has an early-termination clause invoked mid-term; invoice postdates the termination, not the original end date</td><td>Same as case 6 — termination date governs, not the original term_end</td></tr>
+            <tr><td>14</td><td>Single-flight / idempotency</td><td>Same invoice reprocessed twice (duplicate detection already exists elsewhere in this pipeline)</td><td>Second run does not enqueue a second job for the same (invoice, contract) pair — reuses the existing queue's unique-index behavior</td></tr>
+            <tr><td>15</td><td>Reconciliation never mutates <code>amount_payable</code></td><td>A rate mismatch is found on an otherwise-clean invoice</td><td><code>derived.amount_payable</code> is unchanged; the finding lives only in the new, additive <code>record["reconciliation"]</code> block</td></tr>
+            <tr><td>16</td><td>Contract document itself misclassified</td><td>A contract PDF run through the pipeline before the new doc_type exists</td><td>Regression guard — once added, every contract in the corpus sample must classify as <code>contract</code>, not fall through to a billing persona (the actual bug that motivated this feature)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout good">
+        <span class="label">Cases 4 vs. 5, and 6 vs. 13, are the ones worth building first</span>
+        They're the pairs a naive implementation collapses into one flag — and collapsing them is exactly the kind of imprecision this codebase has already spent real effort avoiding elsewhere (the same instinct behind <code>unknown_prior_balance_basis</code> being a distinct tag from the generic <code>arith_balance_mismatch</code>, so a reviewer sees <em>why</em>, not just <em>that</em> something's wrong).
+      </div>
+    </section>
+
+    <section id="research" class="wide">
+      <h2>Real-world research digest</h2>
+      <p>What production AP-automation platforms actually do today, and how it maps onto this system.</p>
+
+      <h4>Matching discipline</h4>
+      <p>3-way matching (PO + invoice + goods receipt) is the standard for physical goods; 2-way (PO/contract + invoice) is standard for service invoices with no delivery event<span class="src"><sup>4</sup></span> — exactly this system's situation. Fraud protection is a real, cited driver: 79% of organizations experienced payment fraud in 2024, average loss over $130,000/incident<span class="src"><sup>8</sup></span> — a fraudulent invoice can't produce a matching contract for services never agreed to, which 2-way matching directly defeats.</p>
+
+      <h4>Exception handling is shifting from "queue" to "agent-assisted queue"</h4>
+      <p>Current-generation platforms deploy specialist agents that investigate a mismatch (check the contract, review historical invoice patterns for that vendor) and either resolve it automatically or route it with a recommended resolution — the human's role shifts from investigating to reviewing what the agent already resolved.<span class="src"><sup>9</sup></span> This system's job queue is the right foundation for that evolution later, but should ship first as a plain queue — resolving automatically before the reconciliation logic itself is proven would repeat this project's own established mistake pattern (guessing instead of refusing).</p>
+
+      <h4>Confidence-based routing is now table stakes, not a differentiator</h4>
+      <p>By 2026, top IDP platforms all advertise 90–99% accuracy on common formats — the differentiation has moved to exception handling and routing, not raw extraction.<span class="src"><sup>10</sup></span> Fields below a ~90% confidence threshold route to human review by convention across platforms<span class="src"><sup>11</sup></span> — this system's <code>DEFAULT_THRESHOLD = 0.90</code> in <code>s7_gate.py</code> already matches that convention exactly, unprompted.</p>
+
+      <h4>Ingestion architecture</h4>
+      <p>Production document pipelines are multi-stage and queue-based: an intake layer (API upload, email parser, SFTP, cloud storage) feeds a background task queue so uploads are never blocked on processing, with the same ingestion path used regardless of source channel.<span class="src"><sup>12</sup></span> This maps onto item 8 in this repo's own feature plan (real-time, multi-document upload) — the architecture described there (object storage → jobs table → worker pools) is exactly the pattern production systems use, not a novel proposal.</p>
+
+      <h4>Contract lifecycle risk</h4>
+      <p>Continuing to bill or be billed after a contract's expiration carries real legal exposure, not just a bookkeeping inconvenience<span class="src"><sup>7</sup></span> — reinforcing that <code>billed_after_contract_expiry</code> deserves the same forced-review treatment as <code>arith_balance_mismatch</code> already gets, not a soft warning.</p>
+    </section>
+
+    <section id="phases" class="wide">
+      <h2>Recommended phase plan</h2>
+      <div class="steps">
+        <li><h4>Near term — close the STP gap on what already exists</h4>Bugs 1–3 from the existing bug list (vision-escalation coverage check, label-block overcapture, table-break detector) are the fastest lever on the 55.9%→70%+ target, since they're silent-wrong-data risks, not missing features.</li>
+        <li><h4>Near term — ship the <code>contract</code> doc_type alone, no reconciliation yet</h4>Just classification + extraction into the new field set. This alone fixes the 16-of-18 misclassification finding and is independently valuable (a contract repository) before reconciliation logic depends on it.</li>
+        <li><h4>Mid term — reconciliation, cases 1–6 from the test matrix</h4>The straightforward cases: exact/tolerance match, outside-tolerance, no-contract-found (both flavors), expired. Ships real value fast, reuses the existing job queue entirely.</li>
+        <li><h4>Mid term — reconciliation, cases 7–13</h4>Date-aware amendment resolution and the multi-contract-ambiguous refusal are the ones that need the real Golub-style test data this repo already has — build against real cases, not synthetic ones, matching this project's own established evidence discipline.</li>
+        <li><h4>Long term — the layers between review and paid</h4>Approval workflow, payment scheduling integration, audit trail, multi-worker persistent storage — needed before this is a system of record, not before it's a useful extraction tool.</li>
+      </div>
+    </section>
+
+    <footer class="doc" id="sources">
+      <p><strong>Sources</strong></p>
+      <p class="src">
+        1. <a class="inline" href="https://ramp.com/blog/accounts-payable/accounts-payable-metrics">Ramp — 10 Accounts Payable Metrics to Track</a> ·
+        2. <a class="inline" href="https://www.finofo.com/blog/invoice-exception-rates-benchmarks">Finofo — Invoice Exception Rates: Benchmarks</a>, <a class="inline" href="https://invoicedataextraction.com/blog/invoice-processing-accuracy-guide">Invoice Data Extraction — Processing Accuracy Guide</a> ·
+        3. <a class="inline" href="https://www.pure-ip.com/blog/telecom-expense-audit-playbook-finding-billing-errors">Pure IP — Telecom Expense Audit Playbook</a> ·
+        4. <a class="inline" href="https://ramp.com/blog/accounts-payable/3-way-match">Ramp — What Is 3-Way Matching in Accounts Payable?</a>, <a class="inline" href="https://www.mindsprint.com/resources/blogs/2-way-vs-3-way-po-matching">Mindsprint — 2-Way vs 3-Way PO Matching</a> ·
+        5. <a class="inline" href="https://www.stackai.com/insights/build-an-ai-agent-for-end-to-end-invoice-and-purchase-order-processing-a-complete-guide">StackAI — Build an AI Agent for Invoice/PO Processing</a> ·
+        6. <a class="inline" href="https://www.mindsprint.com/resources/blogs/2-way-vs-3-way-po-matching">Mindsprint — tolerance-band best practices</a> ·
+        7. <a class="inline" href="https://www.pandadoc.com/blog/expired-contract/">PandaDoc — How to Track Contract Expiration Dates</a> ·
+        8. <a class="inline" href="https://www.zoneandco.com/glossary/3-way-match">Zone &amp; Co — What Is 3-Way Matching?</a> ·
+        9. <a class="inline" href="https://www.mindsprint.com/resources/blogs/2-way-vs-3-way-po-matching">Mindsprint — agentic exception resolution</a> ·
+        10. <a class="inline" href="https://www.koncile.ai/en/ocr-comparisons/rossum-vs-hyperscience">Koncile — Rossum vs Hyperscience</a> ·
+        11. <a class="inline" href="https://idp-software.com/guides/human-in-the-loop-document-processing/">IDP Software — Human-in-the-Loop Document Processing</a> ·
+        12. <a class="inline" href="https://www.extend.ai/resources/document-ingestion-ai-processing-guide">Extend — Document Ingestion Guide</a>, <a class="inline" href="https://shuvro.io/posts/building-a-two-stage-document-ingestion-pipeline-for-ai-agents/">Two-Stage Document Ingestion Pipeline</a>
+      </p>
+      <p>Baseline figures (111-doc held-out run, gold-corpus scores) are from this repo's own <code>docs/STATUS-2026-08-09.md</code>. The misclassification finding (16 of 18) and the Golub multi-contract case are from <code>docs/BUGS-FEATURES-PRODUCTION.md</code>. Everything else is newly researched for this document.</p>
+    </footer>
+  </main>
+</div>

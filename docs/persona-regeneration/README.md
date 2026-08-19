@@ -6,6 +6,12 @@ one document per session — and each produces a `persona.json` authored without
 sight of the expected answers. The folders are named by lookup key rather than by
 vendor, because the vendor's printed name is itself a graded field.
 
+**Scope:** this is an internal evaluation exercise — re-authoring a persona for a
+document whose vendor, pack, and shipped answer already exist, to measure blind
+rule-writing against them. It is not the onboarding path for a genuinely new
+company (no pack yet); that's `docs/onboarding/COMPANY-CONFIG-TEMPLATE.md` and
+`docintel new-pack` (see `docs/onboarding/CONFIG-SPACE.md`).
+
 ## Why the reference copies are redacted
 
 The pack specs and the grammar doc print the expected invoice numbers, totals,

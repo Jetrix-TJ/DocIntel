@@ -181,6 +181,81 @@ def _runs(line: Sequence[Word], needle: str) -> list[tuple[Word, ...]]:
     return found
 
 
+def _other_anchor_phrases(persona: Persona, exclude: object) -> list[str]:
+    """The OTHER declared anchors that plausibly mark a summary/rollup line,
+    not every anchor this persona declares.
+
+    Shared by the label-block trim (`_apply_field`) and the row-group
+    anchor-boundary stop (`_apply_row_group`) - both ask the same question,
+    "did I just read into the document's totals/summary section", which is
+    narrower than "did I just read into any other field's territory".
+
+    That narrowing is load-bearing, not a style choice - discovered against
+    real gold documents, not guessed. An unfiltered version (any other
+    selector's anchor stops the block/table) broke two real, previously-
+    passing Digital Direction documents: CentraCom's `charges` row group has a
+    genuine row literally titled "Internet Taxes, Surcharges, & Fees" - the
+    exact anchor text `taxes_and_fees` (a separate summary field reading the
+    same figure) is anchored on - and CentraCom's `remit_address`/
+    `remit_payee` block legitimately reprints "CENTRACOM" (`vendor_address`'s
+    own anchor) inside the remittance address. Both are ordinary telecom-bill
+    vocabulary reuse, not overcapture, and stopping there truncated a correct
+    3-row table to 1 row and turned a correct address into `None`.
+    `_ROLLUP_LABEL` (already used by `_headerless_row` for the identical
+    reason) is the one signal that survives both: "Total 640.50" bleeding into
+    a table (the original, confirmed overcapture bug this fix targets) matches
+    it; "Internet Taxes, Surcharges, & Fees" and "CENTRACOM" do not.
+    """
+    phrases: list[str] = []
+    for sel in persona.field_selectors:
+        if sel is exclude:
+            continue
+        if isinstance(sel, FieldSelector) and sel.anchor:
+            phrases.extend(p for p in (sel.anchor, *sel.anchor_alts) if p)
+        elif isinstance(sel, RowGroupSelector) and sel.table_anchor:
+            phrases.append(sel.table_anchor)
+    return [p for p in phrases if _ROLLUP_LABEL.match(_norm(p))]
+
+
+def _line_matches_any_anchor(line: Sequence[Word], phrases: list[str]) -> bool:
+    for phrase in phrases:
+        needle = _norm(phrase)
+        if needle and _runs(line, needle):
+            return True
+    return False
+
+
+def _trim_label_block_span(span: Span, other_phrases: list[str]) -> Span:
+    """Stop a label-block capture at the first line matching a DIFFERENT
+    declared field's anchor phrase, rather than only at a geometric gap.
+
+    The anchor's own first line is always kept, untouched - `_label_block`'s
+    own contract is that it's included (the executor's `skip` set is what
+    excludes the anchor's words from candidates, not this trim). Only lines
+    AFTER the first are eligible to end the block here, so a multi-line
+    address whose own first line happens to share a token with another
+    anchor is never truncated to nothing.
+    """
+    if not other_phrases:
+        return span
+    lines = span.lines()
+    if len(lines) <= 1:
+        return span
+    kept: list[Word] = list(lines[0])
+    for line in lines[1:]:
+        if _line_matches_any_anchor(line, other_phrases):
+            break
+        kept.extend(line)
+    bottom = max((w.y1 for w in kept), default=span.bbox[3])
+    return Span(
+        page_number=span.page_number,
+        source=span.source,
+        words=tuple(kept),
+        bbox=(span.bbox[0], span.bbox[1], span.bbox[2], bottom),
+        line_tolerance=span.line_tolerance,
+    )
+
+
 def _cells(words: Sequence[Word]) -> list[list[Word]]:
     """Split a line into cells at any gap wider than a column's worth."""
     out: list[list[Word]] = []
@@ -415,6 +490,16 @@ class Executor:
 
         spans = regions.resolve(selector.region)(ctx.pages, ctx.page_meta, anchor)
         spans = tuple(s for s in spans if self._role(ctx, s.page_number) == "primary")
+        if selector.region == "label-block":
+            # F2/overcapture: the resolver's own stop conditions (gap, blank-line
+            # tolerance, max reach) are all geometric and none is anchor-aware, so
+            # a block can read straight through into a neighbouring field's
+            # territory when a real document's spacing doesn't happen to trip
+            # them. Scoped to `label-block` specifically - it's the confirmed
+            # overcapture site; `near-anchor` block selectors have their own tight
+            # geometric window and aren't implicated.
+            other_phrases = _other_anchor_phrases(self.persona, exclude=selector)
+            spans = tuple(_trim_label_block_span(s, other_phrases) for s in spans)
 
         matcher = patterns.resolve(selector.pattern)
         values: list[Any] = []
@@ -669,12 +754,27 @@ class Executor:
         # because then the tight gaps ARE the majority.
         prev_y: float | None = header_line[0].y0
         gaps: list[float] = []
+        # F3/overcapture, the row-group counterpart of the label-block trim
+        # above: a table has no printed marker for its own end, and the
+        # gap/subtotal breaks below are both geometric/arithmetic - neither
+        # fires when a real document's row spacing or roll-up shape doesn't
+        # happen to trip them. A row matching a DIFFERENT declared field's
+        # anchor (e.g. a totals-block "Total" line sharing wording with the
+        # table's own anchor) is not a line item, whatever the gap says.
+        other_phrases = _other_anchor_phrases(self.persona, exclude=selector)
 
         for span in spans:
             for line in span.lines():
                 if perf_counter() > deadline:
                     ctx.add_modifier("pattern_timeout")
                     ctx.log(f"s5a: pattern budget exceeded for row_group {selector.row_group!r}")
+                    return
+
+                if other_phrases and _line_matches_any_anchor(line, other_phrases):
+                    ctx.log(
+                        f"s5a: row_group {selector.row_group!r} ended at "
+                        "another field's anchor"
+                    )
                     return
 
                 y = line[0].y0

@@ -132,20 +132,59 @@ DERIVED_ONLY: frozenset[str] = frozenset()
 
 # No `statement_of_account`, deliberately. See ladder.py - Centracom's page 1 is
 # titled `Account Summary` and says "statement" twice.
-DOC_TYPES: tuple[str, ...] = ("credit_memo", "disconnect_notice", "telecom_bill")
+DOC_TYPES: tuple[str, ...] = ("credit_memo", "disconnect_notice", "telecom_bill", "contract")
+
+# A contract's field shape genuinely differs from a bill's - it carries a
+# contracted rate and a term, never a payable total or a line-item table
+# (see corpus-analysis.md F20). Until now every function below ignored its
+# `doc_type` argument and returned one shared set regardless of type; that was
+# fine while every doc_type this pack declared was bill-shaped, but a contract
+# is not, so it needs its own branch rather than silently reusing (or
+# polluting) the invoice field set.
+_CONTRACT_IDENTITY: frozenset[str] = frozenset({
+    "account_number", "circuit_id", "contract_number",
+})
+
+_CONTRACT_TERMS: frozenset[str] = frozenset({
+    "contracted_rate", "rate_basis", "term_start_date", "term_end_date",
+    "term_length_months", "effective_date", "signed_date", "auto_renew",
+    "signatory_name", "signatory_title", "supersedes_contract_number",
+    "minimum_monthly_fee", "monthly_recurring_charge_total", "one_time_charge_total",
+})
+# `term_end_date` is registered as an ordinary selectable field, NOT
+# derived-only: some templates print an explicit end date, others only state
+# a term length a human (or a future op) computes from. No op computes it
+# today - there is nothing here to derive it FROM the two selector-scoped
+# fields alone without one - so forbidding a selector from ever targeting it
+# would leave a printed end date unreadable for no reason.
+
+CONTRACT_FIELDS: frozenset[str] = _CONTRACT_IDENTITY | _CONTRACT_TERMS | frozenset({
+    "vendor_name", "bill_to_name",
+})
+
+# A contract must name at least one party identity key and at least one date
+# that anchors it in time - which exact fields are printed varies by whether
+# it's a base agreement (contract_number, effective_date) or an amendment
+# referencing one (supersedes_contract_number, signed_date).
+CONTRACT_REQUIRED: frozenset[str] = frozenset({"bill_to_name"})
+CONTRACT_REQUIRED_ANY_OF: tuple[frozenset[str], ...] = (
+    frozenset({"contract_number", "supersedes_contract_number"}),
+    frozenset({"effective_date", "signed_date"}),
+)
+CONTRACT_DERIVED_ONLY: frozenset[str] = frozenset()
 
 
 def fields_for(doc_type: str) -> frozenset[str]:
-    return FIELDS
+    return CONTRACT_FIELDS if doc_type == "contract" else FIELDS
 
 
 def required_fields(doc_type: str) -> frozenset[str]:
-    return REQUIRED
+    return CONTRACT_REQUIRED if doc_type == "contract" else REQUIRED
 
 
 def required_any_of(doc_type: str) -> tuple[frozenset[str], ...]:
-    return REQUIRED_ANY_OF
+    return CONTRACT_REQUIRED_ANY_OF if doc_type == "contract" else REQUIRED_ANY_OF
 
 
 def derived_only_fields(doc_type: str) -> frozenset[str]:
-    return DERIVED_ONLY
+    return CONTRACT_DERIVED_ONLY if doc_type == "contract" else DERIVED_ONLY

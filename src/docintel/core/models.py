@@ -159,6 +159,16 @@ class JobContext:
     pages: tuple[PageText, ...] = ()
     page_meta: tuple[PageMeta, ...] = ()
     text_source: str = "native"
+    # The PDF Stage 2 actually read, when it differs from `source_path` - set
+    # only when a non-PDF input (an image, a DOCX/XLSX) was converted at
+    # intake (`extract.convert`). `source_path` is deliberately left alone:
+    # `crosscheck_filename` (grammar/ops/crosscheck.py) reads its BASENAME to
+    # compare an amount embedded in the original filename against the printed
+    # total, and a converted file's throwaway temp name would silently break
+    # that. Any stage that needs to open the document's actual bytes from
+    # disk (Stage 5b's vision call) should read `ctx.readable_path or
+    # ctx.source_path` rather than `source_path` alone.
+    readable_path: str | None = None
 
     # classification (s3)
     # The domain pack that claimed this document, resolved from the bill-to on
@@ -175,6 +185,19 @@ class JobContext:
     persona: Any | None = None
     persona_status: PersonaStatus | None = None
     extraction_rule_version: str | None = None
+
+    # processing profile (s4b). What downstream handling this document's
+    # persona asks for, beyond extraction itself - resolved once, right after
+    # persona lookup, rather than left implicit for a human to remember to run
+    # a follow-up command. Absence of a persona (`hard_miss`) or absence of the
+    # key on a persona both mean the same thing: no follow-up is owed.
+    #   reconciliation: "none" | "auto" - match this invoice against contracts
+    #     on file once it's processed.
+    #   export: [] | list of registered layout names (e.g. ["excel"]) - render
+    #     this record into that format once it's processed.
+    processing_profile: dict[str, Any] = field(
+        default_factory=lambda: {"reconciliation": "none", "export": []}
+    )
 
     # extraction (s5*)
     extracted: ExtractedFields = field(default_factory=ExtractedFields)

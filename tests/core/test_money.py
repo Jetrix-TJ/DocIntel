@@ -18,6 +18,8 @@ from docintel.core.money import parse_money, is_money
     ("(249.84)", Decimal("-249.84")),       # Lumen payment received
     ("212.87 cr", Decimal("-212.87")),      # Comcast credit card payment
     ("$1,231.74 CR", Decimal("-1231.74")),  # Windstream payments/adjustments
+    ("$-161.95", Decimal("-161.95")),       # Spectrum/Charter "Payments" line
+    ("$-1,140.29", Decimal("-1140.29")),    # same notation, with thousands separator
     # currency suffix
     ("481.20 USD", Decimal("481.20")),
     ("14789.77", Decimal("14789.77")),

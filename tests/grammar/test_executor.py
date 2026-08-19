@@ -401,6 +401,88 @@ def test_a_table_ends_at_a_structural_gap_not_at_the_page_foot() -> None:
     ]
 
 
+def test_a_row_group_stops_at_another_declared_fields_anchor() -> None:
+    """The overcapture bug (Bug 3): the same failure shape as the label-block
+    test above, one level down - a bogus trailing row whose gap is too small
+    to trip the gap-break, but which contains a DIFFERENT declared field's
+    anchor text, is not a line item. Reproduces the DTSS-shaped synthetic
+    finding: a `Total 640.50` line appended after the real rows, at a 20pt gap
+    (below `TABLE_BREAK_FLOOR=24` and below `pitch(20) * TABLE_BREAK_FACTOR(2.5)
+    = 50`), so only the anchor-boundary check - not the existing gap rule -
+    can catch it.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Item0", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("Item1", 50.0, 140.0), ("20.00", 400.0, 140.0),
+        ("Item2", 50.0, 160.0), ("30.00", 400.0, 160.0),
+        ("Total", 50.0, 180.0), ("640.50", 400.0, 180.0),
+    ))
+    ctx = _run(
+        ctx,
+        {"row_group": "line_items", "table_anchor": "DESCRIPTION",
+         "columns": {"description": "text", "amount": "currency"}},
+        {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+         "pattern": "currency"},
+    )
+    assert ctx.row_groups["line_items"] == [
+        {"description": "Item0", "amount": Decimal("10.00")},
+        {"description": "Item1", "amount": Decimal("20.00")},
+        {"description": "Item2", "amount": Decimal("30.00")},
+    ]
+
+
+def test_a_row_group_does_not_stop_at_an_ordinary_fields_anchor() -> None:
+    """The regression this narrowing exists to prevent, pinned at the unit
+    level: the real CentraCom shape, where a genuine charges-table row is
+    titled the exact same phrase a SEPARATE summary field is anchored on
+    ('Internet Taxes, Surcharges, & Fees') - not a rollup/summary label
+    itself, so it must not end the table. An unfiltered anchor-boundary check
+    truncated CentraCom's real 3-row `charges` table to 1 row; this is that
+    failure, reproduced directly rather than only caught by the gold corpus.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Internet Charges", 50.0, 120.0), ("140.90", 400.0, 120.0),
+        ("Internet Taxes, Surcharges, & Fees", 50.0, 140.0), ("0.20", 400.0, 140.0),
+        ("Special Circuit Charges", 50.0, 160.0), ("13611.50", 400.0, 160.0),
+    ))
+    ctx = _run(
+        ctx,
+        {"row_group": "charges", "table_anchor": "DESCRIPTION",
+         "columns": {"description": "text", "amount": "currency"}},
+        {"field": "taxes_and_fees", "anchor": "Internet Taxes, Surcharges, & Fees",
+         "region": "near-anchor", "pattern": "currency"},
+    )
+    assert ctx.row_groups["charges"] == [
+        {"description": "Internet Charges", "amount": Decimal("140.90")},
+        {"description": "Internet Taxes, Surcharges, & Fees", "amount": Decimal("0.20")},
+        {"description": "Special Circuit Charges", "amount": Decimal("13611.50")},
+    ]
+
+
+def test_a_row_group_with_no_other_anchor_bearing_selector_is_unaffected() -> None:
+    """Regression guard: a persona with only the one row-group selector (the
+    common shape most existing fixtures use) must behave exactly as before -
+    `other_phrases` is empty, so this new stop condition never fires."""
+    ctx = _ctx(_page(
+        1,
+        ("DESCRIPTION", 50.0, 100.0), ("AMOUNT", 400.0, 100.0),
+        ("Item0", 50.0, 120.0), ("10.00", 400.0, 120.0),
+        ("Total", 50.0, 140.0), ("10.00", 400.0, 140.0),
+    ))
+    ctx = _run(ctx, {
+        "row_group": "line_items", "table_anchor": "DESCRIPTION",
+        "columns": {"description": "text", "amount": "currency"},
+    })
+    assert ctx.row_groups["line_items"] == [
+        {"description": "Item0", "amount": Decimal("10.00")},
+        {"description": "Total", "amount": Decimal("10.00")},
+    ]
+
+
 def test_a_uniformly_spaced_table_is_not_broken_up() -> None:
     """The mirror: the break rule must not truncate a long ordinary table."""
     words: list[tuple[str, float, float]] = [
@@ -474,6 +556,58 @@ def test_a_wide_single_column_block_is_not_narrowed() -> None:
     assert ctx.extracted.get("return_address") == (
         "ATTN: Support Services\n131 W Matthews St"
     )
+
+
+def test_a_label_block_stops_at_another_fields_rollup_style_anchor() -> None:
+    """The overcapture bug (Bug 2): none of the resolver's own stop conditions
+    are anchor-aware, so a real address block can read straight through into a
+    neighbouring totals section when the document's own spacing doesn't happen
+    to trip the gap/blank-line/max-reach checks - exactly the failure mode a
+    synthetic DTSS-shaped test document produced. The gaps here (12pt) are
+    deliberately well under `LABEL_BLOCK_GAP_FLOOR` (24pt), so geometry alone
+    would never stop this block - only the anchor-boundary check does.
+
+    Deliberately a ROLLUP-shaped anchor ("Balance"), not an arbitrary one -
+    see `_other_anchor_phrases`'s docstring for why an unfiltered version of
+    this check broke two real, previously-passing gold documents.
+    """
+    ctx = _ctx(_page(
+        1,
+        ("ACME", 50.0, 100.0),
+        ("123", 50.0, 112.0), ("Main", 70.0, 112.0), ("St", 100.0, 112.0),
+        ("Balance", 50.0, 124.0), ("Due", 90.0, 124.0),
+        ("450.00", 50.0, 136.0),
+    ))
+    ctx = _run(
+        ctx,
+        {"field": "vendor_address", "anchor": "ACME", "region": "label-block",
+         "pattern": "text_block"},
+        {"field": "total_printed", "anchor": "Balance Due",
+         "region": "near-anchor", "pattern": "currency"},
+    )
+    assert ctx.extracted.get("vendor_address") == "123 Main St"
+
+
+def test_a_label_block_does_not_stop_at_an_ordinary_fields_anchor() -> None:
+    """The regression this narrowing exists to prevent: a block legitimately
+    containing text that happens to be a DIFFERENT field's anchor - not a
+    rollup/summary label - must not be truncated. This is the real CentraCom
+    shape: a remittance block reprinting the vendor's own name, which is a
+    separate field's anchor elsewhere on the page."""
+    ctx = _ctx(_page(
+        1,
+        ("REMIT", 50.0, 100.0), ("TO:", 90.0, 100.0),
+        ("ACME", 50.0, 112.0),
+        ("123", 50.0, 124.0), ("Main", 70.0, 124.0), ("St", 100.0, 124.0),
+    ))
+    ctx = _run(
+        ctx,
+        {"field": "remit_address", "anchor": "REMIT TO:", "region": "label-block",
+         "pattern": "text_block"},
+        {"field": "vendor_address", "anchor": "ACME", "region": "label-block",
+         "pattern": "text_block"},
+    )
+    assert ctx.extracted.get("remit_address") == "ACME\n123 Main St"
 
 
 def test_an_anchor_can_target_its_last_occurrence() -> None:

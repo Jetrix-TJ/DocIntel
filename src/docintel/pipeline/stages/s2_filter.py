@@ -24,6 +24,17 @@ allowed to do with a page:
   tag when a page's markup was baked into its raster image rather than kept
   as a stripped PDF annotation layer. That tag forces review unconditionally
   further down the pipeline (s7); this stage's only job is to raise it.
+
+**Non-PDF formats.** An image or an Office document is converted to a real
+PDF right here, before either of the two facts above is computed - so
+`load_document` and `detect_flattened` never learn a document arrived as
+anything other than a PDF, and neither needed a single change to accept one.
+See `extract.convert` for why this is a conversion at the boundary rather
+than a second, parallel extraction path. A conversion failure
+(`PermanentError`/`TransientError`) is raised, not caught here - the same
+discipline `load_document`'s own OCR failures already follow, letting the
+`Runner`'s existing retry/dead-letter machinery decide, rather than a second,
+inconsistent copy of that decision living in this stage too.
 """
 
 from __future__ import annotations
@@ -31,10 +42,10 @@ from __future__ import annotations
 import os
 
 from docintel.core.models import JobContext
-from docintel.extract import annotations, pageroles
+from docintel.extract import annotations, convert, pageroles
 from docintel.extract.normalize import load_document
 
-ALLOWED_SUFFIXES = {".pdf"}
+ALLOWED_SUFFIXES = convert.ACCEPTED_SUFFIXES
 
 
 class AttachmentFilter:
@@ -52,7 +63,15 @@ class AttachmentFilter:
             ctx.skip_reason = "source file does not exist"
             return ctx
 
-        pages, page_meta, text_source = load_document(ctx.source_path)
+        path = ctx.source_path
+        if suffix in convert.IMAGE_SUFFIXES:
+            path = convert.convert_image_to_pdf(path)
+        elif suffix in convert.OFFICE_SUFFIXES:
+            path = convert.convert_office_to_pdf(path)
+        if path != ctx.source_path:
+            ctx.readable_path = path
+
+        pages, page_meta, text_source = load_document(path)
         ctx.pages = pages
         ctx.page_meta, used_last_resort_role_fallback = pageroles.assign(pages, page_meta)
         ctx.text_source = text_source
@@ -60,7 +79,7 @@ class AttachmentFilter:
         if used_last_resort_role_fallback:
             ctx.add_tag("page_role_fallback")
 
-        if annotations.detect_flattened(ctx.source_path, pages, page_meta):
+        if annotations.detect_flattened(path, pages, page_meta):
             ctx.add_tag("has_flattened_annotations")
 
         return ctx

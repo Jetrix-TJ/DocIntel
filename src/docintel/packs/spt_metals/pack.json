@@ -1,0 +1,59 @@
+{
+  "_note": "SPT Metals, Inc. - a carbon bar distributor onboarded to prove the classification/derivation architecture generalizes past telecom billing. Weight-tiered pricing (Weight/ft x Base Cost/lb x Margin x CTL Factor, + Energy Surcharge, + Freight) is a structurally different formula family from the F1 payable-derivation math every other pack uses. This pack is data-only for classification/extraction, exactly like acme_freight - what it needs beyond that is one small hook (conventions.py) supplying the weight-tier margin table, the per-state freight-rate table, and the CTL adder, none of which are ever printed on the invoice - the same 'a fact the derivation needs that the page cannot supply' pattern digitaldirection's prior_balance_basis convention already established.",
+
+  "name": "spt_metals",
+  "default_currency": "USD",
+  "doc_types": ["carbon_bar_invoice"],
+
+  "thresholds": {
+    "total_printed": 0.90,
+    "weight_per_ft": 0.90,
+    "base_cost_per_lb": 0.90
+  },
+
+  "fields": {
+    "carbon_bar_invoice": {
+      "all": [
+        "size_od", "weight_per_ft", "base_cost_per_lb", "footage",
+        "ship_to_state", "energy_surcharge", "total_printed"
+      ],
+      "required": [
+        "weight_per_ft", "base_cost_per_lb", "footage",
+        "ship_to_state", "energy_surcharge"
+      ],
+      "any_of": [],
+      "derived_only": [
+        "price_per_foot", "material_total", "freight", "order_total"
+      ]
+    }
+  },
+
+  "claim": {
+    "_why": "SPT Metals invoices many different buyers (Golub Corp among them, but not exclusively), so the claim guards on the VENDOR's own identity - the same reasoning digitaldirection's carrier-based claim uses, not a bill-to roster.",
+    "rules": [
+      {
+        "kind": "markers",
+        "scope": "primary",
+        "values": ["SPT METALS, INC.", "SPT Metals, Inc.", "billing@sptmetals.example"]
+      }
+    ],
+    "vetoes": []
+  },
+
+  "ladder": {
+    "default": "carbon_bar_invoice",
+    "rungs": [
+      {
+        "name": "carbon_bar_invoice_confirmed",
+        "doc_type": "carbon_bar_invoice",
+        "_why": "SPT Metals ships exactly one doc_type today - this rung exists only because the ladder compiler requires at least one, and re-confirms the same claim marker rather than adding a second, unrelated signal.",
+        "when": {
+          "signal": "pattern_in_scope",
+          "params": { "pattern": "SPT METALS", "scope": "primary" }
+        }
+      }
+    ]
+  },
+
+  "tags": []
+}

@@ -618,6 +618,53 @@ and one row carries its own inline `Sub Total / Taxes / Total` block.
 
 ---
 
+### F20 — A contract is a different document family, not an invoice missing its total
+
+**Evidence.** Of 18 real Windstream-carrier documents that processed cleanly during an earlier
+corpus sample, 16 were contracts, amendments, or Customer Service Records — none of them bills —
+matched to a carrier's billing persona purely because the carrier's name appears on the page, then
+run through billing-shaped extraction (total-due, prior-balance logic) that has nothing to
+reconcile against. The real Golub Corporation/Windstream relationship (`docs/corpus/contracts/`)
+confirms the shape directly: a base Service Agreement (`contract_number`, `effective_date`,
+`term_length_months`, a Minimum Monthly Fee) plus a chain of amendments and renewals layered on top
+of it over 2020–2025, none of which print a `total_printed`, a line-item charges table, or a prior
+balance.
+
+**Requirement.** A `contract` doc_type, with its own field set (identity: account/circuit/contract
+number; terms: contracted rate, term start/end, signatory, effective date, a reference back to
+whatever contract it supersedes) — distinct from, not a subset of, the billing field set. See
+`digitaldirection/fields.py`'s doc_type-aware `fields_for`/etc.
+
+### F21 — One customer relationship carries several contracts at once, layered, not superseding
+
+**Evidence.** The Golub/Windstream relationship's own documents: a 2020 base agreement
+(`contract_number 2110613`), a 2022 renewal amendment (`2494434`, explicitly amending 2110613), and
+further location-specific amendments (e.g. `2714300`) that reference "the Agreement" collectively
+rather than one single prior contract_number. "Latest contract wins" is the wrong model — an
+amendment modifies specific terms or specific service locations while everything else in the base
+agreement (and any earlier amendment) remains in force.
+
+**Requirement.** Reconciliation (the invoice↔contract matching layer) must resolve which contract
+governs a given invoice by effective-date bracketing against the invoice's billing period, not by
+picking the most recently dated document — and must escalate rather than guess when precedence is
+genuinely ambiguous (`contract_precedence_ambiguous`), the same posture `prior_balance_basis`
+already established for a different ambiguity.
+
+### F22 — A contract amendment's own arithmetic is a real, checkable closure too
+
+**Evidence.** Golub's 4G service-addition amendment (2021-02-18) states a per-location rate
+($60.00), a location count (137), and a total additional Minimum Recurring Charge ($8,220.00) on
+the same page — `60.00 × 137 = 8,220.00` closes exactly, the contract-document analogue of an
+invoice's line-item-sum-equals-subtotal check (F8).
+
+**Requirement.** A contract persona's `adjust` ops (or a gold assertion, at minimum, ahead of any
+op existing) should be able to state this closure explicitly, the same way `crosscheck_line_sum`
+does for a billing table — not because a contract needs to derive a payable, but because a stated
+rate that doesn't match its own stated inputs is exactly the kind of authoring/OCR error the
+existing crosscheck ops already exist to catch elsewhere.
+
+---
+
 ### F20 — Layout variants within one sender are already present
 
 **Evidence.** U-PAK page 1 and page 5 are the *same template* with different content: p1 has a

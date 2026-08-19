@@ -1,0 +1,52 @@
+{
+  "gold_id": "digitaldirection-golub-contract-amendment-add-services-2021",
+  "source_file": "corpus/contracts/golub-windstream-amendment-add-services-2021-02-18.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-08-17, real Golub/Windstream contract set",
+  "notes": "A service-addition amendment: adds 4G Cellular Broadband Internet Access at $60.00 MRC per location across 137 existing service locations, for $8,220.00 total additional MRC, with its own 60-month term starting from installation rather than the base agreement's effective date. Read in full (4 pages).",
+  "teaches": [
+    "F20",
+    "F22"
+  ],
+  "classification": {
+    "doc_type": "contract",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 4,
+    "page_roles": [
+      "primary",
+      "primary",
+      "primary",
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Kinetic Business by Windstream",
+    "bill_to_name": "The Golub Corporation",
+    "supersedes_contract_number": "2110613",
+    "contracted_rate": 8220.0,
+    "rate_basis": "60.00 per location x 137 locations",
+    "term_length_months": 60,
+    "signatory_name": "Sam Wagar",
+    "signatory_title": "VP Information Technology",
+    "effective_date": "2021-02-18"
+  },
+  "assertions": [
+    {
+      "check": "contracted_rate",
+      "expr": "60.00 * 137",
+      "equals": 8220.0,
+      "note": "Per-location rate times location count must equal the stated total additional MRC - printed on the same page as both factors, unlike a typical invoice trap."
+    },
+    {
+      "check": "doc_type",
+      "equals": "contract"
+    }
+  ],
+  "expected_routing": {
+    "lane": "low",
+    "review_flag": true,
+    "regen_flag": true,
+    "reason": "Backed by a real, active persona (golub-windstream-contract.json) - routing reflects genuine, measured field coverage on this specific document."
+  }
+}

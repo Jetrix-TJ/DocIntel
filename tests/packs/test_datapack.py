@@ -72,7 +72,12 @@ def test_it_satisfies_the_same_protocol_as_the_module_packs() -> None:
 
 
 def test_it_is_loaded_by_the_real_registry() -> None:
-    assert [p.name for p in load_packs()] == ["northstar", "digitaldirection", "acme_freight"]
+    # spt_metals joined PACK_MODULES between digitaldirection and the
+    # data-only acme_freight (PACK_FILES) - a module pack with a custom hook,
+    # not a drift in this list.
+    assert [p.name for p in load_packs()] == [
+        "northstar", "digitaldirection", "spt_metals", "acme_freight",
+    ]
 
 
 # --------------------------------------------------------------------------

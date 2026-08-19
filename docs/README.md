@@ -1,5 +1,11 @@
 # Document Intelligence — POC documentation
 
+> **This is a point-in-time design record from the original 10-document proof of concept** — the
+> spec, the corpus findings, and the open questions as they stood then. It predates SPT Metals,
+> data-only packs, multi-format (email/Office) intake, and Gemini vision extraction, and is kept
+> as-is because it's the record of *why* things were decided, not a living reference.
+> **For the current system, start at the repo root [`README.md`](../README.md)** instead.
+
 Email attachment → confidence-scored structured record, without a human in the middle.
 
 ## Start here

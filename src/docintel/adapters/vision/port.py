@@ -9,6 +9,14 @@ call and calling it vision. So the port carries a pointer to the original bytes.
 It is keyword-only and optional because a deterministic stand-in
 (`FakeVision`) has no use for it, and because a caller that genuinely has no
 file must be able to say so rather than invent a path.
+
+**Why `field_hints` is on the call, not only on the adapter's constructor.**
+An adapter is constructed once and shared across an entire run (`build_
+pipeline`), while the hint text is a property of the DOCUMENT's persona -
+different per vendor. A constructor-level default (`GeminiVision(field_hints=
+...)`) still exists for a caller that only ever processes one vendor (a demo
+script, a one-off), but Stage 5b's shared instance needs a hint set that
+varies call to call, which only a per-call parameter can give it.
 """
 
 from __future__ import annotations
@@ -33,4 +41,5 @@ class VisionExtractor(Protocol):
         field_names: list[str],
         *,
         source_path: str | None = None,
+        field_hints: dict[str, str] | None = None,
     ) -> VisionResult: ...

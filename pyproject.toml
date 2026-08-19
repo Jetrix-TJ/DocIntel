@@ -5,6 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "docintel"
 version = "0.1.0"
+description = "Turn a vendor invoice or bill into a confidence-scored structured record, with a human in the loop only where the system says one is genuinely needed."
+readme = "README.md"
+authors = [{ name = "Techjays" }]
+license = { text = "Proprietary - All Rights Reserved. Internal use only; not for external distribution." }
 requires-python = ">=3.12"
 dependencies = [
     "pdfplumber==0.11.9",
@@ -14,14 +18,49 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5", "mypy>=1.10"]
-vision = ["anthropic>=0.40"]
+vision = ["google-genai>=2.18", "python-dotenv>=1.0"]
 ui = ["flask>=3.0"]
+export = ["openpyxl>=3.1"]
+# `.msg` (Outlook's proprietary format) only - `.eml` parses with the stdlib
+# `email` module. See src/docintel/adapters/intake/email.py.
+email = ["extract-msg>=0.45"]
+# `docintel generate-persona` (src/docintel/generation/persona_agent.py) - a
+# draft-only, human-reviewed onboarding aid, not a runtime dependency of the
+# real extraction pipeline. Separate from `vision`'s `google-genai`: Gemini
+# reads the pages of documents already in the pipeline; this calls Claude,
+# once per new vendor, to draft the field list a reviewer starts from.
+generation = ["anthropic>=0.121", "pydantic>=2.0"]
+
+# Not a pip dependency: `extract.convert.convert_office_to_pdf` (DOCX/XLSX ->
+# PDF, for documents that arrive as Office files instead of PDFs) shells out
+# to LibreOffice headless. Install `libreoffice` (or just
+# `libreoffice-writer`/`libreoffice-calc`) on any host that runs `docintel
+# process`/`docintel serve` and needs to accept those formats - a missing
+# `soffice` binary fails that document loudly and per-document (a clear
+# PermanentError), never silently, so its absence is safe to notice at
+# deploy time rather than a hard build-time requirement.
 
 [project.scripts]
 docintel = "docintel.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Runtime data a normal `.py`-only wheel would otherwise silently drop: every
+# pack's `personas/*.json` and `pack.json`, and the web UI's `templates/*.html`.
+# Nothing in `[tool.setuptools.packages.find]` implies these are included -
+# without this, `pip install` from a built wheel installs a `docintel` with
+# zero personas and a broken web UI, and nothing about that failure is loud;
+# `docintel process` would just silently classify every document as a hard
+# miss. Declared per-package rather than a single blanket `"*": ["*"]` so a
+# new pack or template directory is a one-line, reviewed addition to this
+# list, not something that works by accident.
+[tool.setuptools.package-data]
+"docintel.packs.northstar" = ["*.json", "personas/*.json"]
+"docintel.packs.digitaldirection" = ["*.json", "personas/*.json"]
+"docintel.packs.spt_metals" = ["*.json", "personas/*.json"]
+"docintel.packs.acme_freight" = ["*.json", "personas/*.json"]
+"docintel.webui" = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -49,11 +88,11 @@ files = [
 python_version = "3.12"
 strict = true
 
-# `anthropic` is an optional extra (`pip install 'docintel[vision]'`). It is
+# `google-genai` is an optional extra (`pip install 'docintel[vision]'`). It is
 # absent in the default dev environment on purpose - `--vision fake` and
 # `--vision cassette` must work without it - so the import is unresolvable here
-# rather than wrong. The lazy `import anthropic` inside `_resolve_client` is the
-# only reference, and its result is handled as `Any` regardless.
+# rather than wrong. The lazy `from google import genai` inside `_resolve_client`
+# is the only reference, and its result is handled as `Any` regardless.
 [[tool.mypy.overrides]]
-module = ["anthropic", "anthropic.*"]
+module = ["google.genai", "google.genai.*"]
 ignore_missing_imports = true

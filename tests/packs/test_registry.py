@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from docintel.core.models import PageMeta, PageText, Word, new_context
 from docintel.grammar.schema import Pack as GrammarPack
-from docintel.packs.registry import Pack, load_packs, register_all, resolve_pack
+from docintel.packs.registry import Pack, load_basis_overlay, load_packs, register_all, resolve_pack
 from docintel.pipeline.hooks import SOCKETS, HookRegistry
 
 
@@ -150,3 +150,127 @@ def test_no_pack_registers_an_adjust_op_of_its_own() -> None:
     needs is already in the grammar's closed enum, so no pack has had to grow it."""
     for pack in load_packs():
         assert pack.adjust_ops() == frozenset()
+
+
+# ==========================================================================
+# `load_basis_overlay` - the reviewer-confirmed prior_balance_basis overlay
+# ==========================================================================
+
+
+def test_a_missing_overlay_file_is_an_empty_dict(tmp_path) -> None:
+    """No file yet is the common case (no reviewer has confirmed anything for
+    this pack) - it must read as 'nothing known', never raise."""
+    assert load_basis_overlay(str(tmp_path)) == {}
+
+
+def test_an_existing_overlay_file_is_read_fresh(tmp_path) -> None:
+    """No caching: a reviewer's just-written decision must be visible on the
+    very next call, mirroring `DataPack.personas()`'s own 'read from disk on
+    every call' idiom."""
+    path = tmp_path / "prior_balance_basis.local.json"
+    path.write_text('{"acme-widgets": "gross"}')
+    assert load_basis_overlay(str(tmp_path)) == {"acme-widgets": "gross"}
+
+    path.write_text('{"acme-widgets": "gross", "second-vendor": "net_of_payments"}')
+    assert load_basis_overlay(str(tmp_path)) == {
+        "acme-widgets": "gross",
+        "second-vendor": "net_of_payments",
+    }
+
+
+def test_malformed_json_is_treated_as_no_overlay_not_a_crash(tmp_path) -> None:
+    """A hand-edited or half-written overlay file must never take down the
+    pipeline - it's reviewer-facing runtime state, not validated input."""
+    path = tmp_path / "prior_balance_basis.local.json"
+    path.write_text("{not valid json")
+    assert load_basis_overlay(str(tmp_path)) == {}
+
+
+def test_a_json_value_that_is_not_an_object_is_treated_as_no_overlay(tmp_path) -> None:
+    path = tmp_path / "prior_balance_basis.local.json"
+    path.write_text("[1, 2, 3]")
+    assert load_basis_overlay(str(tmp_path)) == {}
+
+
+def test_overlay_values_are_coerced_to_strings(tmp_path) -> None:
+    """Defensive: the file is meant to hold only the two F1b basis strings, but
+    the reader itself makes no assumption about what's in it beyond 'a dict'."""
+    path = tmp_path / "prior_balance_basis.local.json"
+    path.write_text('{"acme-widgets": "gross", "123": "net_of_payments"}')
+    overlay = load_basis_overlay(str(tmp_path))
+    assert overlay == {"acme-widgets": "gross", "123": "net_of_payments"}
+    assert all(isinstance(k, str) and isinstance(v, str) for k, v in overlay.items())
+
+
+def test_the_hardcoded_table_wins_over_the_overlay_for_a_known_vendor(tmp_path, monkeypatch) -> None:
+    """The overlay is a strictly lower trust tier - see conventions.py's own
+    docstring ('a wrong entry here is a reviewed code change'). Exercised
+    directly against the real northstar convention, not a stand-in, so a
+    future refactor that reorders the two lookups fails this test."""
+    import docintel.packs.northstar.conventions as ns_conventions
+
+    overlay_path = tmp_path / "prior_balance_basis.local.json"
+    overlay_path.write_text('{"edco": "net_of_payments"}')
+    monkeypatch.setattr(ns_conventions, "_PACK_DIR", str(tmp_path))
+
+    ctx = _ctx("EDCO Waste Recycling Service")
+    ctx.extracted.set("prior_balance", 298.34, 0.99)
+    out = ns_conventions.apply_prior_balance_basis(ctx)
+    assert out.extracted.get("prior_balance_basis") == "gross", (
+        "edco is in PRIOR_BALANCE_BASIS as 'gross' - the overlay's "
+        "'net_of_payments' must lose"
+    )
+
+
+def test_the_overlay_supplies_the_basis_for_a_vendor_the_hardcoded_table_does_not_know(
+    tmp_path, monkeypatch
+) -> None:
+    """The other half of the same precedence: when the hardcoded table has
+    nothing for this vendor, the overlay is consulted rather than the F1b
+    refusal firing immediately."""
+    import docintel.packs.northstar.conventions as ns_conventions
+
+    overlay_path = tmp_path / "prior_balance_basis.local.json"
+    overlay_path.write_text('{"dtss": "net_of_payments"}')
+    monkeypatch.setattr(ns_conventions, "_PACK_DIR", str(tmp_path))
+
+    ctx = _ctx("D T S S Inc")
+    ctx.extracted.set("prior_balance", 100.00, 0.99)
+    out = ns_conventions.apply_prior_balance_basis(ctx)
+    assert out.extracted.get("prior_balance_basis") == "net_of_payments"
+    assert "unknown_prior_balance_basis" not in out.tags
+
+
+def test_a_vendor_in_neither_table_still_tags_unknown_and_sets_no_basis(
+    tmp_path, monkeypatch
+) -> None:
+    import docintel.packs.northstar.conventions as ns_conventions
+
+    monkeypatch.setattr(ns_conventions, "_PACK_DIR", str(tmp_path))  # no overlay file at all
+
+    ctx = _ctx("D T S S Inc")
+    ctx.extracted.set("prior_balance", 100.00, 0.99)
+    out = ns_conventions.apply_prior_balance_basis(ctx)
+    assert out.extracted.get("prior_balance_basis") is None
+    assert "unknown_prior_balance_basis" in out.tags
+
+
+def test_the_overlay_mechanism_is_symmetric_on_the_digitaldirection_pack(
+    tmp_path, monkeypatch
+) -> None:
+    """conventions.py is duplicated code, one copy per pack (see both files'
+    own docstrings) - a fix or a bug in one does not automatically apply to
+    the other, so the overlay fallback needs its own proof here too, not just
+    on northstar."""
+    import docintel.packs.digitaldirection.conventions as dd_conventions
+
+    monkeypatch.delitem(dd_conventions.PRIOR_BALANCE_BASIS, "comcast")
+    monkeypatch.setattr(dd_conventions, "_PACK_DIR", str(tmp_path))
+    overlay_path = tmp_path / "prior_balance_basis.local.json"
+    overlay_path.write_text('{"comcast": "gross"}')
+
+    ctx = _ctx("Comcast Business")
+    ctx.extracted.set("prior_balance", 221.11, 0.99)
+    out = dd_conventions.apply_prior_balance_basis(ctx)
+    assert out.extracted.get("prior_balance_basis") == "gross"
+    assert "unknown_prior_balance_basis" not in out.tags

@@ -79,12 +79,21 @@ class CassetteVision:
         pages: tuple[PageText, ...],
         field_names: list[str],
         source_path: str | None = None,
+        field_hints: dict[str, str] | None = None,
     ) -> str:
-        """A stable identifier for "this document, these fields".
+        """A stable identifier for "this document, these fields, these hints".
 
         Prefers the source bytes, because that is what a real adapter sends. Falls
         back to the text layer so a cassette can be keyed for a caller that has no
         file - the two are domain-separated so they can never collide.
+
+        `field_hints` only enters the hash when non-empty, so a caller that never
+        passes hints (every cassette recorded before this parameter existed)
+        gets the exact same key as before - the change is additive, not a mass
+        invalidation. A hint set DOES belong in the key once it is used: it is
+        as much a part of "what we asked for" as `field_names` already is, and
+        two different hint sets asked about the same fields can legitimately
+        get different answers.
         """
         h = hashlib.sha256()
         h.update(KEY_VERSION)
@@ -106,6 +115,13 @@ class CassetteVision:
         for name in field_names:
             h.update(name.encode())
             h.update(b"\0")
+        if field_hints:
+            h.update(b"hints\0")
+            for name in sorted(field_hints):
+                h.update(name.encode())
+                h.update(b"\0")
+                h.update(field_hints[name].encode())
+                h.update(b"\0")
         return h.hexdigest()[:_KEY_LENGTH]
 
     # -- the port ----------------------------------------------------------
@@ -116,11 +132,12 @@ class CassetteVision:
         field_names: list[str],
         *,
         source_path: str | None = None,
+        field_hints: dict[str, str] | None = None,
     ) -> VisionResult:
-        cassette_key = self.key(pages, field_names, source_path)
+        cassette_key = self.key(pages, field_names, source_path, field_hints)
         if self.mode == "replay":
             return self._replay(cassette_key, field_names, source_path)
-        return self._record(cassette_key, pages, field_names, source_path)
+        return self._record(cassette_key, pages, field_names, source_path, field_hints)
 
     def _replay(
         self, cassette_key: str, field_names: list[str], source_path: str | None
@@ -141,10 +158,11 @@ class CassetteVision:
         pages: tuple[PageText, ...],
         field_names: list[str],
         source_path: str | None,
+        field_hints: dict[str, str] | None = None,
     ) -> VisionResult:
         assert self.inner is not None  # guaranteed by __init__
         result = self.inner.extract(  # type: ignore[attr-defined]
-            pages, field_names, source_path=source_path
+            pages, field_names, source_path=source_path, field_hints=field_hints
         )
         entries = self._load()
         entries[cassette_key] = {
@@ -152,6 +170,7 @@ class CassetteVision:
             "model": self.model,
             "document": os.path.basename(source_path) if source_path else None,
             "field_names": list(field_names),
+            "field_hints": dict(field_hints) if field_hints else {},
             "fields": dict(result.fields),
             "confidence": dict(result.confidence),
             "irregularities": list(result.irregularities),

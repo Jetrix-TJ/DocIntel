@@ -340,7 +340,12 @@ def test_no_persona_has_quietly_paid_the_extraction_debt() -> None:
     selected: dict[str, list[str]] = {}
     pattern = os.path.join("src", "docintel", "packs", "*", "personas", "*.json")
     paths = sorted(glob.glob(pattern))
-    assert len(paths) == 10, f"expected ten personas, found {len(paths)}"
+    # 12 since spt_metals: golub-windstream-contract.json (doc_type "contract")
+    # joined the original ten invoice personas in Phase 4, and
+    # spt_metals/personas/spt_metals.json is the twelfth - a deliberate
+    # addition (a new pack onboarded), not a drift, per this test's own
+    # "either is a diff worth arguing about" rule.
+    assert len(paths) == 12, f"expected twelve personas, found {len(paths)}"
     for path in paths:
         with open(path) as fh:
             persona = json.load(fh)
@@ -620,3 +625,44 @@ def test_upak_cannot_go_green_on_its_vacuous_assertions_alone() -> None:
     ]
     assert modifier_assertions, "U-PAK must assert the refusal's modifier"
     assert "arith_balance_mismatch" in modifier_assertions[0].expected
+
+
+# --------------------------------------------------------------------------
+# Numeric gold fields and MONEY_FIELDS/EXACT_NUMERIC_FIELDS registration
+#
+# The same "make the gap mechanical" reasoning as the assertions-array
+# section above, one level down: `_field_kind` now raises the moment it sees
+# an unregistered numeric field (found this session: `contracted_rate`,
+# `minimum_monthly_fee`, `monthly_recurring_charge_total`, and
+# `one_time_charge_total` were all silently compared via bare `==` instead
+# of Decimal equality until then). This test is the earlier, more specific
+# net: it catches the same mistake the moment a new gold FIXTURE introduces
+# an unregistered numeric field name, before anyone even runs the scorer.
+# --------------------------------------------------------------------------
+
+
+def _all_numeric_field_names() -> set[str]:
+    names: set[str] = set()
+    for gold in GOLD:
+        for section in ("fields", "derived"):
+            for name, value in (gold.get(section) or {}).items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    names.add(name)
+    return names
+
+
+def test_every_numeric_gold_field_is_registered_as_money_or_exact() -> None:
+    """A new gold fixture that introduces a numeric field must classify it
+    (in MONEY_FIELDS if it's a currency amount, in EXACT_NUMERIC_FIELDS if
+    it's a genuine count/duration) - never leave it to fall through to
+    whichever comparison happens not to raise."""
+    from docintel.scorecard import EXACT_NUMERIC_FIELDS, MONEY_FIELDS
+
+    present = _all_numeric_field_names()
+    registered = MONEY_FIELDS | EXACT_NUMERIC_FIELDS
+    unregistered = sorted(present - registered)
+    assert not unregistered, (
+        f"gold fixtures have numeric values for {unregistered}, which are in "
+        "neither MONEY_FIELDS nor EXACT_NUMERIC_FIELDS (scorecard.py). Add "
+        "each to whichever actually describes it."
+    )

@@ -22,6 +22,9 @@
 
   {% if state == "no_persona" %}
     <p class="stop">No extraction rules exist yet for this document.</p>
+    <p>{{ classification.company }} isn't configured yet. To add it, fill in
+       <code>docs/onboarding/COMPANY-CONFIG-TEMPLATE.md</code> with this document attached as the
+       sample — see <code>docs/onboarding/CONFIG-SPACE.md</code> for what happens after that.</p>
 
   {% elif state == "collapsed" %}
     <p class="stop">Rules exist for this vendor but aren't matching this document

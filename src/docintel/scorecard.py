@@ -146,7 +146,39 @@ MONEY_FIELDS = frozenset({
     "subtotal", "tax_amount", "balance_due", "please_pay", "amount_payable",
     "taxes_and_fees", "discount_amount", "balance_from_last_statement",
     "amount_previously_due", "credits_adjustments", "balance", "total_weight",
+    # The `contract` doc_type's own money fields. Found missing here by the
+    # numeric-field guard below on `_field_kind` - all four were silently
+    # comparing via bare `==` instead of `Decimal` equality until this fix,
+    # on real gold data (the Golub/Windstream contract set), not a
+    # hypothetical: a printed "$61,988.52" vs a gold `61988.52` would have
+    # failed a same-value comparison the instant either was serialized with a
+    # different number of trailing digits.
+    "contracted_rate", "minimum_monthly_fee", "monthly_recurring_charge_total",
+    "one_time_charge_total",
+    # SPT Metals (weight-tiered carbon bar pricing) - a second derivation
+    # family alongside telecom F1 (grammar/ops/pricing.py). Rate/multiplier
+    # fields (`weight_tier_margin`, `state_freight_rate`, `ctl_adder`) are not
+    # literally currency, but need the same Decimal-not-string comparison as
+    # every field above for the same reason `total_weight` already does.
+    "weight_per_ft", "base_cost_per_lb", "energy_surcharge",
+    "weight_tier_margin", "state_freight_rate", "ctl_adder",
+    "price_per_foot", "material_total", "freight", "order_total",
 })
+
+# Numeric gold fields that are genuinely NOT money - a plain count/duration,
+# where exact equality is correct and Decimal parsing would be wrong. Named
+# explicitly, the same discipline EXACT_TEXT_FIELDS already applies to string
+# fields, so a future numeric field falls into one list or the other rather
+# than silently defaulting to whichever comparison happens not to raise.
+EXACT_NUMERIC_FIELDS: frozenset[str] = frozenset({"term_length_months", "footage"})
+
+
+class UnregisteredNumericFieldError(ValueError):
+    """A gold field's expected value is numeric but the field name is in
+    neither `MONEY_FIELDS` nor `EXACT_NUMERIC_FIELDS` - `_field_kind` used to
+    fall through to plain `==` silently here, which is indistinguishable from
+    a deliberate exact-equality field. Fails loud instead: add the name to
+    whichever list actually describes it."""
 
 # Every entry here is tied to a finding in docs/corpus-analysis.md. An earlier
 # draft asserted only 12 scalar fields, which left the loop blind to ten
@@ -205,6 +237,30 @@ CHECKED_FIELDS = (
     # Both are registered in their pack's FIELDS so the debt can actually be
     # paid; neither has a selector, so both fail every run.
     "tax_id", "vendor_parent_reference",
+
+    # --- the `contract` doc_type (Phase 4, F20) -----------------------------
+    # Real, printed values on the curated Golub/Windstream contract set
+    # (docs/corpus/contracts/) - genuinely different names from the billing
+    # field set above, registered in `digitaldirection.fields.CONTRACT_FIELDS`
+    # rather than `FIELDS`. Some (contract_number, effective_date) are covered
+    # by the shipped persona and pass; the rest (signatory_name,
+    # minimum_monthly_fee, ...) have no selector yet and fail every run - an
+    # honest, visible gap, not one hidden by leaving the name out of this tuple.
+    "contract_number", "supersedes_contract_number", "contracted_rate", "rate_basis",
+    "term_start_date", "term_length_months", "effective_date", "signed_date",
+    "auto_renew", "signatory_name", "signatory_title",
+    "minimum_monthly_fee", "monthly_recurring_charge_total", "one_time_charge_total",
+
+    # --- spt_metals (weight-tiered carbon bar pricing) ----------------------
+    # Raw printed fields plus the non-printed business facts
+    # `conventions.apply_pricing_conventions` threads through `ctx.extracted`
+    # (total_weight, weight_tier, weight_tier_margin, state_freight_rate,
+    # ctl_adder) - the same "quasi-extracted" pattern as digitaldirection's
+    # prior_balance_basis, asserted here for the same reason: it is a value on
+    # the record, so leaving it out of this tuple would make it unmeasured.
+    "size_od", "weight_per_ft", "base_cost_per_lb", "footage", "ship_to_state",
+    "energy_surcharge", "total_weight", "weight_tier", "weight_tier_margin",
+    "state_freight_rate", "ctl_adder",
 )
 
 # Extraction debt that belongs to ONE document rather than to a field name.
@@ -237,7 +293,11 @@ DEFERRED_REASON = "deferred:printed-fields-only"
 # this tuple in Task 11: both are now wired on every persona
 # (grammar/ops/derive.py::derive_amount_payable), and gold already carries the
 # expected answer for all 11 documents.
-CHECKED_DERIVED = ("document_identity", "identity_basis", "amount_payable", "payable_basis")
+CHECKED_DERIVED = (
+    "document_identity", "identity_basis", "amount_payable", "payable_basis",
+    # spt_metals: grammar/ops/pricing.py::derive_price_per_foot's four outputs.
+    "price_per_foot", "material_total", "freight", "order_total",
+)
 
 # Confidence modifiers reporting an arithmetic cross-check. Each one is the ONLY
 # observable of a closure the printed-fields-only narrowing defers, so expecting
@@ -364,11 +424,24 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # -- classification and routing -----------------------------------------
     "not_a_batch": "covered:doc_type",
     "not_misclassified_as_statement": "covered:doc_type",
+    "doc_type": "covered:doc_type",
     "past_due_is_a_tag_not_a_type": "covered:tags",
     "review_forced": "covered:review_flag",
     "review_not_needed": "covered:review_flag",
     "values_never_from_supporting": "covered:page_roles",
     "totals_not_on_page_1": "covered:fields.total_printed",
+
+    # -- F20/F21/F22: the contract doc_type (Phase 4) and reconciliation
+    # (Phase 6). None of these three has a machine check yet - `term_end_date`
+    # and `contracted_rate` are hand-computed arithmetic facts about a
+    # specific contract (no op derives either today, see
+    # `digitaldirection/fields.py`'s own note on why `term_end_date` is a
+    # plain, not derived_only, field), and `supersedes_contract_number` names
+    # which prior contract an amendment amends - real ground truth, checked
+    # by eye against the source PDF, not yet asserted by any code.
+    "term_end_date": "documentation",
+    "contracted_rate": "documentation",
+    "supersedes_contract_number": "documentation",
 
     # -- fields ------------------------------------------------------------
     "service_location_captured": "covered:fields.service_location",
@@ -389,6 +462,15 @@ GOLD_ASSERTION_COVERAGE: dict[str, str] = {
     # slightly higher confidence number, which no gold label predicts.
     "duplicate_anchor_agrees": "documentation",
     "filename_crosscheck": "wired:derived.filename_crosscheck",
+
+    # -- spt_metals: the weight-tier trap, both directions ------------------
+    # Both checks compose values that are each independently asserted already
+    # (fields.total_weight, fields.weight_tier, fields.total_printed,
+    # derived.order_total) - same class as payable_composition above: real
+    # arithmetic, no separate observable on the record beyond its inputs.
+    "weight_tier_from_computed_weight_not_claimed_tier": "documentation",
+    "printed_total_overstates_correct_total": "documentation",
+    "printed_total_understates_correct_total": "documentation",
 }
 
 # Columns of a line-item row that hold an amount rather than a rate or a count.
@@ -470,6 +552,18 @@ def _field_kind(name: str, expected: Any) -> str:
         return "address"
     if isinstance(expected, str) and name not in EXACT_TEXT_FIELDS:
         return "text"
+    if (
+        isinstance(expected, (int, float, Decimal))
+        and not isinstance(expected, bool)  # bool is an int subclass; never money
+        and name not in EXACT_NUMERIC_FIELDS
+    ):
+        raise UnregisteredNumericFieldError(
+            f"{name!r} has a numeric gold value ({expected!r}) but is registered in "
+            "neither MONEY_FIELDS nor EXACT_NUMERIC_FIELDS. Add it to MONEY_FIELDS if "
+            "it's a currency amount (compared via Decimal equality), or to "
+            "EXACT_NUMERIC_FIELDS if it's a genuine count/duration meant to compare "
+            "by exact equality - do not let it fall through silently."
+        )
     return "exact"
 
 
@@ -579,7 +673,7 @@ def assertions_for(gold: dict[str, Any]) -> list[Assertion]:
         # it. The lane IS the routing decision, so a scorecard that checks the
         # two boolean flags but not which lane a document landed in cannot tell
         # a correctly-routed document from a wrongly-routed one. Implementing it
-        # is C4's job (`s7_gate` is still a stub); measuring it starts now, so
+        # was C4's job (`s7_gate.py`, now complete); measuring it starts now, so
         # C4 has a visible target instead of an unstated one.
         Assertion("lane", routing["lane"], lambda r: r.get("lane")),
         # F10 / page_roles: this appears on every emitted record and in every

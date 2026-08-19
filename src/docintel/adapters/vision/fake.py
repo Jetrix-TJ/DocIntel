@@ -27,6 +27,7 @@ class FakeVision:
         self.irregularities = irregularities or []
         self.calls: list[list[str]] = []
         self.sources: list[str | None] = []
+        self.hints: list[dict[str, str]] = []
 
     def extract(
         self,
@@ -34,9 +35,11 @@ class FakeVision:
         field_names: list[str],
         *,
         source_path: str | None = None,
+        field_hints: dict[str, str] | None = None,
     ) -> VisionResult:
         self.calls.append(list(field_names))
         self.sources.append(source_path)
+        self.hints.append(dict(field_hints or {}))
         fields = {k: v for k, v in self.canned.items() if k in field_names}
         return VisionResult(
             fields=fields,

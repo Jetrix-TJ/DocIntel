@@ -46,8 +46,22 @@ U-PAK and `northstar-edco-819387` into the `review` lane today.
 from __future__ import annotations
 
 import random
+from decimal import Decimal
+from typing import Any
 
+from docintel.core.coverage import DEFAULT_COLLAPSE_SHARE
 from docintel.core.models import JobContext
+
+# Fields worth showing a reviewer alongside a prior_balance_basis job: the
+# same four the F1b machinery reasons over (grammar/ops/derive.py). A
+# snapshot, not a live reference, because the job may sit open for a while
+# and ctx itself is not persisted.
+_BASIS_CONTEXT_FIELDS = ("prior_balance", "payments_credits", "current_charges", "total_printed")
+
+
+def _json_safe(value: Any) -> Any:
+    """Decimal isn't JSON-serializable; everything else here already is."""
+    return format(value, "f") if isinstance(value, Decimal) else value
 
 DEFAULT_THRESHOLD = 0.90
 
@@ -96,7 +110,11 @@ FORCING_MODIFIERS: frozenset[str] = frozenset({
 # template", not "one field moved". Below the share, a missing required field still
 # forces `review` - the difference is whether someone re-keys one value or
 # regenerates the rule set.
-INCOMPLETE_COLLAPSE_SHARE = 0.60
+#
+# The constant itself now lives in `core.coverage` (`DEFAULT_COLLAPSE_SHARE`),
+# since `s5b_vision`'s escalation check compares against the identical number -
+# see that module's own `_collapsed()`.
+INCOMPLETE_COLLAPSE_SHARE = DEFAULT_COLLAPSE_SHARE
 
 LANES = ("high", "medium", "review", "low")
 
@@ -110,6 +128,7 @@ class ConfidenceGate:
         forced_review_tags: set[str] | frozenset[str] | None = None,
         audit_rate: float = 0.0,
         rng: random.Random | None = None,
+        jobs: object | None = None,
     ) -> None:
         self.thresholds = thresholds or {}
         self.forced_review_tags = frozenset(
@@ -119,6 +138,7 @@ class ConfidenceGate:
         )
         self.audit_rate = audit_rate
         self.rng = rng or random.Random(0)
+        self.jobs = jobs
 
     # -- forcing -----------------------------------------------------------
 
@@ -188,8 +208,77 @@ class ConfidenceGate:
 
     # -- run ---------------------------------------------------------------
 
+    def _enqueue_unknown_basis(self, ctx: JobContext) -> None:
+        """Queue a `prior_balance_basis` job when the tag from Phase 2 is set.
+
+        Independent of lane routing on purpose: `arith_balance_mismatch`
+        already forces `review` regardless (that mechanism is untouched), but
+        forcing the lane and telling a reviewer WHAT to decide are two
+        different jobs, and only the second one needs a queue entry.
+        """
+        if self.jobs is None or "unknown_prior_balance_basis" not in ctx.tags:
+            return
+        context = {
+            name: _json_safe(ctx.extracted.get(name))
+            for name in _BASIS_CONTEXT_FIELDS
+            if ctx.extracted.get(name) is not None
+        }
+        self.jobs.enqueue_once(  # type: ignore[attr-defined]
+            ctx.sender_fingerprint,
+            ctx.doc_type,
+            kind="prior_balance_basis",
+            context=context,
+        )
+
+    def _enqueue_reconciliation_pending(self, ctx: JobContext) -> None:
+        """Queue a `reconciliation_pending` job when the persona's processing
+        profile asks for it (s4b, `ResolveProcessingProfile`).
+
+        Single-flighted on `document_id` rather than the usual
+        `(sender_fingerprint, doc_type)` key, because unlike a
+        `prior_balance_basis`/`persona_authoring` job (one open question per
+        VENDOR), reconciliation is a per-DOCUMENT fact - the same vendor's
+        next invoice needs its own job, not to collapse onto this one's.
+
+        Enqueues here rather than running the join inline: reconciliation
+        needs the full set of contracts on file for this carrier, which is a
+        batch/lookup concern, not a per-document one - `docintel reconcile
+        --pending` drains this queue shortly after with the real join logic
+        already built in `docintel.reconciliation`.
+        """
+        if self.jobs is None:
+            return
+        if ctx.processing_profile.get("reconciliation") != "auto":
+            return
+        self.jobs.enqueue_once(  # type: ignore[attr-defined]
+            ctx.sender_fingerprint,
+            ctx.doc_type,
+            kind="reconciliation_pending",
+            context={"document_id": ctx.document_id},
+            match_key=ctx.document_id,
+        )
+
+    def _enqueue_export_pending(self, ctx: JobContext) -> None:
+        """Queue one `excel_export_pending` job per layout the persona's
+        processing profile names. One job per (document, layout) - a vendor
+        whose profile names two layouts gets two independent follow-ups, not
+        one job that has to remember to do both."""
+        if self.jobs is None:
+            return
+        for layout in ctx.processing_profile.get("export") or []:
+            self.jobs.enqueue_once(  # type: ignore[attr-defined]
+                ctx.sender_fingerprint,
+                ctx.doc_type,
+                kind="excel_export_pending",
+                context={"document_id": ctx.document_id, "layout": layout},
+                match_key=f"{ctx.document_id}:{layout}",
+            )
+
     def run(self, ctx: JobContext) -> JobContext:
         ctx.log("s7: confidence_gate")
+        self._enqueue_unknown_basis(ctx)
+        self._enqueue_reconciliation_pending(ctx)
+        self._enqueue_export_pending(ctx)
         forced = self._forced_reasons(ctx)
         incomplete = self._incomplete_reasons(ctx)
         collapsed = self._collapsed(ctx)

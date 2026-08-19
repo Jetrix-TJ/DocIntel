@@ -62,3 +62,16 @@ def test_directory_expands_to_its_pdfs(tmp_path):
     (tmp_path / "not-a-pdf.txt").write_text("ignore me")
     items = list(FilesystemIntake([str(tmp_path)]).items())
     assert len(items) == 3
+
+
+def test_a_directory_walk_now_also_finds_images_and_office_documents(tmp_path):
+    """`_walk` used to hardcode `.pdf` a second time, independent of Stage
+    2's own allowlist - the two could drift. Both now read
+    `convert.ACCEPTED_SUFFIXES`, so a scan/Office document one directory
+    down is no longer invisible before Stage 2 ever runs."""
+    for name in ("a.pdf", "b.png", "c.docx", "d.xlsx", "e.jpg", "f.tiff"):
+        (tmp_path / name).write_bytes(b"stub bytes")
+    (tmp_path / "ignore.txt").write_text("still not accepted")
+
+    found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
+    assert found == {"a.pdf", "b.png", "c.docx", "d.xlsx", "e.jpg", "f.tiff"}

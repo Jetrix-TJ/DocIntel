@@ -94,6 +94,14 @@ def test_currency_signed_requires_an_explicit_sign() -> None:
     assert NAMED["currency_signed"]("1,234.56") is None
 
 
+def test_currency_signed_accepts_the_sign_on_either_side_of_the_symbol() -> None:
+    """Spectrum/Charter Communications prints its "Payments" line as
+    "$-161.95" - the sign after the currency symbol, not before it."""
+    assert NAMED["currency_signed"]("$-161.95") == Decimal("-161.95")
+    assert NAMED["currency_signed"]("-$161.95") == Decimal("-161.95")
+    assert NAMED["currency_signed"]("$161.95") is None  # still requires a sign
+
+
 # --------------------------------------------------------------------------
 # integer / decimal
 # --------------------------------------------------------------------------

@@ -1,0 +1,375 @@
+<title>Onboarding a New Company — docintel</title>
+<style>
+:root {
+  --paper: #f6f5f1;
+  --paper-raised: #ffffff;
+  --ink: #20242b;
+  --ink-soft: #565f6b;
+  --ink-faint: #8b93a0;
+  --line: #ddd9d0;
+  --line-soft: #e8e5dd;
+  --accent: #2b6e77;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4eeef;
+  --good: #1f7a45;
+  --good-soft: #e1f3e7;
+  --human: #9a6b0c;
+  --human-soft: #fdf1d9;
+  --bad: #a02a37;
+  --bad-soft: #fbe6e8;
+  --code-bg: #ece9e1;
+  --code-ink: #2a2f38;
+  --serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --radius: 5px;
+  --shadow: 0 1px 2px rgba(30, 30, 20, 0.06), 0 4px 14px rgba(30, 30, 20, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #171a1f;
+    --paper-raised: #1f232a;
+    --ink: #e7e5df;
+    --ink-soft: #a8afb9;
+    --ink-faint: #6d7480;
+    --line: #333941;
+    --line-soft: #292e35;
+    --accent: #5fb3bd;
+    --accent-ink: #0d1114;
+    --accent-soft: #1c2e31;
+    --good: #5cc98a;
+    --good-soft: #16261d;
+    --human: #e0ac3d;
+    --human-soft: #2b2410;
+    --bad: #e3707c;
+    --bad-soft: #2c1719;
+    --code-bg: #23272e;
+    --code-ink: #dcdad2;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #171a1f;
+  --paper-raised: #1f232a;
+  --ink: #e7e5df;
+  --ink-soft: #a8afb9;
+  --ink-faint: #6d7480;
+  --line: #333941;
+  --line-soft: #292e35;
+  --accent: #5fb3bd;
+  --accent-ink: #0d1114;
+  --accent-soft: #1c2e31;
+  --good: #5cc98a;
+  --good-soft: #16261d;
+  --human: #e0ac3d;
+  --human-soft: #2b2410;
+  --bad: #e3707c;
+  --bad-soft: #2c1719;
+  --code-bg: #23272e;
+  --code-ink: #dcdad2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 3.4rem clamp(1.2rem, 4vw, 3rem) 6rem;
+}
+.title-block { margin-bottom: 2.8rem; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.7rem;
+}
+h1 {
+  font-family: var(--serif);
+  font-size: clamp(1.9rem, 4vw, 2.5rem);
+  line-height: 1.15;
+  margin: 0 0 0.9rem;
+  text-wrap: balance;
+}
+.lede { font-size: 1.08rem; color: var(--ink-soft); max-width: 66ch; }
+
+section { margin-bottom: 3.2rem; scroll-margin-top: 1.5rem; }
+h2 {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.5rem;
+  margin: 0 0 1.1rem;
+}
+h3 { font-family: var(--serif); font-size: 1.1rem; margin: 1.6rem 0 0.6rem; }
+h4 {
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+  margin: 1.3rem 0 0.5rem;
+}
+p { margin: 0 0 1rem; }
+ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+li { margin-bottom: 0.35rem; }
+strong { color: var(--ink); }
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0 0 1.2rem;
+  border: 1px solid var(--line-soft);
+}
+pre code { background: none; padding: 0; border-radius: 0; }
+
+.table-wrap { overflow-x: auto; margin: 0 0 1.3rem; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+th, td { text-align: left; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); background: var(--paper-raised); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td code { white-space: nowrap; }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.9rem 1.1rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 0 0 1.3rem;
+  font-size: 0.92rem;
+}
+.callout.human { border-color: var(--human); background: var(--human-soft); }
+.callout.good { border-color: var(--good); background: var(--good-soft); }
+.callout p:last-child { margin-bottom: 0; }
+.callout .label { font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+.callout cite { display: block; margin-top: 0.5rem; font-size: 0.82rem; color: var(--ink-faint); font-style: normal; }
+
+.steps { counter-reset: step; list-style: none; padding-left: 0; margin: 0 0 1.3rem; }
+.steps > li {
+  position: relative;
+  padding: 0.15rem 0 0.15rem 2.6rem;
+  margin-bottom: 1.3rem;
+  counter-increment: step;
+}
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0; top: 0;
+  width: 1.7rem; height: 1.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600;
+}
+.steps h4 { margin: 0 0 0.3rem; text-transform: none; letter-spacing: 0; font-size: 1.05rem; color: var(--ink); }
+
+.badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+.badge.human { color: var(--human); border-color: var(--human); background: var(--human-soft); }
+
+footer.doc {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+}
+::selection { background: var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<main>
+  <div class="title-block">
+    <p class="eyebrow">docintel · Vendor Onboarding</p>
+    <h1>Fill in one file. Get one reviewed draft. Nothing goes live without a human.</h1>
+    <p class="lede">
+      This is the open, documented space to add a new company's document types and fields —
+      the thing raised at standup: <em>"we need a certain area where the particular team can add
+      their own modules."</em> One template you fill in without touching any code, one optional
+      automated first draft, and one review step that never gets skipped.
+    </p>
+  </div>
+
+  <section id="flow">
+    <h2>The whole flow, in three steps</h2>
+    <ol class="steps">
+      <li>
+        <h4>You fill in a template</h4>
+        <p>
+          Company name, how to recognise its documents, every document type it sends, and the
+          fields your team actually needs per type — plus one real sample document per type.
+          No engineering background required; this is the entire interface.
+        </p>
+      </li>
+      <li>
+        <h4>A reviewer gets a first draft <span class="badge">increasingly, automated</span></h4>
+        <p>
+          One command sends your sample document to Claude once and gets back a plain-language
+          field list — never a final answer, always a starting point for step 3.
+        </p>
+      </li>
+      <li>
+        <h4>A human reviews it <span class="badge human">always, no exceptions</span></h4>
+        <p>
+          Checked against the real sample, corrected where needed, tested, and only then does
+          this company's documents start routing automatically.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="template">
+    <h2>Step 1 — the template</h2>
+    <p>
+      <code>docs/onboarding/COMPANY-CONFIG-TEMPLATE.md</code> is the form. It asks for exactly
+      what a reviewer needs and nothing else:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Section</th><th>What you fill in</th></tr></thead>
+        <tbody>
+          <tr><td>Company</td><td>Name, and every printed identifier that marks a document as theirs</td></tr>
+          <tr><td>Document types</td><td>Every distinct kind they send — invoice, credit memo, statement — each with a real sample attached</td></tr>
+          <tr><td>Fields</td><td>Per document type: what your team needs, where it sits on the page, and — critically — whether it's computed rather than just printed</td></tr>
+          <tr><td>Billing conventions</td><td>Net vs. gross balances, if it's a recurring bill — "not sure" is a completely fine answer here</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      A document type with no sample attached can't move to step 2 — everything downstream is
+      built from looking at a real page, not from description alone.
+    </p>
+  </section>
+
+  <section id="draft">
+    <h2>Step 2 — the automated first draft</h2>
+    <p>
+      Writing a field list by hand, from nothing, for every new company doesn't scale. That
+      was the exact gap raised at standup:
+    </p>
+    <div class="callout">
+      <span class="label">Standup, Aug 18</span>
+      <p>
+        "The schema generation, or the classification generation, or the persona generation —
+        you are proposing it to do it by human. I think we also need to find a way… we can try
+        to do it with some agents."
+      </p>
+      <cite>— Anamul</cite>
+    </div>
+    <p>One command runs the draft:</p>
+    <pre><code>docintel generate-persona path/to/a/sample.pdf --company "Acme Corp"</code></pre>
+    <p>
+      It sends that one document to Claude once and asks for a plain-language description of
+      every field it recognises — never the value itself, never invented field names, only
+      names from this project's own fixed vocabulary of fields it already knows how to score:
+    </p>
+    <pre><code>{
+  "status": "draft - not reviewed, do not use in production",
+  "company_name": "Acme Corp",
+  "spec": {
+    "fields": [
+      {
+        "name": "total_printed",
+        "type": "currency",
+        "hint": "bottom right of the page, beside 'Total Amount Due'"
+      }
+    ],
+    "row_groups": [],
+    "notes": "..."
+  }
+}</code></pre>
+    <h3>What it deliberately will not do</h3>
+    <p>
+      It never generates the pixel-level selector geometry a real persona eventually needs. An
+      earlier internal test found that's the one part that does <strong>not</strong> generalize
+      from a single blind pass — the field list and one-sentence hints did generalize, the
+      coordinates didn't. So the draft gives a reviewer exactly the part worth having early, and
+      leaves geometry to a human, informed by this draft rather than starting from a blank page.
+    </p>
+  </section>
+
+  <section id="review">
+    <h2>Step 3 — human review, always</h2>
+    <div class="callout human">
+      <span class="label">Standup, Aug 18</span>
+      <p>
+        "Let's say the generation was done and the quality is not good — then we will mark it
+        down that okay the quality is not good, and human review it. We only approve it."
+      </p>
+      <cite>— Anamul, agreed by JA</cite>
+    </div>
+    <p>A reviewer:</p>
+    <ul>
+      <li>Reads the draft next to the same sample document and confirms each field and hint is right — not close, right.</li>
+      <li>For a genuinely new company, starts from a real scaffold instead of reading an existing pack's source by hand: <code>docintel new-pack &lt;slug&gt; --company "..." --doc-type ... --hints &lt;draft&gt;</code> writes a starting <code>pack.json</code> and persona — every selector geometry field an explicit placeholder, nothing registered anywhere.</li>
+      <li>Self-checks it before asking anyone else to look: <code>docintel validate-persona &lt;persona&gt; --pack-file &lt;pack.json&gt;</code> runs the same rules the real pipeline enforces on every shipped persona, and names the first thing wrong.</li>
+      <li>Builds or corrects the real persona: the selector geometry and claim rules the draft never attempts.</li>
+      <li>Tests it against the sample document(s) and confirms the extracted values before anything goes live.</li>
+    </ul>
+    <p>
+      Every generated draft is labelled <code>"status": "draft - not reviewed, do not use in
+      production"</code> on disk, and nothing on the real extraction pipeline's path reads it.
+      <code>draft</code> already carries a real, tested consequence elsewhere in this system — an
+      automatic confidence penalty that routes to review rather than auto-approving — so this
+      reuses that guarantee instead of asking anyone to trust a new promise.
+    </p>
+  </section>
+
+  <section id="reference">
+    <h2>Where each piece lives</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Piece</th><th>File</th></tr></thead>
+        <tbody>
+          <tr><td>The template you fill in</td><td><code>docs/onboarding/COMPANY-CONFIG-TEMPLATE.md</code></td></tr>
+          <tr><td>Full write-up of the config space</td><td><code>docs/onboarding/CONFIG-SPACE.md</code></td></tr>
+          <tr><td>The draft generator</td><td><code>src/docintel/generation/persona_agent.py</code> — <code>docintel generate-persona &lt;pdf&gt; --company &lt;name&gt;</code></td></tr>
+          <tr><td>The new-company scaffold</td><td><code>src/docintel/generation/pack_scaffold.py</code> — <code>docintel new-pack &lt;slug&gt; --company &lt;name&gt; --doc-type &lt;type&gt; [--hints &lt;path&gt;]</code></td></tr>
+          <tr><td>The standalone self-check</td><td><code>docintel validate-persona &lt;persona.json&gt; [--pack &lt;name&gt; | --pack-file &lt;path&gt;]</code> — reuses <code>grammar/validator.py</code>'s own rules, no new logic</td></tr>
+          <tr><td>The real, reviewed personas the pipeline reads</td><td><code>src/docintel/packs/&lt;company&gt;/personas/*.json</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="doc">
+    docintel — see also <code>docs/DOCINTEL-ARCHITECTURE-GUIDE.html</code> for the full pipeline
+    reference, and the repo root <code>README.md</code> for everyday commands.
+  </footer>
+</main>

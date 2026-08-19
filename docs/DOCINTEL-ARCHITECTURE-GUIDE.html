@@ -1,0 +1,1226 @@
+<title>Document Intelligence — Architecture &amp; Operator's Guide</title>
+<style>
+:root {
+  --paper: #f6f5f1;
+  --paper-raised: #ffffff;
+  --ink: #20242b;
+  --ink-soft: #565f6b;
+  --ink-faint: #8b93a0;
+  --line: #ddd9d0;
+  --line-soft: #e8e5dd;
+  --accent: #2b6e77;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4eeef;
+  --good: #1f7a45;
+  --good-soft: #e1f3e7;
+  --human: #9a6b0c;
+  --human-soft: #fdf1d9;
+  --bad: #a02a37;
+  --bad-soft: #fbe6e8;
+  --code-bg: #ece9e1;
+  --code-ink: #2a2f38;
+  --serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --radius: 5px;
+  --shadow: 0 1px 2px rgba(30, 30, 20, 0.06), 0 4px 14px rgba(30, 30, 20, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #171a1f;
+    --paper-raised: #1f232a;
+    --ink: #e7e5df;
+    --ink-soft: #a8afb9;
+    --ink-faint: #6d7480;
+    --line: #333941;
+    --line-soft: #292e35;
+    --accent: #5fb3bd;
+    --accent-ink: #0d1114;
+    --accent-soft: #1c2e31;
+    --good: #5cc98a;
+    --good-soft: #16261d;
+    --human: #e0ac3d;
+    --human-soft: #2b2410;
+    --bad: #e3707c;
+    --bad-soft: #2c1719;
+    --code-bg: #23272e;
+    --code-ink: #dcdad2;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #171a1f;
+  --paper-raised: #1f232a;
+  --ink: #e7e5df;
+  --ink-soft: #a8afb9;
+  --ink-faint: #6d7480;
+  --line: #333941;
+  --line-soft: #292e35;
+  --accent: #5fb3bd;
+  --accent-ink: #0d1114;
+  --accent-soft: #1c2e31;
+  --good: #5cc98a;
+  --good-soft: #16261d;
+  --human: #e0ac3d;
+  --human-soft: #2b2410;
+  --bad: #e3707c;
+  --bad-soft: #2c1719;
+  --code-bg: #23272e;
+  --code-ink: #dcdad2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  max-width: 1320px;
+  margin: 0 auto;
+}
+@media (max-width: 920px) {
+  .shell { grid-template-columns: 1fr; }
+  .toc { display: none; }
+}
+
+.toc {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.2rem 1.4rem 2rem 1.6rem;
+  border-right: 1px solid var(--line-soft);
+}
+.toc .kicker {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 0.9rem;
+}
+.toc nav { display: flex; flex-direction: column; gap: 0.15rem; }
+.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.88rem;
+  padding: 0.32rem 0.6rem;
+  border-radius: var(--radius);
+  border-left: 2px solid transparent;
+}
+.toc a:hover { color: var(--ink); background: var(--line-soft); }
+.toc .sub { padding-left: 1.5rem; font-size: 0.82rem; }
+.toc .group-label {
+  margin-top: 1.1rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 0.6rem;
+}
+
+main {
+  padding: 3rem clamp(1.2rem, 4vw, 4rem) 6rem;
+  min-width: 0;
+}
+
+.title-block { margin-bottom: 3rem; max-width: 760px; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.7rem;
+}
+h1 {
+  font-family: var(--serif);
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  line-height: 1.15;
+  margin: 0 0 0.9rem;
+  text-wrap: balance;
+}
+.lede {
+  font-size: 1.08rem;
+  color: var(--ink-soft);
+  max-width: 66ch;
+}
+
+section { max-width: 800px; margin-bottom: 3.4rem; scroll-margin-top: 1.5rem; }
+section.wide { max-width: 980px; }
+h2 {
+  font-family: var(--serif);
+  font-size: 1.55rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.5rem;
+  margin: 0 0 1.1rem;
+  scroll-margin-top: 1.2rem;
+}
+h3 {
+  font-family: var(--serif);
+  font-size: 1.18rem;
+  margin: 1.8rem 0 0.7rem;
+  scroll-margin-top: 1.2rem;
+}
+h4 {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+  margin: 1.4rem 0 0.5rem;
+}
+p { margin: 0 0 1rem; }
+ul, ol { margin: 0 0 1rem; padding-left: 1.3rem; }
+li { margin-bottom: 0.35rem; }
+a.inline { color: var(--accent); }
+strong { color: var(--ink); }
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.83rem;
+  line-height: 1.55;
+  margin: 0 0 1.2rem;
+  border: 1px solid var(--line-soft);
+}
+pre code { background: none; padding: 0; border-radius: 0; }
+
+.table-wrap { overflow-x: auto; margin: 0 0 1.3rem; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); background: var(--paper-raised); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td code { white-space: nowrap; }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.9rem 1.1rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 0 0 1.3rem;
+  font-size: 0.92rem;
+}
+.callout.human { border-color: var(--human); background: var(--human-soft); }
+.callout.good { border-color: var(--good); background: var(--good-soft); }
+.callout.bad { border-color: var(--bad); background: var(--bad-soft); }
+.callout p:last-child { margin-bottom: 0; }
+.callout .label { font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 0.3rem; }
+
+.steps { counter-reset: step; list-style: none; padding-left: 0; margin: 0 0 1.3rem; }
+.steps > li {
+  position: relative;
+  padding: 0.15rem 0 0.15rem 2.6rem;
+  margin-bottom: 1.1rem;
+  counter-increment: step;
+}
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0; top: 0;
+  width: 1.7rem; height: 1.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600;
+}
+.steps h4 { margin: 0 0 0.3rem; text-transform: none; letter-spacing: 0; font-size: 1rem; color: var(--ink); }
+
+.pillrow { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.3rem; }
+.pill {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  color: var(--ink-soft);
+}
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin: 0 0 1.3rem; }
+.card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow);
+}
+.card h4 { margin-top: 0; }
+.card p { margin-bottom: 0; font-size: 0.88rem; color: var(--ink-soft); }
+
+.mermaid { background: var(--paper-raised); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 1.2rem; margin: 0 0 1.3rem; overflow-x: auto; }
+
+footer.doc {
+  max-width: 800px;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+}
+
+::selection { background: var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<div class="shell">
+  <aside class="toc">
+    <p class="kicker">docintel — operator's guide</p>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#architecture">Architecture</a>
+      <a class="sub" href="#stages">The 10 stages</a>
+      <a class="sub" href="#formats">What file types are accepted</a>
+      <a class="sub" href="#email">Email containers</a>
+      <a class="sub" href="#fields-derived">fields vs. derived</a>
+      <a class="sub" href="#lanes">Confidence lanes</a>
+      <a href="#gemini">Gemini vision extraction</a>
+      <a class="sub" href="#gemini-decision">When it runs — the decision logic</a>
+      <a class="sub" href="#gemini-hints">What it's told: field_hints</a>
+      <a class="sub" href="#gemini-boundary">What it's never allowed to decide</a>
+      <a class="sub" href="#gemini-modes">The four run modes</a>
+      <a href="#using">Using the application</a>
+      <a class="sub" href="#cli">CLI</a>
+      <a class="sub" href="#realtime">Real-time notification, as a library</a>
+      <a class="sub" href="#webui">Web UI</a>
+      <a class="sub" href="#review">Review queue</a>
+      <a href="#current-vendors">Current vendors — what's live today</a>
+      <p class="group-label">Configuring vendors</p>
+      <a href="#new-vendor">New vendor, known company</a>
+      <a href="#new-company">New company (no code)</a>
+      <a href="#basis-overlay">A vendor's billing convention</a>
+      <p class="group-label">Authoring</p>
+      <a href="#business-logic">Writing business logic</a>
+      <a class="sub" href="#claim-rules">Claim rules</a>
+      <a class="sub" href="#ladder">The doc_type ladder</a>
+      <a class="sub" href="#ops">The ops registry</a>
+      <a class="sub" href="#pack-hooks">When you still need Python</a>
+      <a href="#validate">Validating &amp; testing</a>
+      <a href="#eval-layer">The evaluation layer</a>
+      <a class="sub" href="#gold">Gold fixtures &amp; the scorecard</a>
+      <a class="sub" href="#eval-commands">The eval commands</a>
+      <a href="#reference">Quick reference</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="title-block">
+      <p class="eyebrow">Document Intelligence · Architecture &amp; Operator's Guide</p>
+      <h1>How it works, how to run it, and how to configure the next vendor</h1>
+      <p class="lede">
+        One reference for the whole system: the pipeline that turns a PDF into a
+        structured record, the two ways to run it, the human-review loop that
+        catches what the rules can't decide, and — the part that matters most
+        once this is live — exactly what to touch when a new vendor or a new
+        client company arrives.
+      </p>
+    </div>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>
+        The central design claim: <strong>what to extract is a specification,
+        not code.</strong> A document arrives, gets read (native text or OCR),
+        gets claimed by whichever client company it belongs to, gets classified
+        into that company's own document-type vocabulary, and then either
+        matches a saved reading rule (no AI call) or escalates. Every document
+        that goes in produces a record coming out — nothing is ever silently
+        dropped.
+      </p>
+      <div class="mermaid">
+flowchart TD
+    A["📄 Document arrives"] --> B{"Readable file type?"}
+    B -- No --> Z["Skipped, reason on the record"]
+    B -- Yes --> C["Read every page — native text or OCR"]
+    C --> D{"Claimed by a configured company?"}
+    D -- No --> Y["Tagged unclaimed_document — still emitted"]
+    D -- Yes --> E["Classify using that company's own doc_type ladder"]
+    E --> F{"Known sender + layout?"}
+    F -- "Yes, most of the time" --> G["Apply saved reading rules — no AI, no cost"]
+    F -- No --> H["Ask a vision model"]
+    G --> I["Extract the fields that company asked for"]
+    H --> I
+    I --> J["Apply business rules for values that aren't printed anywhere"]
+    J --> K{"How sure are we?"}
+    K -- "Everything checks out" --> L["✅ Auto-approve"]
+    K -- "Some doubt" --> M["👤 Human review queue"]
+    K -- "Can't tell, won't guess" --> M
+
+    classDef good fill:#e1f3e7,stroke:#1f7a45,color:#123a20
+    classDef human fill:#fdf1d9,stroke:#9a6b0c,color:#4a3505
+    classDef neutral fill:#ece9e1,stroke:#8b93a0,color:#2a2f38
+    class L good
+    class M human
+    class Z,Y neutral
+      </div>
+      <p>
+        Three layers, and only the top one changes when a new company or
+        vendor arrives:
+      </p>
+      <div class="card-grid">
+        <div class="card"><h4>The engine</h4><p>Knows nothing about any document type. Reads pages, finds values by position and pattern, scores confidence, routes. This never changes per client.</p></div>
+        <div class="card"><h4>The shared operation library</h4><p>A closed, named vocabulary — 26 field/document operations, ~12 classification signals, the record contract. Extending it is a reviewed code change with a test.</p></div>
+        <div class="card"><h4>The specification</h4><p>Pure JSON, per company and per vendor — which document types exist, which fields matter, where they sit, which business rules apply. This is what you author.</p></div>
+      </div>
+    </section>
+
+    <section id="architecture" class="wide">
+      <h2>Architecture</h2>
+
+      <h3 id="stages">The 10 stages</h3>
+      <p>Every document walks the same fixed pipeline, in <code>src/docintel/pipeline/stages/</code>. The <code>Runner</code> wraps every stage so a crash anywhere still emits a dead-letter record rather than losing a document silently.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Stage</th><th>Module</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Intake</td><td><code>s1_intake.py</code></td><td>Discovers files, assigns a stable document id.</td></tr>
+            <tr><td>2</td><td>Attachment filter</td><td><code>s2_filter.py</code></td><td>Allow-lists the file type (PDF only), reads every page — native text or OCR — labels pages primary/supporting.</td></tr>
+            <tr><td>3</td><td>Classify</td><td><code>s3_classify.py</code></td><td>Decides which company claims the document, then that company's <code>doc_type</code> via its own JSON ladder.</td></tr>
+            <tr><td>4</td><td>Persona lookup</td><td><code>s4_persona.py</code></td><td>Fingerprints the sender/layout (<code>pack|vendor</code>), looks up a saved persona.</td></tr>
+            <tr><td>5a</td><td>Apply cached rules</td><td><code>s5a_cached.py</code></td><td>Runs the persona's saved selectors. No AI call — this is the fast lane, and it's where almost every document stops.</td></tr>
+            <tr><td>5b</td><td>Vision one-shot</td><td><code>s5b_vision.py</code></td><td>Escalates to Gemini only when 5a can't cope or no persona exists — see <a class="inline" href="#gemini">Gemini vision extraction</a> for the exact decision logic.</td></tr>
+            <tr><td>5c</td><td>Agent escalation</td><td><code>s5c_agent.py</code></td><td>A hard-miss sender (no persona, weak confidence) queues a <code>persona_authoring</code> job for a human — see <a class="inline" href="#review">Review queue</a>.</td></tr>
+            <tr><td>6</td><td>Capture fields</td><td><code>s6_capture.py</code></td><td>Normalizes values, runs the persona's declared <code>adjust</code> ops (derivations, cross-checks), resolves vendor identity.</td></tr>
+            <tr><td>7</td><td>Confidence gate</td><td><code>s7_gate.py</code></td><td>Assigns a routing lane — <code>high / medium / review / low</code> — and queues a <code>prior_balance_basis</code> job when a vendor's billing convention is unknown.</td></tr>
+            <tr><td>8</td><td>Emit record</td><td><code>s8_emit.py</code></td><td>Validates against the record contract, emits. Always runs, even on a dead letter.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="formats">What file types are accepted</h3>
+      <p>
+        Stage 2 checks the file suffix against an allowlist before anything else runs, built
+        from one shared constant so it can never drift from what the directory-walking intake
+        adapter and the web UI's own upload gate each independently check:
+      </p>
+      <pre><code># src/docintel/extract/convert.py
+IMAGE_SUFFIXES  = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".gif"}
+OFFICE_SUFFIXES = {".docx", ".xlsx"}
+ACCEPTED_SUFFIXES = {".pdf"} | IMAGE_SUFFIXES | OFFICE_SUFFIXES</code></pre>
+      <p>
+        Anything outside this set is <code>disposition: "skipped"</code> with a plain-English
+        reason on the record (<code>"file type .zip not in allowlist"</code>), never silently
+        dropped and never crashed on — the same "every document that goes in produces a record
+        coming out" invariant from the Overview, applied to the one gate that runs before any
+        of it.
+      </p>
+      <div class="mermaid">
+flowchart TD
+    A["File arrives"] --> B{"Suffix in ACCEPTED_SUFFIXES?"}
+    B -- No --> Z["Skipped, reason on the record"]
+    B -- "Image (.png/.jpg/.tiff/...)" --> C["Pillow wraps it as a PDF page(s)"]
+    B -- "Office (.docx/.xlsx)" --> D["LibreOffice headless renders it to PDF"]
+    B -- ".pdf already" --> E
+    C --> E["load_document() — completely unmodified"]
+    D --> E
+    E --> F["Everything downstream: OCR routing, grammar, personas, scorecard"]
+
+    classDef good fill:#e1f3e7,stroke:#1f7a45,color:#123a20
+    classDef neutral fill:#ece9e1,stroke:#8b93a0,color:#2a2f38
+    class F good
+    class Z neutral
+      </div>
+      <p>
+        <strong>Conversion at the intake boundary, not a second extraction path.</strong> An
+        image or an Office document is converted to a real PDF <em>before</em> Stage 2 does
+        anything else, in <code>extract/convert.py</code>:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Function</th><th>How</th><th>Why this way, not native parsing</th></tr></thead>
+          <tbody>
+            <tr><td><code>convert_image_to_pdf</code></td><td>Pillow (already a dependency — no new install). Wraps a raster image, or every frame of a multi-frame TIFF/GIF in order, as PDF page(s).</td><td>A wrapped image reads back with <code>char_count == 0</code> — exactly the existing signal that already routes a page to OCR, so the OCR path needed zero changes.</td></tr>
+            <tr><td><code>convert_office_to_pdf</code></td><td>Shells out to LibreOffice headless (<code>soffice --headless --convert-to pdf</code>), one throwaway <code>-env:UserInstallation</code> profile per call so concurrent conversions can't lock or corrupt each other's shared profile.</td><td><code>grammar/regions.py</code>'s selectors (<code>same-row</code>, <code>near-anchor</code>, <code>totals-block</code>) are calibrated against <em>measured</em> geometry from real rendered PDF pages. A DOCX's flow layout or an XLSX's cell grid has no honest analogue — synthesizing word coordinates from paragraphs or cells would be a second, weaker extraction model nobody measured. Converting first means Office documents get real geometry for free, and nothing downstream changes at all.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        A conversion failure raises <code>PermanentError</code>/<code>TransientError</code> — the
+        same discipline the OCR path's own <code>_ocr_and_check_complete</code> already uses — so
+        it dead-letters that one document with a clear, actionable reason (a malformed DOCX, a
+        missing LibreOffice install) rather than crashing the run. LibreOffice itself is a system
+        dependency, not a pip package — install it on any host that needs to accept Office
+        documents; its absence fails loudly and per-document, so it's safe to notice at deploy
+        time rather than a hard build-time requirement.
+      </p>
+      <div class="callout">
+        <span class="label">Within "PDF", two very different documents — still true</span>
+        A PDF with a real text layer is read natively; a scanned PDF (or a wrapped image, or a
+        converted Office document with no extractable text) is read via OCR — <code>text_source</code>
+        on the emitted record says which. The native-vs-OCR decision happens one level deeper,
+        inside <code>extract.normalize.load_document</code>, completely unaware that some of its
+        inputs started life as something other than a PDF.
+      </div>
+
+      <h3 id="email">Email containers — one input, many documents</h3>
+      <p>
+        The invoice is almost always an <em>attachment</em>, not the email body — so a `.eml`/`.msg`
+        never reaches Stage 2 itself. It is unwrapped one layer above the pipeline entirely, into
+        one ordinary document per attachment.
+      </p>
+      <div class="callout bad">
+        <span class="label">The one invariant this had to respect</span>
+        <code>Runner.process(document_id, source_path) -&gt; dict</code> is a strict, machine-checked
+        1:1 elsewhere in this codebase — one call, one record, never a list
+        (<code>count(intaken) == count(emitted)</code>). An email genuinely can contain several
+        documents, so the expansion happens <strong>one layer above the <code>Runner</code></strong>,
+        never inside it — the exact same seam <code>FilesystemIntake._walk</code> already uses to
+        turn one directory into many items, applied to one archive file instead of a directory tree.
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>How</th></tr></thead>
+          <tbody>
+            <tr><td>Where</td><td><code>adapters/intake/email.py</code>'s <code>EmailIntake</code>, implementing the same <code>IntakeSource</code> protocol as <code>FilesystemIntake</code> — the CLI's existing per-item loop already calls <code>runner.process()</code> once per yielded item, so it runs N times for one email with zero changes to the loop itself.</td></tr>
+            <tr><td>Formats</td><td><code>.eml</code> parses with the stdlib <code>email</code> module — no new dependency. <code>.msg</code> (Outlook's proprietary format) needs <code>extract-msg</code>, its own optional extra: <code>pip install 'docintel[email]'</code>.</td></tr>
+            <tr><td><code>document_id</code></td><td>A stable hash of the email's own key (its <code>Message-Id</code> header, or a content hash when absent) plus the attachment's index/filename/size — the same shape <code>FilesystemIntake._stable_id</code> already uses, so redelivery of the identical email never mints new ids.</td></tr>
+            <tr><td>Nesting</td><td>Not supported, on purpose. A nested container attachment (another <code>.eml</code>, a <code>.zip</code>) is yielded like any other attachment, not recursed into — its own suffix isn't in <code>ACCEPTED_SUFFIXES</code>, so Stage 2 rejects it cleanly for free.</td></tr>
+            <tr><td>A parse failure, or zero attachments</td><td>Falls back to yielding the <em>original</em> email path as one item, so it is still counted and still visible on a <code>skipped</code> record — never silently vanishes.</td></tr>
+            <tr><td>Where it stops</td><td>CLI only, for now. The web UI's <code>/process</code> route is built around exactly one upload producing exactly one result screen — supporting 1:N there is a real UI design question, sequenced after the CLI path was proven.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        One more piece the conversion work above needed: <code>JobContext.readable_path</code>. When
+        Stage 2 converts a non-PDF input, <code>source_path</code> is deliberately left pointing at
+        the <em>original</em> file — <code>crosscheck_filename</code> reads its basename to compare
+        an amount embedded in the original filename against the printed total, and a converted
+        file's throwaway temp name would silently break that. Any stage that needs to actually open
+        the document's bytes (Stage 5b's Gemini call) reads <code>ctx.readable_path or ctx.source_path</code>
+        instead.
+      </p>
+
+      <h3 id="fields-derived">The <code>fields</code> / <code>derived</code> split</h3>
+      <p>The single most important thing to understand about the output record. A value lives in exactly one of two places:</p>
+      <ul>
+        <li><code>fields.*</code> — what was <strong>read off the page</strong>. Printed evidence, untransformed.</li>
+        <li><code>derived.*</code> — what was <strong>computed or resolved</strong>. Alias tables, arithmetic, inference.</li>
+      </ul>
+      <div class="callout">
+        <span class="label">Why this matters</span>
+        A field being <code>null</code> in <code>fields</code> does not mean it's missing — it may be resolved in <code>derived</code> instead. Any code reading only <code>record["fields"]</code> will produce false alarms. Always check <code>fields</code> first, then fall back to <code>derived</code>, for any given field name.
+      </div>
+
+      <h3 id="lanes">Confidence lanes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Lane</th><th>Meaning</th><th>Flags</th></tr></thead>
+          <tbody>
+            <tr><td><code>high</code></td><td>Every field cleared its confidence threshold.</td><td>audit sample only</td></tr>
+            <tr><td><code>medium</code></td><td>Some fields fell short, but the shortfall is explained (e.g. a scan).</td><td>review</td></tr>
+            <tr><td><code>review</code></td><td>Something mandates a human look regardless of confidence — a forced tag, or a business-rule refusal.</td><td>review</td></tr>
+            <tr><td><code>low</code></td><td>Systemic collapse — the persona's rules no longer fit this document, not just this one field.</td><td>review + regen</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The gate never raises or clears <code>review_flag</code> itself for reasons unrelated to confidence — that flag can also come from upstream (a hard-miss sender, or a business-rule refusal like an unresolvable prior balance).</p>
+    </section>
+
+    <section id="gemini" class="wide">
+      <h2>Gemini vision extraction</h2>
+      <p>
+        Stage 5a (the saved selectors) is free and handles almost every document once a
+        vendor has a working persona. Gemini is the fallback for the two cases that
+        aren't that: a sender nobody has configured yet, or a known persona whose reading
+        stopped fitting the document in hand. Nobody chooses this per document — it is
+        fully automatic, decided fresh every time, by four cheap checks against what
+        Stage 5a already produced.
+      </p>
+
+      <h3 id="gemini-decision">When it runs — the decision logic</h3>
+      <div class="mermaid">
+flowchart TD
+    A["Stage 5a ran"] --> B{"extraction_route == 5a_cached?"}
+    B -- "No — no persona at all" --> G["Call Gemini"]
+    B -- "Yes" --> C{"Anything extracted at all?"}
+    C -- "No" --> G
+    C -- "Yes" --> D{"2+ fields below confidence 0.50?"}
+    D -- "Yes" --> G
+    D -- "No" --> E{"miss_share &ge; 60% of declared fields?"}
+    E -- "Yes" --> G
+    E -- "No" --> F["Leave the 5a result alone — no AI call"]
+
+    classDef good fill:#e1f3e7,stroke:#1f7a45,color:#123a20
+    classDef human fill:#fdf1d9,stroke:#9a6b0c,color:#4a3505
+    class F good
+    class G human
+      </div>
+      <p>In code (<code>s5b_vision.py</code>), the whole gate is one line — <code>run()</code> returns immediately unless this is true:</p>
+      <pre><code>ctx.extraction_route == "5a_cached" and not _collapsed(ctx)</code></pre>
+      <p><code>_collapsed(ctx)</code> is <strong>true</strong> — meaning Gemini runs — under any of these:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Condition</th><th>What it catches</th></tr></thead>
+          <tbody>
+            <tr><td>No persona at all</td><td>A genuinely first-time vendor. <code>extraction_route</code> never became <code>5a_cached</code>, because there was no rule set to try. This is the single biggest reason a new vendor's very first document reaches Gemini.</td></tr>
+            <tr><td><code>ctx.extracted.match_quality</code> is empty</td><td>A persona matched zero fields — as complete a failure as a weak one, just at the other end.</td></tr>
+            <tr><td>2 or more fields scored below <code>0.50</code></td><td>Individually weak reads. <code>COLLAPSE_THRESHOLD = 0.50</code>.</td></tr>
+            <tr><td><code>coverage.assess(ctx).miss_share &ge; 0.60</code></td><td>The case confidence alone can't see: a persona declaring 14 fields where 12 come back empty and 2 come back at 0.99 confidence still counts as collapsed. <code>match_quality</code> only ever records a field that <em>produced</em> a value, so the 12 empty ones are invisible to the confidence check above — coverage is the one place that already answers "how much of what was declared came back empty," reused rather than re-invented. <code>DEFAULT_COLLAPSE_SHARE = 0.60</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <span class="label">A fifth, separate escalation — not extraction</span>
+        Stage 5c (<code>agent_escalation</code>) fires only when <code>persona_status == "hard_miss"</code> <em>and</em> Gemini's weakest confidence is below <code>0.60</code> (<code>WEAK</code>, a different threshold from Stage 5b's own <code>0.50</code>). It does not change what gets extracted for the current document — Gemini's Stage 5b answer still ships. It queues a <code>persona_authoring</code> job so a human eventually writes a real persona for <em>next</em> time, and sets <code>review_flag = True</code>. See <a class="inline" href="#review">Review queue</a>.
+      </div>
+
+      <h3 id="gemini-hints">What it's told: field_hints</h3>
+      <p>
+        A known-but-collapsed persona already knows this vendor's field list and roughly
+        where each value sits — throwing that away and asking Gemini the same generic
+        4-field question every first-time vendor gets would waste the one piece of
+        vendor knowledge most likely to recover the read. So Stage 5b asks:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Case</th><th>Fields requested</th><th>Hints sent</th></tr></thead>
+          <tbody>
+            <tr><td>No persona (true first-time vendor)</td><td>The generic default — <code>vendor_name</code>, <code>invoice_number</code>, <code>invoice_date</code>, <code>total_printed</code></td><td>None — there is no vendor knowledge to draw on yet</td></tr>
+            <tr><td>Known persona, collapsed</td><td>That persona's own full declared field list</td><td>One sentence per field, built from the persona's own <code>anchor</code>/<code>region</code>/<code>pattern</code> — e.g. <code>total_printed: labelled "Total Amount Due", in the totals box, a money amount</code></td></tr>
+            <tr><td>Caller supplies an explicit field list</td><td>Exactly that list (a test, or the isolated <code>eval-vision</code> suite, which deliberately wants a fixed, vendor-independent set)</td><td>None — an explicit override always wins and carries no hints</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Built by <code>adapters/vision/hints.py</code> (<code>field_names_for_persona</code>,
+        <code>hints_for_persona</code>). Deliberately prose, never the regex itself — an
+        anchor and a region become a sentence a model can act on
+        (<code>"labelled X, just below or beside that label"</code>), not an instruction
+        it cannot run anyway. A field with nothing describable is simply left without a
+        hint, never padded with a vague placeholder.
+      </p>
+      <div class="callout good">
+        <span class="label">Why geometry isn't actually the expensive part on this path</span>
+        An external ablation against this same corpus — delete every anchor and region
+        from the prompt, keep only field name, type, and one sentence — moved 1 value in
+        102 that had a hint at all (10 documents, 256 assertions: 221/256 with hints vs.
+        219/256 without). What is load-bearing is the field <em>list</em> and its
+        <em>type</em>, not the coordinate-level precision a hand-authored regex selector
+        needs. This is why a brand-new vendor's Gemini path can recover reasonably even
+        before anyone hand-writes a persona for it.
+      </div>
+
+      <h3 id="gemini-boundary">What it's never allowed to decide</h3>
+      <p>
+        The system prompt (<code>adapters/vision/gemini_adapter.py</code>) is one
+        instruction repeated in different words: <strong>transcribe, do not
+        interpret.</strong> Report each value exactly as printed. Do not do arithmetic —
+        no summing line items, no netting credits, no computing a balance. Do not decide
+        which of several printed totals is the one actually owed;
+        <code>total_printed</code> means the headline number as printed, even if a
+        different number is what should be paid. An unreadable value comes back as an
+        empty string, never a guess.
+      </p>
+      <p>
+        That boundary is enforced twice, not once — the prompt is a request, not a
+        guarantee:
+      </p>
+      <ol class="steps">
+        <li><h4>The response schema</h4>Every requested field is a plain string; type coercion into currency/date/Decimal happens downstream, in the same coercer a regex selector's <code>pattern</code> already uses — Gemini is never asked to produce a typed value.</li>
+        <li><h4><code>adapters/vision/policy.sanitize</code></h4>The real boundary. Drops any field name Gemini wasn't asked for (Gemini's schema subset has no <code>additionalProperties: false</code>, unlike the Anthropic path, which makes this check load-bearing rather than a second belt-and-braces net), drops any irregularity flag outside the closed enum, clamps confidence into <code>[0, 1]</code>. A model that invents <code>amount_payable</code> — the exact number the business rules must derive, never read — gets it silently discarded here, every time.</li>
+      </ol>
+      <p>
+        The business decision itself — what's actually payable, which prior-balance
+        convention applies, whether a weight-tier margin was misapplied — happens
+        afterward, in Stage 6/7's real <code>adjust</code> ops, reading whatever Gemini
+        transcribed the exact same way it reads a regex selector's output. Gemini supplies
+        <em>values</em>; code supplies <em>decisions</em>, and only code's decisions are
+        ever tested and recorded with a reason.
+      </p>
+
+      <h3 id="gemini-modes">The four run modes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mode</th><th>Behaviour</th><th>Needs a key?</th></tr></thead>
+          <tbody>
+            <tr><td><code>cassette</code> (default)</td><td>Replays a previously recorded response, byte-for-byte, from <code>tests/fixtures/cassettes/corpus.json</code>. A cache miss raises loudly (<code>KeyError</code>) rather than degrading to an empty result — the one document affected dead-letters; the run keeps going.</td><td>No</td></tr>
+            <tr><td><code>fake</code></td><td>Returns nothing at all. Proves the wiring — that Gemini gets called when it should, with the fields/hints it should get — without any model behaviour in the loop.</td><td>No</td></tr>
+            <tr><td><code>live</code></td><td>Calls the real API (<code>gemini-2.5-pro</code> by default — model IDs move; check Google's current docs rather than trusting this).</td><td>Yes — <code>GEMINI_API_KEY</code></td></tr>
+            <tr><td><code>record</code></td><td>Calls the real API once and writes the response into the cassette, so every later run replays it for free.</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Cost guards, because Gemini bills a PDF page as an image plus its text — cost scales with page count, not byte size: <code>MAX_PAGES = 30</code> (a real 24-invoice sample found legitimate telecom bills running 14–18 pages, so this is deliberately above that evidence, not a guess) and <code>MAX_PDF_BYTES = 15 MB</code> (the inline-part ceiling; bigger needs the Files API). Both are refusals, not warnings — going over either raises a clear, permanent error rather than silently billing for a document nobody decided to send whole.</p>
+    </section>
+
+    <section id="using" class="wide">
+      <h2>Using the application</h2>
+
+      <h3 id="cli">The CLI</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>Flags</th><th>Does</th></tr></thead>
+          <tbody>
+            <tr><td><code>docintel process &lt;paths...&gt;</code></td><td><code>--json</code>, <code>--vision {cassette,fake,live,record}</code>, <code>--cassette &lt;path&gt;</code></td><td>Runs one or more PDFs (or a directory) through the real pipeline. Prints one record per document. Exit 2 means a document was intaken and never emitted — a real bug, not a bad document.</td></tr>
+            <tr><td><code>docintel replay-gold</code></td><td>same vision flags, <code>--json</code></td><td>Runs the labelled gold corpus end to end and scores every assertion — the objective function for "did this change break anything." See <a class="inline" href="#eval-layer">The evaluation layer</a>.</td></tr>
+            <tr><td><code>docintel accuracy-report</code></td><td>same vision flags, <code>--json</code></td><td>The exact same score as <code>replay-gold</code>, rendered as a short, non-engineer-readable summary — percent correct by company and by document type, every failing document named with what it got wrong. A pure rendering of the same numbers, not a second scoring mechanism.</td></tr>
+            <tr><td><code>docintel eval-gate</code></td><td>same vision flags, <code>--record-history</code>, <code>--label</code></td><td>Scores <em>only</em> intake/attachment_filter/classify — <code>doc_type</code>/<code>tags</code>/<code>text_source</code>/<code>disposition</code> — independent of whether extraction succeeds at all.</td></tr>
+            <tr><td><code>docintel eval-vision</code></td><td>same vision flags, <code>--record-history</code>, <code>--label</code></td><td>Forces a Stage 5b Gemini call on <em>every</em> gold document, bypassing the normal collapse gate, and scores it alone.</td></tr>
+            <tr><td><code>docintel eval-compare &lt;baseline&gt; &lt;candidate&gt;</code></td><td><code>--suite</code>, <code>--json</code></td><td>Champion/challenger: diffs two recorded runs and names every assertion that regressed. A candidate may freely gain passes — only a same-named assertion getting <em>worse</em> counts.</td></tr>
+            <tr><td><code>docintel eval-history</code></td><td><code>--suite</code>, <code>--limit</code></td><td>The score trend over time for a suite, from the recorded-run store.</td></tr>
+            <tr><td><code>docintel reconcile &lt;records.jsonl&gt;</code></td><td><code>--pending</code></td><td>Cross-checks already-processed invoices against contracts on file; enqueues findings (<code>no_matching_contract</code>, <code>rate_mismatch</code>, ...) into the same review queue. No payment, no approval — findings only.</td></tr>
+            <tr><td><code>docintel export &lt;records.jsonl&gt; --out &lt;file.xlsx&gt;</code></td><td><code>--layout</code>, <code>--pending</code></td><td>Renders already-processed records into a spreadsheet using a registered column layout.</td></tr>
+            <tr><td><code>docintel promote-correction &lt;correction_id&gt;</code></td><td><code>--gold-id</code>, <code>--force</code></td><td>Turns a reviewer-accepted <code>/review</code> correction into a new <code>docs/corpus/gold/*.json</code> fixture — copies the source PDF too. Does not auto-run <code>validate_gold.py</code>; a human checks it before committing.</td></tr>
+            <tr><td><code>docintel draft-gold &lt;gold_id&gt;</code></td><td><code>--source</code>, same vision flags, <code>--force</code></td><td>The fast path <code>promote-correction</code> can't offer: drafts a gold fixture directly from one clean pipeline run, no review-queue correction needed first. Auto-fills fields/derived/line_items/charges/sub_account/scanline/reference_list; never auto-fills <code>expected_routing</code> — that's the one thing a gold fixture exists to check independently.</td></tr>
+            <tr><td><code>docintel generate-persona &lt;pdf&gt;</code></td><td><code>--company</code>, <code>--out</code>, <code>--model</code></td><td>Calls Claude once against one representative document to draft a field list — name, type, one-sentence location hint — from the closed field/pattern vocabularies. Never selector geometry. Writes a JSON file labelled a draft; nothing here is read by the real pipeline. See <a class="inline" href="#new-company">New company (no code)</a>.</td></tr>
+            <tr><td><code>docintel new-pack &lt;slug&gt;</code></td><td><code>--company</code>, <code>--doc-type</code> (repeatable), <code>--hints</code>, <code>--vendor</code>, <code>--force</code></td><td>Scaffolds a brand-new company's <code>pack.json</code> + a starter persona, optionally seeded from a <code>generate-persona</code> hint-spec draft. Never registered anywhere on its own — every <code>region</code>/<code>anchor</code>/<code>table_anchor</code> is an explicit placeholder for a human to fill in.</td></tr>
+            <tr><td><code>docintel validate-persona &lt;persona.json&gt;</code></td><td><code>--pack</code> or <code>--pack-file</code></td><td>Standalone self-check against <code>grammar.validator</code>'s V1-V14 rules — no need to already have the persona wired into a registered pack. <code>--pack-file</code> checks a draft <code>pack.json</code> (e.g. one <code>new-pack</code> scaffolded) before anyone registers it.</td></tr>
+            <tr><td><code>docintel queue-status</code></td><td><code>--fail-if-older-than-hours</code></td><td>Review-queue depth and oldest-open-job age. Poll-based — a nonzero depth is normal, not a failure, unless the age threshold is crossed. Cron-friendly.</td></tr>
+            <tr><td><code>docintel telemetry-report</code></td><td><code>--since-days</code></td><td>Aggregates dead-letter rate, escalation rate, and mean confidence from the process log.</td></tr>
+            <tr><td><code>docintel serve</code></td><td><code>--port</code>, <code>--no-browser</code></td><td>Starts the local web UI (needs <code>pip install 'docintel[ui]'</code>). Opens a browser tab automatically.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><code>--vision</code> defaults to <code>cassette</code> (recorded responses, no live API calls, fully offline and reproducible). Use <code>fake</code> for wiring checks with zero vision behavior, <code>live</code> to actually call the model, <code>record</code> to call it once and save the response into the cassette — see <a class="inline" href="#gemini-modes">the four run modes</a>.</p>
+      <pre><code># Score the labelled corpus
+python -m docintel.cli replay-gold
+
+# Run real documents, one JSON record per line
+python -m docintel.cli process all-docs/second-samples --json
+
+# Local review UI
+python -m docintel.cli serve</code></pre>
+
+      <h3 id="realtime">Real-time notification, as a library</h3>
+      <p>
+        <code>docintel</code> has no inbox watcher or webhook receiver of its own — that's
+        the caller's infrastructure, whatever it looks like — but <code>Runner.process(...)</code>
+        is a plain synchronous call, and <code>build_pipeline()</code> now accepts a caller-built
+        <code>HookRegistry</code> (<code>hooks=</code>) instead of always constructing its own and
+        discarding what a caller registered. Register a <code>beforeEmit</code> hook — the one
+        socket guaranteed to fire after <code>lane</code>/<code>review_flag</code>/<code>regen_flag</code>
+        are already decided, for every emitted record — and a caller knows the instant a document
+        needs a human, inline, with no polling interval to wait out. The channel (email/Slack/webhook)
+        is deliberately left to the caller's own code. Full recipe in the root <code>README.md</code>'s
+        "Real-time notification" section; the 8 hook sockets themselves are declared in
+        <code>src/docintel/pipeline/hooks.py</code> (<code>SOCKETS</code>) — see
+        <a class="inline" href="#reference">Quick reference</a>.
+      </p>
+      <div class="callout human">
+        <span class="label">One Runner per concurrent worker</span>
+        A <code>Runner</code> keeps small mutable per-run state (an in-run duplicate-detection
+        index, a processed-document counter) — safe for one worker calling <code>.process()</code>
+        repeatedly, not safe for two threads sharing the same <code>Runner</code> at once.
+        <code>build_pipeline()</code> is cheap to call again per worker (packs/personas are cached
+        process-wide), so build one <code>Runner</code> per worker and reuse it for that worker's
+        lifetime — never share one across concurrent callers.
+      </div>
+
+      <h3 id="webui">The web UI</h3>
+      <p>A single Flask app (<code>src/docintel/webui/app.py</code>) for two jobs: process one document and see the result, and work through whatever's waiting for a human.</p>
+      <div class="card-grid">
+        <div class="card"><h4><code>/</code> — upload</h4><p>Upload one PDF. It runs through the real extraction pipeline (rule engine only — the AI fallback is off in the default runner). You see the classification, the extracted fields with per-field confidence, and a status of <em>Auto-approved</em> or <em>Needs review</em>.</p></div>
+        <div class="card"><h4>Four outcome screens</h4><p><strong>Extracted</strong> (fields shown, status computed), <strong>no persona</strong> (nothing configured for this sender yet), <strong>collapsed persona</strong> (a persona exists but mostly stopped matching — a template redesign), <strong>failed</strong> (skipped/dead-lettered, with the reason).</p></div>
+      </div>
+
+      <h3 id="review">The review queue</h3>
+      <p>Two situations escalate to a real, persistent queue (SQLite, <code>var/jobs.sqlite3</code>) instead of just logging a line no one reads:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Job kind</th><th>Raised by</th><th>When</th><th>What resolving it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>persona_authoring</code></td><td>Stage 5c</td><td>A sender with no persona at all, and the one-shot result isn't confident enough to trust.</td><td>Marks the job resolved once a developer has actually authored the persona by hand — rule authoring itself stays a manual, out-of-scope step.</td></tr>
+            <tr><td><code>prior_balance_basis</code></td><td>Stage 7</td><td>A vendor prints a prior balance but no convention says whether it's already net of payments or a gross figure still carrying one forward.</td><td>A reviewer picks <code>gross</code> or <code>net_of_payments</code> (never free text) — see <a class="inline" href="#basis-overlay">below</a>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ol class="steps">
+        <li><h4>Open <code>/review</code></h4>Every open job, grouped by kind, with the sender fingerprint, document type, and when it was queued.</li>
+        <li><h4>Open a job's detail page</h4>Shows the context snapshot captured at escalation time (for a basis job: <code>prior_balance</code>, <code>payments_credits</code>, <code>current_charges</code>, <code>total_printed</code> — whichever were actually extracted).</li>
+        <li><h4>Resolve it</h4>A basis job requires picking one of the two closed values, checking "I looked at real sample documents," and giving a reviewer name. A persona job just needs a reviewer name once the persona file exists.</li>
+      </ol>
+      <div class="callout human">
+        <span class="label">This queue is deliberately not a rule-authoring tool</span>
+        Resolving a <code>persona_authoring</code> job does not write a persona. A brand-new vendor's field selectors are still authored by hand, as JSON — see <a class="inline" href="#new-vendor">New vendor</a>. The queue only tracks that the question exists and that someone answered it.
+      </div>
+    </section>
+
+    <section id="current-vendors" class="wide">
+      <h2>Current vendors — what's live today</h2>
+      <p>
+        Packs are named on purpose, not discovered by scanning a directory — see
+        <code>PACK_MODULES</code>/<code>PACK_FILES</code> below. Check what's actually
+        registered, right now, with one line:
+      </p>
+      <pre><code>python -c "
+from docintel.packs.registry import load_packs
+for p in load_packs():
+    print(p.name, '-&gt;', p.doc_types)
+"</code></pre>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Vendors</th><th>doc_types</th></tr></thead>
+          <tbody>
+            <tr><td><code>northstar</code></td><td>Full Python module</td><td>complete_beverage_destruction, dtss, edco, federal_recycling, upak, veritiv</td><td>standard_invoice, credit_memo, contra_invoice, invoice_with_attachment, statement_of_account, own_paperwork</td></tr>
+            <tr><td><code>digitaldirection</code></td><td>Full Python module</td><td>centracom, comcast, lumen, windstream</td><td>telecom_bill, credit_memo, disconnect_notice, contract</td></tr>
+            <tr><td><code>spt_metals</code></td><td>Hybrid — <code>DataPack</code> + one custom hook</td><td>spt_metals (single-vendor pack)</td><td>carbon_bar_invoice</td></tr>
+            <tr><td><code>acme_freight</code></td><td>Pure data — zero Python</td><td>redline, summit</td><td>standard_invoice, credit_memo, statement_of_account</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Four packs, three genuinely different onboarding shapes — the choice depends on exactly one question: <strong>does this company need a fact or a rule the page can never print, that no existing hook already supplies?</strong></p>
+      <div class="card-grid">
+        <div class="card"><h4>Pure data — <code>acme_freight</code></h4><p>One <code>pack.json</code>, a <code>personas/</code> folder, zero Python. Gets the ladder, claim guard, field sets, thresholds, aliases. Cannot register a pack-specific hook. Right when a company's business logic is fully covered by the shared op registry.</p></div>
+        <div class="card"><h4>Hybrid — <code>spt_metals</code></h4><p>A thin class wrapping a <code>DataPack</code> for everything a data-only pack already does, adding exactly one <code>afterExtraction</code> hook to supply weight-tier margins, a CTL adder, and per-state freight rates — none ever printed on the invoice. ~120 lines, not ~1,200. Right when one non-printed fact is missing and nothing else is.</p></div>
+        <div class="card"><h4>Full module — <code>northstar</code>, <code>digitaldirection</code></h4><p>A bespoke Python package per pack (~1,150–1,290 lines across ~8 modules): fingerprint resolution, billing-convention tables, reference collection, aliasing. Right when a company needs several bespoke hooks, not just one.</p></div>
+      </div>
+      <div class="callout good">
+        <span class="label">SPT Metals, worked end to end</span>
+        Onboarded specifically to prove the hybrid shape and a second derivation family (<code>derive_price_per_foot</code>, <a class="inline" href="#ops">§ ops registry</a>) generalize past telecom billing. Its trap mirrors F1's own lesson one level over: a weight-tiered invoice's own narrative text claims a pricing tier ("priced at the Tier 1 margin schedule"), but the correct tier depends on the order's actual <em>computed</em> weight (<code>footage × weight/ft</code>), which can cross a tier boundary the invoice's own claim gets wrong in either direction — an overcharge when the invoice under-claims the weight, an undercharge when it over-claims it. Both directions are gold-labelled (<code>docs/corpus/gold/spt-metals-70921.json</code>, <code>-71104.json</code>) and both score 23/23 on <code>replay-gold</code>.
+      </div>
+    </section>
+
+    <section id="new-vendor" class="wide">
+      <h2>Configuring a new vendor of an existing company</h2>
+      <p>The common case: <code>northstar</code> or <code>digitaldirection</code> already exists, and a 7th (or 5th) vendor starts billing them. <strong>This is a configuration change, not a software release.</strong></p>
+
+      <ol class="steps">
+        <li>
+          <h4>Write a persona file</h4>
+          <p>Drop a new JSON file into <code>src/docintel/packs/&lt;pack&gt;/personas/&lt;vendor&gt;.json</code>. It's picked up automatically — personas are read by directory scan, nothing needs registering. A real, working example (Northstar's DTSS persona, trimmed):</p>
+          <pre><code>{
+  "sender_fingerprint": "northstar|dtss",
+  "doc_type": "standard_invoice",
+  "rule_version": "v1",
+  "status": "active",
+  "field_selectors": [
+    { "field": "vendor_name", "region": "top-left", "pattern": "text" },
+    { "field": "invoice_number", "anchor": "Invoice #",
+      "region": "near-anchor", "pattern": "text" },
+    { "field": "invoice_date", "region": "top-right", "pattern": "date",
+      "adjust": ["normalize_date_iso"] },
+    { "field": "total_printed", "anchor": "Total", "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": ["resolve_vendor_alias", "resolve_bill_to_alias",
+                 "resolve_carried_balance", "derive_amount_payable"] }
+  ]
+}</code></pre>
+        </li>
+        <li>
+          <h4>Pick a region and a pattern for each field</h4>
+          <p>A selector is <em>where</em> (region, optionally anchored to a printed label) plus <em>what shape</em> (pattern). Both vocabularies are closed and shared across every pack — see the <a class="inline" href="#reference">quick reference</a> for the full lists actually in use.</p>
+        </li>
+        <li>
+          <h4>Add an alias, if the vendor's printed name varies</h4>
+          <p>If the vendor prints its name more than one way (a letterhead vs. a remittance payee), add an entry to that pack's <code>aliases.py</code> <code>LITERAL_ALIASES</code> dict so every rendering resolves to the same canonical key — and a display name to <code>DISPLAY_NAMES</code> if no selector will ever extract <code>vendor_name</code> directly. Skip this if the vendor always prints one consistent name.</p>
+          <div class="callout good">
+            <span class="label">A real safety net, not just a suggestion</span>
+            <code>sender_fingerprint</code>'s vendor half must be a key this alias table actually produces — a shipped test (<code>test_every_persona_fingerprint_names_a_known_vendor</code>) fails immediately in CI if a new persona's fingerprint names a vendor the alias table doesn't know, so forgetting this step doesn't fail silently.
+          </div>
+        </li>
+        <li>
+          <h4>Decide the vendor's <code>prior_balance_basis</code> — or don't, yet</h4>
+          <p>If the vendor ever prints a "prior balance" or "balance forward," a human needs to have looked at real invoices and decided whether it's <code>gross</code> or <code>net_of_payments</code>. You can add it directly to that pack's hand-maintained <code>PRIOR_BALANCE_BASIS</code> dict in <code>conventions.py</code> (a reviewed code change) — <strong>or leave it unset entirely</strong>. If it's genuinely unknown at authoring time, the pipeline will correctly refuse to guess, route the document to <code>review</code>, and queue a <code>prior_balance_basis</code> job — a reviewer can confirm it later through the web UI with no further code change. See <a class="inline" href="#basis-overlay">below</a>.</p>
+        </li>
+        <li>
+          <h4>Validate and test</h4>
+          <p>Two layers, and they run at different times — worth knowing precisely so a typo doesn't slip through:</p>
+          <ul>
+            <li><strong>Structural parsing</strong> runs automatically, every time the process starts (inside <code>PackPersonaStore</code>'s construction). It catches a missing required key or an unrecognized selector shape — but it does <em>not</em> check vocabularies.</li>
+            <li><strong>Semantic validation</strong> (the real security boundary — 13 numbered rules) checks the vocabulary: is this <code>adjust</code> op name actually registered, is this region actually in the closed enum, does a selector target a <code>derived_only</code> field it's never allowed to touch. <strong>This does not run automatically at <code>docintel process</code> startup</strong> — run it explicitly, either via <code>docs/persona-regeneration/reference/try_persona.py</code> (a reference script built for exactly this) or by adding the new persona to the parametrized test in <code>tests/packs/test_personas_validate.py</code> ("guardrail 5"), which every shipped persona already runs through in CI.</li>
+          </ul>
+          <p>What a typo actually looks like once you do run it:</p>
+          <pre><code>ValidationError: selector[6] (field 'total_printed') names adjust op
+'resolve_carreid_balance', which is not registered (V2). A new op is a
+business-logic change and needs a PR and an eval, not a persona write
+
+ValidationError: selector[2] (field 'invoice_date') names region 'top-lft',
+which is not in the section 2 enum (V3)</code></pre>
+          <p>Then run the new persona against a real sample document (<code>docintel process path/to/sample.pdf --json</code>) and check the extracted fields by eye before calling it done.</p>
+        </li>
+      </ol>
+      <div class="callout">
+        <span class="label">One thing to know about timing</span>
+        Unlike the billing-convention overlay, a new persona file needs the process to restart (or the CLI to be invoked fresh, or <code>docintel serve</code> to be restarted) before it's picked up — <code>PackPersonaStore</code> parses every persona once, at construction, for the lifetime of that runner.
+      </div>
+      <div class="callout good">
+        <span class="label">Start a new persona as <code>"status": "draft"</code></span>
+        A draft persona applies an automatic 0.85 confidence penalty and can never reach the <code>high</code> lane — every document routes to review while you're still validating field coverage. Every shipped persona must be <code>"active"</code> before merging (a dedicated test enforces this), so promote it once you've checked real coverage.
+      </div>
+    </section>
+
+    <section id="new-company" class="wide">
+      <h2>Onboarding a brand-new client company</h2>
+      <div class="callout">
+        <span class="label">Faster start: scaffold, don't hand-author</span>
+        <code>docintel new-pack &lt;slug&gt; --company "..." --doc-type ... [--hints &lt;path&gt;]</code>
+        writes a starting <code>pack.json</code> and persona skeleton for steps 1-2 below —
+        seeded from a <code>generate-persona</code> hint-spec draft if you have one, every
+        selector geometry field left an explicit placeholder. Then
+        <code>docintel validate-persona &lt;persona&gt; --pack-file &lt;pack.json&gt;</code>
+        self-checks the result against the same V1-V14 rules below, before anyone else looks
+        at it. See <a class="inline" href="#cli">the CLI table</a> and
+        <code>docs/onboarding/CONFIG-SPACE.md</code> for the full flow.
+      </div>
+      <p>
+        A whole new company can be onboarded as <strong>pure data — no Python
+        module at all.</strong> <code>acme_freight</code> ships in this repo as
+        exactly that proof: one <code>pack.json</code>, a <code>personas/</code>
+        folder, zero lines of Python, and a test
+        (<code>tests/packs/test_datapack.py</code>) that fails the day that
+        ever stops being possible.
+      </p>
+      <ol class="steps">
+        <li>
+          <h4>Write <code>pack.json</code></h4>
+          <p>One file declares everything a data-only pack can: document types, the bill-to roster it claims on, vendor aliases, confidence thresholds, per-doc_type field sets, the claim rule, and the classification ladder. A real, complete example:</p>
+          <pre><code>{
+  "name": "acme_freight",
+  "default_currency": "USD",
+  "doc_types": ["standard_invoice", "credit_memo", "statement_of_account"],
+  "bill_to_roster": ["acme freight services", "acme freight"],
+
+  "aliases": {
+    "literal": { "summit carriers": "summit", "redline logistics": "redline" },
+    "display": { "summit": "Summit Carriers, LLC", "redline": "Redline Logistics" }
+  },
+
+  "thresholds": { "total_printed": 0.90, "invoice_number": 0.90, "bill_to_name": 0.90 },
+
+  "fields": {
+    "standard_invoice": {
+      "all": ["vendor_name", "invoice_number", "invoice_date", "total_printed", "bill_to_name"],
+      "required": ["bill_to_name"],
+      "any_of": [["invoice_number", "invoice_date"]],
+      "derived_only": []
+    }
+  },
+
+  "claim": {
+    "rules": [
+      { "kind": "markers", "scope": "primary",
+        "values": ["acme freight services", "acme freight", "ap@acmefreight.example"] }
+    ],
+    "vetoes": [
+      { "kind": "every_marker_hit_in_block", "anchor": "\\bship\\s*to\\b" }
+    ]
+  },
+
+  "ladder": {
+    "default": "standard_invoice",
+    "rungs": [
+      { "name": "credit_memo_title", "doc_type": "credit_memo",
+        "when": { "signal": "title_near_top",
+          "params": { "pattern": "\\b(credit memo|credit note)\\b",
+                      "max_words": 7, "max_line_index": 10 } } }
+    ]
+  }
+}</code></pre>
+        </li>
+        <li>
+          <h4>Add a <code>personas/</code> folder</h4>
+          <p>Same as an existing pack — one JSON file per vendor, same schema as <a class="inline" href="#new-vendor">above</a>.</p>
+        </li>
+        <li>
+          <h4>Register the pack, once</h4>
+          <p>Packs are deliberately <em>named</em>, not auto-discovered by directory scan — a pack is a business decision, so it shouldn't go live because someone dropped a folder on disk. Add the relative path to <code>PACK_FILES</code> in <code>src/docintel/packs/registry.py</code>:</p>
+          <pre><code>PACK_FILES: tuple[str, ...] = ("acme_freight/pack.json",)</code></pre>
+        </li>
+        <li>
+          <h4>Know the honest limit</h4>
+          <p>A data-only pack gets the classification ladder, tag rules, claim guard, field sets, thresholds, and aliases. It does <strong>not</strong> get pack-specific hooks — see <a class="inline" href="#pack-hooks">When you still need Python</a> for exactly what that costs.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="basis-overlay" class="wide">
+      <h2>Confirming a vendor's billing convention without a restart</h2>
+      <p>
+        This is the one piece of business logic a <strong>reviewer</strong> can
+        change directly, live, through the web UI — everything else in this
+        guide is a developer's job. It exists because "is the printed prior
+        balance already net of payments, or still gross" is a business judgment
+        about how a specific vendor bills, not something any extraction rule
+        should ever guess.
+      </p>
+      <div class="mermaid">
+sequenceDiagram
+    participant Doc as Document
+    participant Gate as ConfidenceGate (Stage 7)
+    participant Queue as Job queue
+    participant UI as /review
+    participant Overlay as prior_balance_basis.local.json
+
+    Doc->>Gate: prior_balance printed, no known convention
+    Gate->>Queue: enqueue prior_balance_basis job
+    Gate-->>Doc: lane=review (refuses to guess)
+    UI->>Queue: reviewer opens the job
+    UI->>Overlay: reviewer confirms gross / net_of_payments
+    Note over Overlay: written to the pack's own directory,<br/>read fresh on every call — no cache
+    Doc->>Gate: next document, same vendor, same process
+    Gate->>Overlay: reads the overlay (hardcoded table still checked first)
+    Gate-->>Doc: lane=high, amount_payable resolved
+      </div>
+      <p>The hardcoded, audited <code>PRIOR_BALANCE_BASIS</code> table in each pack's <code>conventions.py</code> is always checked first — the overlay is a strictly lower trust tier, exactly for the reason its own code comment states: <em>"a wrong entry in the table is a reviewed code change; a wrong overlay entry is a reviewer's call, correctable the same way."</em></p>
+    </section>
+
+    <section id="business-logic" class="wide">
+      <h2>Writing business logic</h2>
+      <p>"Business logic" in this system is authored in exactly three places, in order of how often you'll touch them.</p>
+
+      <h3 id="claim-rules">Claim rules — deciding whose document this is</h3>
+      <p>A pack claims a document when <strong>any rule holds and no veto holds</strong>. Four rule kinds exist, deliberately closed:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kind</th><th>Use when</th><th>Real example</th></tr></thead>
+          <tbody>
+            <tr><td><code>markers</code></td><td>A name or address specific enough that no other business prints it.</td><td>Northstar guards on its own address: <code>"po box 188 east longmeadow"</code>.</td></tr>
+            <tr><td><code>corroborated_markers</code></td><td>A weak marker (a bare ZIP code) that only counts alongside a second one.</td><td><code>"ma 01028"</code> only counts if <code>"northst"</code> also appears — a bare ZIP alone claims too much.</td></tr>
+            <tr><td><code>alias_table</code></td><td>The pack claims by <em>sender</em>, and already maintains a vendor alias table — reads it directly, so onboarding a new carrier is a table edit, not a new rule.</td><td>Digital Direction (a telecom expense manager) claims by carrier, not bill-to.</td></tr>
+            <tr><td><code>roster_on_short_line</code></td><td>A client name, but only on a short line — a short line means a bill-to block, not a line-item description that happens to mention the client.</td><td>Digital Direction's managed-client roster, as a secondary/fallback rule.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Vetoes exist because a marker can be present for the wrong reason.</strong> <code>every_marker_hit_in_block</code> is the one shipped today: if every marker hit sits inside a <code>SHIP TO</code> block, the pack does not claim — a delivery address says where goods went, not who owes the money.</p>
+
+      <h3 id="ladder">The doc_type ladder — deciding what kind of document it is</h3>
+      <p>An ordered list of rungs; <strong>the first whose condition holds wins.</strong> If none fire, the ladder's own default applies. Rung order is load-bearing — write the more specific test above the more general one. A real rung:</p>
+      <pre><code>{
+  "name": "statement_title_no_table",
+  "doc_type": "statement_of_account",
+  "when": {
+    "all_of": [
+      { "signal": "pattern_in_scope",
+        "params": { "pattern": "\\bstatement of account\\b", "scope": "primary" } },
+      { "not": { "signal": "money_table_present" } }
+    ]
+  }
+}</code></pre>
+      <p>A condition is a small closed algebra: a named signal, or <code>all_of</code> / <code>any_of</code> / <code>not</code> composing other conditions. Signals used across today's packs include <code>pattern_in_scope</code>, <code>title_near_top</code>, <code>text_near_top</code>, <code>role_shape</code>, <code>all_matches_negative</code>, <code>money_table_present</code>, <code>shared_pagination_footer</code>, <code>noise_ratio_above</code>, <code>label_with_corroborating_value</code>, <code>short_label_line</code>, <code>text_source_is</code>, <code>distinct_printed_aliases_at_least</code>. Adding a genuinely new signal is a code change with a test and a named real document behind it — that's what keeps "declarative" from becoming a second, unreviewed way to write regexes.</p>
+      <div class="callout good">
+        <span class="label">Fail-loud, at load time</span>
+        An unknown signal name, an unknown region, a misspelled parameter — each raises when the pack loads, not silently evaluating to false at classify time. A rung that silently never fires is a document type that silently never gets recognized, and this system refuses to let that happen quietly.
+      </div>
+
+      <h3 id="ops">The ops registry — deciding what isn't printed anywhere</h3>
+      <p>A field selector's <code>adjust</code> list names operations from a closed, shared registry — 26 total. Two kinds:</p>
+      <h4>Value ops (transform one field)</h4>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td><code>strip_internal_whitespace</code></td><td><code>strip_currency_symbols</code></td><td><code>parens_to_negative</code></td><td><code>trailing_cr_to_negative</code></td></tr>
+            <tr><td><code>normalize_date_iso</code></td><td><code>uppercase</code></td><td><code>lowercase</code></td><td><code>trim</code></td></tr>
+            <tr><td><code>collapse_internal_spaces</code></td><td><code>join_lines_comma</code></td><td><code>dedupe_preserve_order</code></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h4>Document ops (reason across several fields)</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Op</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>normalize_credit_sign</code></td><td>A payment/credit must be negative before it's added to a balance.</td></tr>
+            <tr><td><code>resolve_carried_balance</code></td><td>Works out whether the prior balance was actually carried forward (F1b).</td></tr>
+            <tr><td><code>derive_amount_payable</code></td><td>The core reconciliation: computes what's actually owed from prior balance + current charges + printed total. Refuses rather than guesses when it can't.</td></tr>
+            <tr><td><code>derive_price_per_foot</code></td><td>A <em>second derivation family</em>, structurally unrelated to the F1 payable math above — weight-tiered pricing (<code>weight/ft × base cost/lb × margin × CTL factor</code>, + a flat surcharge, + weight × a per-state freight rate). Prices from the order's own <strong>computed</strong> weight, never from whatever tier the vendor's invoice claims — see the SPT Metals worked example under <a class="inline" href="#current-vendors">Current vendors</a>.</td></tr>
+            <tr><td><code>subtract_prior_balance_if_present</code></td><td>Supplies <code>current_charges</code> when it isn't printed directly.</td></tr>
+            <tr><td><code>prefer_current_charges_line</code></td><td>Prefers a printed current-charges line over a derived one when both exist.</td></tr>
+            <tr><td><code>crosscheck_line_sum</code></td><td>Scoring only: do the line items add up to the subtotal?</td></tr>
+            <tr><td><code>crosscheck_total_composition</code></td><td>Scoring only: does prior + current = total?</td></tr>
+            <tr><td><code>crosscheck_balance_composition</code></td><td>Scoring only: does the balance math close?</td></tr>
+            <tr><td><code>crosscheck_scanline</code></td><td>Scoring only: does the OCR-A remittance line agree with the printed total/account?</td></tr>
+            <tr><td><code>crosscheck_duplicate_anchor</code></td><td>Scoring only: a signal for possible duplicate submissions.</td></tr>
+            <tr><td><code>crosscheck_filename</code></td><td>Scoring only: does the filename's own stated amount agree?</td></tr>
+            <tr><td><code>infer_currency</code></td><td>Fills in currency when it's the pack's own default rather than printed.</td></tr>
+            <tr><td><code>resolve_vendor_alias</code></td><td>Supplies <code>vendor_name</code> from the pack's alias/display table when the letterhead can't be read directly.</td></tr>
+            <tr><td><code>resolve_bill_to_alias</code></td><td>Supplies <code>bill_to_name</code> from the pack's client roster when no label anchors it on the page.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout bad">
+        <span class="label">This is the part that isn't a JSON edit</span>
+        Adding a genuinely new op — a new kind of arithmetic or inference the current 26 can't express — is a Python change to <code>src/docintel/grammar/ops/</code>, requires a test, and must be added to the closed <code>BASE_ADJUST_OPS</code> enum <strong>in three places kept in lockstep</strong>: the op function itself, the <code>OPS</code>/<code>ORDER</code> registry, and <code>BASE_ADJUST_OPS</code> — a shipped test pins that all three agree exactly, so a new op can never be reachable from only two of them. Every existing op was added this way, on evidence from a real document.
+      </div>
+
+      <h3 id="pack-hooks">When you still need Python</h3>
+      <p>A data-only pack (§<a class="inline" href="#new-company">above</a>) gets the ladder, tag rules, claim guard, field sets, thresholds, and aliases. It does not get pack-specific <strong>hooks</strong> — and both shipped packs today need every one of these:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Hook</th><th>What it does</th><th>Cost of not having it</th></tr></thead>
+          <tbody>
+            <tr><td><code>resolve_vendor_fingerprint</code></td><td>Builds the <code>pack|vendor</code> key Stage 4 looks a persona up by.</td><td>No fingerprint → no persona ever matches → the cached fast lane is unreachable, every document falls to vision or a hard miss.</td></tr>
+            <tr><td><code>apply_billing_conventions</code></td><td>Supplies <code>prior_balance_basis</code> from the pack's table (<a class="inline" href="#basis-overlay">§ above</a>).</td><td>Without it the F1b refusal fires on every document with a prior balance — no CentraCom-style derivation is possible at all.</td></tr>
+            <tr><td><code>collect_references</code></td><td>Pack-specific match keys, with provenance, for cross-referencing.</td><td>No reference-based corroboration for this pack's documents.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Writing one of these means adding a Python module for the pack (the two shipped packs are each ~1,150–1,290 lines across ~8 modules) — a real engineering task, not a config edit. Whether to eventually add a declarative equivalent for these two hook kinds is an open question for this codebase, not yet solved.</p>
+    </section>
+
+    <section id="validate" class="wide">
+      <h2>Validating &amp; testing a change</h2>
+      <ol class="steps">
+        <li><h4>Classification is fail-loud automatically</h4>A pack's claim rules and doc_type ladder are compiled the moment the pack loads (every process start) — an unknown signal name, scope, or malformed condition raises immediately, before any document is processed.</li>
+        <li><h4>Persona vocabulary needs an explicit check</h4>Structural parsing runs automatically too, but it only catches malformed shapes — an unregistered <code>adjust</code> op name or an unknown region is <em>not</em> caught just by running <code>docintel process</code>. Run <code>try_persona.py</code> or the shipped-persona test (§<a class="inline" href="#new-vendor">above</a>) explicitly before trusting a new persona file.</li>
+        <li><h4>Run it against a real sample</h4><code>docintel process path/to/sample.pdf --json</code> — read the output record by eye. Check both <code>fields</code> and <code>derived</code>.</li>
+        <li><h4>Score against the labelled corpus</h4><code>docintel replay-gold</code> — confirms nothing else regressed. This is the number that matters more than any single document looking right.</li>
+        <li><h4>Run the test suite</h4><code>python -m pytest -q</code> — full pipeline, pack, and grammar tests.</li>
+      </ol>
+    </section>
+
+    <section id="eval-layer" class="wide">
+      <h2>The evaluation layer</h2>
+      <p>
+        Everything above is checked against one thing: a hand-labelled corpus of real
+        documents, each with the correct answer written down in advance. <strong>Gold is
+        the only source of truth this project trusts</strong> — no test invents its own
+        expected values, and no fixture is ever authored from the pipeline's own output
+        (that would score a system against itself and call it evidence).
+      </p>
+
+      <h3 id="gold">Gold fixtures &amp; the scorecard</h3>
+      <p>
+        One JSON file per document in <code>docs/corpus/gold/</code> — 17 today, one per
+        real (or, for SPT Metals, realistically constructed) invoice. A trimmed real
+        example, <code>spt-metals-70921.json</code>:
+      </p>
+      <pre><code>{
+  "gold_id": "spt-metals-70921",
+  "source_file": "SPT_Metals_Invoice_70921.pdf",
+  "pack": "spt_metals",
+  "classification": {
+    "doc_type": "carbon_bar_invoice", "tags": [], "text_source": "native",
+    "page_count": 1, "page_roles": ["primary"]
+  },
+  "fields": {
+    "weight_per_ft": 3.03, "footage": 700, "ship_to_state": "NY",
+    "total_printed": 1712.78, "total_weight": 2121.0,
+    "weight_tier": "Tier 2", "weight_tier_margin": 1.08
+  },
+  "derived": {
+    "price_per_foot": 2.27, "material_total": 1589.0,
+    "freight": 63.63, "order_total": 1656.78
+  },
+  "expected_routing": { "lane": "high", "review_flag": false, "regen_flag": false }
+}</code></pre>
+      <p><code>fields</code> is what a correct read should extract off the page; <code>derived</code> is what correct business logic should compute from it — the same split the emitted record itself uses. <code>replay-gold</code> runs every real PDF through the actual pipeline and diffs the result against this file, assertion by assertion.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Registry (<code>scorecard.py</code>)</th><th>Size today</th><th>Decides</th></tr></thead>
+          <tbody>
+            <tr><td><code>CHECKED_FIELDS</code></td><td>71 names</td><td>Which <code>fields.*</code> names actually get asserted. A gold file can carry a value under a name not in this tuple — it simply won't be scored, which is itself a guardrail failure (below), not a silent gap.</td></tr>
+            <tr><td><code>CHECKED_DERIVED</code></td><td>8 names</td><td>Same, for <code>derived.*</code>.</td></tr>
+            <tr><td><code>MONEY_FIELDS</code></td><td>30 names</td><td>Which fields compare via <code>Decimal</code> equality (<code>140.9 == 140.90</code>) rather than bare <code>==</code>, where a differently-serialized number would otherwise fail a genuinely correct read.</td></tr>
+            <tr><td><code>EXACT_NUMERIC_FIELDS</code></td><td>2 names</td><td>Genuinely non-money numeric fields (a count, a duration) that should compare exactly, not as currency.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout bad">
+        <span class="label">The mistake this project has already made once, and now can't make silently</span>
+        A numeric field whose name is in neither <code>MONEY_FIELDS</code> nor
+        <code>EXACT_NUMERIC_FIELDS</code> used to fall through to bare <code>==</code>
+        comparison — indistinguishable from a deliberately exact field, and wrong for
+        money. <code>_field_kind</code> now raises <code>UnregisteredNumericFieldError</code>
+        immediately the first time this happens, naming the field — a new derived money
+        field (exactly what a new op like <code>derive_price_per_foot</code> produces)
+        cannot silently score wrong just because someone forgot to register its name.
+        A second, independent net catches it even earlier: a static test walks every gold
+        fixture's numeric values and fails by name if any aren't registered, before
+        <code>replay-gold</code> is even run.
+      </div>
+      <p>
+        <code>GOLD_ASSERTION_COVERAGE</code> (62 check names classified) is the same
+        discipline applied to the free-text <code>assertions[]</code> array every gold
+        file also carries — a shipped test asserts its key set equals every check name
+        that actually appears across the corpus, so a new gold file introducing an
+        unclassified assertion fails CI immediately rather than being silently ignored.
+      </p>
+      <p><code>docs/corpus/validate_gold.py</code> is a separate, narrower check: no pipeline call at all, just "does this gold file agree with itself" — do the line items sum to the subtotal, does prior + current close to the printed total, is <code>amount_payable</code> ever accidentally placed under <code>fields</code> instead of <code>derived</code>. Catches a contradiction in the labels before it ever reaches a real eval run.</p>
+
+      <h3 id="eval-commands">The eval commands, and why there are four of them</h3>
+      <p>
+        A single number ("73% of assertions pass") cannot say <em>which stage</em> broke.
+        Each command isolates one slice of the pipeline on purpose:
+      </p>
+      <div class="card-grid">
+        <div class="card"><h4><code>replay-gold</code></h4><p>The whole pipeline, end to end. The number that matters most — "did this change break anything," full stop.</p></div>
+        <div class="card"><h4><code>accuracy-report</code></h4><p>The exact same numbers as <code>replay-gold</code>, rendered for the non-engineering side of a rollout: percent correct by company and document type, every failure named. A rendering, not a second scoring path.</p></div>
+        <div class="card"><h4><code>eval-gate</code></h4><p>Classification alone (stages 1–3): <code>doc_type</code>, tags, text source, disposition — before extraction even starts. Isolates a classification regression from an extraction one.</p></div>
+        <div class="card"><h4><code>eval-vision</code></h4><p>Gemini alone, forced on every document regardless of whether it would really collapse to vision — the fallback's own accuracy, measured directly rather than only on whichever documents happened to escalate.</p></div>
+        <div class="card"><h4><code>eval-compare</code> / <code>eval-history</code></h4><p>Two recorded runs (by id or by label — a git SHA, "ci", anything) diffed for regressions, or the trend across many runs over time. A candidate may freely gain passes; only a named assertion getting <em>worse</em> counts as a regression.</p></div>
+      </div>
+      <p>All four (plus <code>replay-gold</code>) can persist a run via <code>--record-history</code> into <code>var/eval_history.sqlite3</code>, which is what <code>eval-compare</code>/<code>eval-history</code> read from — the same store, four different views onto it.</p>
+    </section>
+
+    <section id="reference" class="wide">
+      <h2>Quick reference</h2>
+      <h4>The closed region enum</h4>
+      <div class="pillrow">
+        <span class="pill">near-anchor</span><span class="pill">same-row</span><span class="pill">same-cell</span>
+        <span class="pill">top-left</span><span class="pill">top-center</span><span class="pill">top-right</span>
+        <span class="pill">header-block</span><span class="pill">label-block</span><span class="pill">totals-block</span>
+        <span class="pill">remittance-block</span><span class="pill">line_items</span><span class="pill">last-table-row</span>
+        <span class="pill">first-page</span><span class="pill">last-page</span><span class="pill">any-page</span>
+        <span class="pill">page:N</span>
+      </div>
+      <p style="font-size:0.85rem;color:var(--ink-soft);margin-top:-0.6rem;"><code>any-page</code> is the one region that doesn't narrow the search — a bare-digit or literal-capture pattern on it is rejected unless anchored, so it can't accidentally match the wrong page's numbers.</p>
+      <h4>Pattern kinds</h4>
+      <div class="pillrow">
+        <span class="pill">text</span><span class="pill">text_block</span><span class="pill">currency</span>
+        <span class="pill">date</span><span class="pill">integer</span>
+        <span class="pill">a raw regex, when nothing named fits</span>
+      </div>
+      <h4>The closed classification signal registry</h4>
+      <div class="pillrow">
+        <span class="pill">pattern_in_scope</span><span class="pill">short_label_line</span><span class="pill">title_near_top</span>
+        <span class="pill">text_near_top</span><span class="pill">label_with_corroborating_value</span>
+        <span class="pill">all_matches_negative</span><span class="pill">role_shape</span><span class="pill">shared_pagination_footer</span>
+        <span class="pill">money_table_present</span><span class="pill">text_source_is</span><span class="pill">noise_ratio_above</span>
+        <span class="pill">distinct_printed_aliases_at_least</span>
+      </div>
+      <h4>Files to know</h4>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr><td><code>src/docintel/packs/registry.py</code></td><td><code>PACK_MODULES</code> / <code>PACK_FILES</code> — where a new pack gets registered.</td></tr>
+            <tr><td><code>src/docintel/packs/&lt;pack&gt;/personas/*.json</code></td><td>One file per vendor, auto-discovered.</td></tr>
+            <tr><td><code>src/docintel/packs/&lt;pack&gt;/classification.json</code> or <code>pack.json</code></td><td>Claim rules, doc_type ladder, tags.</td></tr>
+            <tr><td><code>src/docintel/packs/&lt;pack&gt;/conventions.py</code></td><td>Module-backed packs only — <code>PRIOR_BALANCE_BASIS</code>.</td></tr>
+            <tr><td><code>src/docintel/grammar/ops/</code></td><td>The closed 26-op registry.</td></tr>
+            <tr><td><code>src/docintel/extract/convert.py</code></td><td>Image/Office → PDF at the intake boundary — <code>ACCEPTED_SUFFIXES</code>, the single source of truth for every format gate.</td></tr>
+            <tr><td><code>src/docintel/adapters/intake/email.py</code></td><td><code>EmailIntake</code> — one <code>IntakeItem</code> per email attachment.</td></tr>
+            <tr><td><code>src/docintel/adapters/vision/gemini_adapter.py</code></td><td>The Gemini call — request shape, response handling, error classification.</td></tr>
+            <tr><td><code>src/docintel/adapters/vision/hints.py</code></td><td>Persona → <code>field_hints</code> — the field list and prose Gemini gets when a persona is known.</td></tr>
+            <tr><td><code>src/docintel/adapters/vision/policy.py</code></td><td>The real security boundary on any vision result — <code>sanitize()</code>.</td></tr>
+            <tr><td><code>src/docintel/scorecard.py</code></td><td><code>CHECKED_FIELDS</code>/<code>MONEY_FIELDS</code>/<code>GOLD_ASSERTION_COVERAGE</code> — what the eval layer actually measures.</td></tr>
+            <tr><td><code>docs/corpus/gold/*.json</code></td><td>The 17+ hand-labelled documents every eval command scores against; grown with <code>docintel draft-gold</code> without needing a review-queue correction first.</td></tr>
+            <tr><td><code>src/docintel/evals/draft_gold.py</code></td><td>Auto-fills a gold fixture from one clean <code>process()</code> record; never auto-fills <code>expected_routing</code> — see the module's own docstring for why.</td></tr>
+            <tr><td><code>src/docintel/generation/pack_scaffold.py</code></td><td><code>docintel new-pack</code>'s scaffolding logic — a <code>pack.json</code> + starter persona for a brand-new company, every selector geometry field an explicit placeholder.</td></tr>
+            <tr><td><code>src/docintel/pipeline/hooks.py</code></td><td><code>HookRegistry</code> — the 8 hook sockets. Pass one to <code>build_pipeline(hooks=...)</code> to get a real-time callback the instant a document needs review (<code>beforeEmit</code>); see the root <code>README.md</code>'s "Real-time notification" recipe.</td></tr>
+            <tr><td><code>src/docintel/jobs/store.py</code></td><td>The reviewer job queue (SQLite).</td></tr>
+            <tr><td><code>var/jobs.sqlite3</code></td><td>Runtime job queue file — gitignored, regenerated.</td></tr>
+            <tr><td><code>var/eval_history.sqlite3</code></td><td>Recorded eval runs — what <code>eval-compare</code>/<code>eval-history</code> read.</td></tr>
+            <tr><td><code>*.local.json</code> (per pack directory)</td><td>Reviewer-confirmed overlays — gitignored.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="doc">
+      Reflects the codebase as of the classification-correctness-v2 branch: the human-in-the-loop job queue and review UI, the SPT Metals hybrid-pack onboarding and its second derivation family, the Gemini <code>field_hints</code> wiring, the evaluation layer's fail-loud numeric-field guard, multi-format intake (images, Office documents via LibreOffice, and email containers via a new one-input-many-documents adapter), the library's <code>hooks=</code> real-time notification support, and the onboarding-tooling trio (<code>generate-persona</code>, <code>new-pack</code>, <code>validate-persona</code>) plus <code>draft-gold</code> and <code>accuracy-report</code>. Region/pattern/signal lists, op counts, the current-vendor table, and the accepted-format list are drawn directly from what's actually registered and declared today — extending any closed vocabulary is a reviewed code change with a test.
+    </footer>
+  </main>
+</div>

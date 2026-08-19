@@ -58,8 +58,11 @@ def test_base_adjust_ops_are_the_closed_enum_from_section_4() -> None:
         # Section 10 extension. The bill-to counterpart of the vendor resolver,
         # for the templates that print their bill-to with no label to anchor on.
         "resolve_bill_to_alias",
+        # spt_metals: weight-tiered pricing, a second derivation family
+        # alongside 4.2's F1 machinery (grammar/ops/pricing.py).
+        "derive_price_per_foot",
     })
-    assert len(BASE_ADJUST_OPS) == 25
+    assert len(BASE_ADJUST_OPS) == 26
 
 
 # --------------------------------------------------------------------------

@@ -11,6 +11,11 @@ from decimal import Decimal, InvalidOperation
 
 # A money token: optional currency symbol, digit groups, required decimal part.
 # The required decimal part is what keeps account numbers and tax IDs out.
+#
+# The minus sign is accepted on EITHER side of the currency symbol - "-$161.95"
+# and "$-161.95" both appear in the wild (the latter on a real Spectrum/Charter
+# Communications "Payments" line: "Payments $-161.95"), and a document has no
+# reason to pick one ordering over the other consistently.
 MONEY_RE = re.compile(
     r"""
     ^\s*
@@ -19,6 +24,8 @@ MONEY_RE = re.compile(
     (?P<sign>-)?
     \s*
     [$€£]?
+    \s*
+    (?P<sign_after_symbol>-)?
     \s*
     (?P<num>
         (?:\d{1,3}(?:,\d{3})+ | \d*)     # grouped or bare integer part
@@ -41,11 +48,12 @@ MONEY_RE = re.compile(
 def parse_money(raw: str) -> Decimal | None:
     """Parse a money token to a signed Decimal, or None if not money-shaped.
 
-    Negative is expressed three different ways across the corpus and all three
-    must normalize to a leading minus:
+    Negative is expressed several different ways across real documents and all
+    of them must normalize to a leading minus:
       -99.80        Federal Recycling line amounts
       (249.84)      Lumen "Payment Received"
       212.87 cr     Comcast credit-card payment
+      $-161.95      Spectrum/Charter Communications "Payments" line
     """
     if not raw:
         return None
@@ -61,7 +69,7 @@ def parse_money(raw: str) -> Decimal | None:
     except InvalidOperation:
         return None
 
-    negative = bool(m.group("sign")) or bool(m.group("cr"))
+    negative = bool(m.group("sign")) or bool(m.group("sign_after_symbol")) or bool(m.group("cr"))
     if m.group("open_paren") and m.group("close_paren"):
         negative = True
     return -value if negative else value

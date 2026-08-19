@@ -33,7 +33,14 @@ from docintel.core.money import parse_money
 # Named patterns
 # --------------------------------------------------------------------------
 
-_SIGNED_MONEY = re.compile(r"^\s*(?:[-+]|\()|(?:\)|cr|CR)\s*$")
+# The sign is accepted on either side of a currency symbol - "-$161.95" and
+# "$-161.95" both appear in the wild (the latter on Spectrum/Charter
+# Communications invoices), same reasoning as `core.money.MONEY_RE`'s own
+# `sign_after_symbol` group, which this pre-check must agree with: it must
+# accept everything `parse_money` would actually resolve to a signed value,
+# or a genuinely signed figure gets rejected here before `parse_money` is
+# ever called.
+_SIGNED_MONEY = re.compile(r"^\s*[$€£]?\s*(?:[-+]|\()|(?:\)|cr|CR)\s*$")
 _INTEGER = re.compile(r"^\s*(\d{1,3}(?:,\d{3})+|\d+)\s*$")
 _DECIMAL = re.compile(r"^\s*-?\s*(\d{1,3}(?:,\d{3})+|\d*)\.(\d+)\s*$")
 _PHONE = re.compile(

@@ -28,9 +28,13 @@ code change; a wrong constant in a persona would be an agent write.
 
 from __future__ import annotations
 
+import os
+
 from docintel.core.models import JobContext
 from docintel.packs.northstar import aliases
-from docintel.packs.registry import primary_text
+from docintel.packs.registry import load_basis_overlay, primary_text
+
+_PACK_DIR = os.path.dirname(__file__)
 
 # canonical vendor -> "gross" | "net_of_payments"
 PRIOR_BALANCE_BASIS: dict[str, str] = {
@@ -55,10 +59,21 @@ def apply_prior_balance_basis(ctx: JobContext) -> JobContext:
     vendor = aliases.canonical(primary_text(ctx))
     basis = PRIOR_BALANCE_BASIS.get(vendor or "")
     if basis is None:
+        # A reviewer-confirmed overlay (docintel.webui's /review flow), tried
+        # only after the audited table above has had its say - see
+        # `load_basis_overlay`'s docstring for why this is a lower, separate
+        # trust tier rather than a second copy of the same table.
+        basis = load_basis_overlay(_PACK_DIR).get(vendor or "")
+    if basis is None:
         ctx.log(
             f"s6: no prior-balance convention recorded for vendor {vendor!r}; "
             "the carried balance will not be guessed (F1b)"
         )
+        # A precise "why" for the human-in-the-loop queue (Stage 7 enqueues on
+        # this tag): distinct from the generic review_flag/arith_balance_mismatch
+        # F1b already raises downstream, so a reviewer sees "no convention for
+        # this vendor yet" rather than just "the numbers didn't reconcile".
+        ctx.add_tag("unknown_prior_balance_basis")
         return ctx
 
     ctx.extracted.set("prior_balance_basis", basis, 1.0)

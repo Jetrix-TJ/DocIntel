@@ -25,6 +25,7 @@ than waiting for someone to declare which pack it belongs to.
 from __future__ import annotations
 
 import importlib
+import json
 import os
 from typing import Any, Protocol, runtime_checkable
 
@@ -49,6 +50,7 @@ from docintel.pipeline.hooks import HookRegistry
 PACK_MODULES: tuple[str, ...] = (
     "docintel.packs.northstar",
     "docintel.packs.digitaldirection",
+    "docintel.packs.spt_metals",
 )
 
 # Data-only packs: a directory holding `pack.json` and `personas/`, with no
@@ -209,6 +211,41 @@ def primary_text(ctx: JobContext) -> str:
     declarative ladder compiles against, so the selection has to be one thing.
     """
     return "\n".join(page.text for page in signals.primary_pages(ctx))
+
+
+def load_basis_overlay(pack_dir: str) -> dict[str, str]:
+    """A reviewer's confirmed `prior_balance_basis` decisions, read fresh.
+
+    Same discipline as `DataPack.personas()`: read from disk on every call, no
+    cache, because a decision made through the review UI (see `docintel.webui`)
+    must take effect on the very next document with no restart - that is the
+    whole point of separating this from the hardcoded `PRIOR_BALANCE_BASIS`
+    table each pack's `conventions.py` still owns.
+
+    Deliberately a SEPARATE, smaller trust tier, not a replacement for that
+    table: `conventions.py` documents its own reasoning for why a wrong entry
+    there must be a reviewed code change. An overlay entry is reachable only
+    through an explicit reviewer "confirm" action (never agent-writable, never
+    inferred), but it is still data on disk rather than code - a lower bar than
+    a PR, appropriate for unblocking one vendor quickly, with promotion into the
+    audited table as the deliberate next step once it's trusted.
+
+    Missing file (the common case - most packs will never need an override) or
+    a malformed one both return {} rather than raising: a broken overlay must
+    never crash extraction for every vendor in the pack, only fail to help the
+    one new vendor it was meant for.
+    """
+    path = os.path.join(pack_dir, "prior_balance_basis.local.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items()}
 
 
 def all_text(ctx: JobContext) -> str:

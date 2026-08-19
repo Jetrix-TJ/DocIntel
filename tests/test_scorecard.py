@@ -1,9 +1,12 @@
 import pathlib
-from docintel.scorecard import load_gold, replay_gold
+
+import pytest
+
+from docintel.adapters.vision.fake import FakeVision
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_default_stages
-from docintel.adapters.vision.fake import FakeVision
+from docintel.scorecard import load_gold, replay_gold
 
 GOLD_DIR = pathlib.Path("docs/corpus/gold")
 
@@ -190,6 +193,66 @@ def test_a_non_string_gold_value_is_compared_exactly():
     from docintel.scorecard import _field_kind
 
     assert _field_kind("has_something", True) == "exact"
+
+
+# ==========================================================================
+# The numeric-field guard: an unregistered numeric field must fail loud,
+# never silently fall through to "exact" (bare `==` where `Decimal` equality
+# was actually needed).
+# ==========================================================================
+
+
+def test_every_currently_registered_money_field_still_returns_money():
+    """The fix must not change behavior for anything already correct - only
+    the previously-silent gap should now be reachable."""
+    from docintel.scorecard import MONEY_FIELDS, _field_kind
+
+    for name in sorted(MONEY_FIELDS):
+        assert _field_kind(name, 123.45) == "money"
+
+
+def test_the_exempted_numeric_field_stays_exact_not_money():
+    """`term_length_months` is a duration (a count), not a currency amount -
+    it must stay `exact`, not be forced into `MONEY_FIELDS` just to satisfy
+    the guard."""
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("term_length_months", 60) == "exact"
+
+
+def test_an_unregistered_numeric_field_fails_loud():
+    """The bug this fix closes: a brand-new derived money field a developer
+    forgets to register in MONEY_FIELDS used to silently compare via bare
+    `==` instead of Decimal equality. It must now raise immediately, naming
+    the field, rather than quietly scoring wrong.
+
+    `price_per_foot` was this test's original example of an unregistered
+    field - it is real MONEY_FIELDS now (spt_metals), so a placeholder name
+    stands in instead of the guard silently stopping firing here."""
+    from docintel.scorecard import UnregisteredNumericFieldError, _field_kind
+
+    with pytest.raises(UnregisteredNumericFieldError, match="brand_new_unregistered_field"):
+        _field_kind("brand_new_unregistered_field", 42.17)
+
+
+def test_the_guard_fires_for_int_float_and_decimal_alike():
+    from decimal import Decimal
+
+    from docintel.scorecard import UnregisteredNumericFieldError, _field_kind
+
+    for value in (42, 42.17, Decimal("42.17")):
+        with pytest.raises(UnregisteredNumericFieldError):
+            _field_kind("some_new_unregistered_field", value)
+
+
+def test_bool_never_trips_the_numeric_guard():
+    """`bool` is an `int` subclass in Python - `isinstance(True, int)` is
+    `True` - so the guard must exclude it explicitly, or every unregistered
+    boolean-valued field would start raising too."""
+    from docintel.scorecard import _field_kind
+
+    assert _field_kind("an_unregistered_flag", True) == "exact"
+    assert _field_kind("an_unregistered_flag", False) == "exact"
 
 
 # ==========================================================================

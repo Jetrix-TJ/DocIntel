@@ -1,0 +1,56 @@
+{
+  "gold_id": "spt-metals-71104",
+  "source_file": "SPT_Metals_Invoice_71104.pdf",
+  "pack": "spt_metals",
+  "labelled_by": "spt_metals onboarding exercise, 2026-08-18",
+  "teaches": [
+    "SPT2"
+  ],
+  "notes": "The complementary trap to spt-metals-70921, in the opposite direction. The invoice's own narrative claims Tier 3 (5,001+ lb, 1.04x margin), but 950 ft x 5.26 lb/ft = 4,997 lbs is just UNDER the 5,000 lb cutoff, so the correct tier is Tier 2 (1.08x - a HIGHER margin than the vendor claimed). The printed total ($3,533.59) is therefore an UNDERCHARGE against the correct total ($3,666.59, a $133.00 difference) - proof the derivation corrects a wrong tier claim in both directions, not just the one that happens to favor the vendor.",
+  "classification": {
+    "doc_type": "carbon_bar_invoice",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "size_od": "5.00\" OD",
+    "weight_per_ft": 5.26,
+    "base_cost_per_lb": 0.60,
+    "footage": 950,
+    "ship_to_state": "OH",
+    "energy_surcharge": 4.15,
+    "total_printed": 3533.59,
+    "total_weight": 4997.0,
+    "weight_tier": "Tier 2",
+    "weight_tier_margin": 1.08,
+    "state_freight_rate": 0.02,
+    "ctl_adder": 0.10
+  },
+  "derived": {
+    "price_per_foot": 3.75,
+    "material_total": 3562.5,
+    "freight": 99.94,
+    "order_total": 3666.59
+  },
+  "assertions": [
+    {
+      "check": "weight_tier_from_computed_weight_not_claimed_tier",
+      "expr": "950 * 5.26 = 4997.00 lbs -> Tier 2 (1.08x), despite the invoice's own 'Tier 3' narrative claim",
+      "equals": "Tier 2"
+    },
+    {
+      "check": "printed_total_understates_correct_total",
+      "expr": "3666.59 - 3533.59",
+      "equals": 133.0
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

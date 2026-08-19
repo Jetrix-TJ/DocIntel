@@ -1,0 +1,47 @@
+{
+  "gold_id": "digitaldirection-golub-contract-amendment-call-paths-2021",
+  "source_file": "corpus/contracts/golub-windstream-amendment-call-paths-2021-03-29.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-08-17, real Golub/Windstream contract set",
+  "notes": "A quantity-ramp amendment: adds 150 of a total 1,400 contracted Call Paths (Quote # 2110613, the base 2020 agreement), continuing at 150/month until the full 1,400 are added - a third, distinct amendment shape from the service-addition and renewal amendments already labelled (a phased quantity increase with no new dollar rate stated on the page, rather than a new rate or a wholesale renewal). Single page, read in full. Originally curated from a different real Golub PDF (a location-amendment) that turned out to trip the separately-tracked pdfplumber recursion crash (docs/BUGS-FEATURES-PRODUCTION.md Bug 4) on its signed-annotation structure - swapped for this document rather than pulling an unrelated, out-of-scope bug fix into this plan.",
+  "teaches": [
+    "F20",
+    "F21"
+  ],
+  "classification": {
+    "doc_type": "contract",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Kinetic Business by Windstream",
+    "bill_to_name": "Golub",
+    "supersedes_contract_number": "2110613",
+    "rate_basis": "150 of 1,400 Call Paths added, continuing 150/month until the full 1,400 are added",
+    "signatory_name": "Samuel N. Wagar",
+    "signatory_title": "VP Information Technology",
+    "effective_date": "2021-03-29",
+    "signed_date": "2021-03-29"
+  },
+  "assertions": [
+    {
+      "check": "doc_type",
+      "equals": "contract"
+    },
+    {
+      "check": "supersedes_contract_number",
+      "equals": "2110613",
+      "note": "Amends the base 2020 agreement by quantity, not by rate - no contracted_rate is printed on this page, which is itself the correct read, not a miss."
+    }
+  ],
+  "expected_routing": {
+    "lane": "review",
+    "review_flag": true,
+    "regen_flag": false,
+    "reason": "Backed by a real, active persona (golub-windstream-contract.json) - routing reflects genuine, measured field coverage on this specific document."
+  }
+}

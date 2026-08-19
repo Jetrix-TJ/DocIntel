@@ -1,0 +1,141 @@
+{% extends "_base.html" %}
+{% block content %}
+  <p><a href="{{ url_for('review_list') }}">&larr; All open jobs</a></p>
+
+  <dl class="classification">
+    <dt>Job</dt><dd>#{{ job.id }} &mdash; {{ job.kind }}</dd>
+    <dt>Sender</dt><dd>{{ job.sender_fingerprint }} (vendor: {{ vendor }})</dd>
+    <dt>Document type</dt><dd>{{ job.doc_type or '—' }}</dd>
+    <dt>Queued</dt><dd>{{ job.created_at }}</dd>
+  </dl>
+
+  {% if job.context and not job.context.record_snapshot %}
+    <h2>Snapshot from the escalating document</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for name, value in job.context.items() %}
+          <tr><td>{{ name }}</td><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if job.kind == "prior_balance_basis" %}
+    <p class="stop">
+      A prior balance was printed on this document, but no pack convention
+      says whether it's already net of payments or a gross figure still
+      carrying a payment forward &mdash; reading it the wrong way over- or
+      under-states what's actually owed. Look at 2&ndash;3 real invoices from
+      this vendor before deciding.
+    </p>
+    <form method="post" action="{{ url_for('review_resolve', job_id=job.id) }}">
+      <fieldset>
+        <legend>What does this vendor's printed "prior balance" mean?</legend>
+        {% for choice in basis_choices %}
+          <label style="display:block;margin:0.4rem 0;">
+            <input type="radio" name="basis" value="{{ choice }}" required>
+            {{ 'Gross — payments/credits are shown separately' if choice == 'gross'
+               else 'Net of payments — already reflects any payment applied' }}
+          </label>
+        {% endfor %}
+      </fieldset>
+      <label style="display:block;margin:0.8rem 0;">
+        <input type="checkbox" name="confirm" required>
+        I checked real sample documents from this vendor before deciding.
+      </label>
+      <label style="display:block;margin:0.4rem 0;">
+        Reviewer name
+        <input type="text" name="reviewer" required>
+      </label>
+      <button type="submit">Confirm — apply to every future document from this vendor</button>
+    </form>
+
+  {% elif job.kind == "contract_reconciliation" %}
+    <p class="stop">
+      {% if job.context.candidate_count %}
+        This invoice matches {{ job.context.candidate_count }} contracts on
+        file for this account, and it isn't clear which one governs it &mdash;
+        the pipeline refuses to guess rather than pick one silently.
+      {% elif job.context.term_end_date %}
+        This invoice is dated after the matched contract's term end
+        ({{ job.context.term_end_date }}) with no renewal or amendment on
+        file covering the gap.
+      {% elif job.context.variance_pct %}
+        The billed rate ({{ job.context.billed_rate }}) differs from the
+        contracted rate ({{ job.context.contracted_rate }}) by
+        {{ job.context.variance_pct }}%, outside the standard tolerance.
+      {% else %}
+        No contract on file matches this invoice's account
+        {{ '(' ~ job.context.account_number ~ ')' if job.context.account_number else '' }}.
+      {% endif %}
+      This queue does not schedule or approve payment &mdash; resolving here
+      only records that a reviewer has looked at the finding.
+    </p>
+    <form method="post" action="{{ url_for('review_resolve', job_id=job.id) }}">
+      <label style="display:block;margin:0.4rem 0;">
+        Reviewer name
+        <input type="text" name="reviewer" required>
+      </label>
+      <label style="display:block;margin:0.4rem 0;">
+        Note (optional)
+        <input type="text" name="note" style="width:100%;">
+      </label>
+      <button type="submit">Mark resolved</button>
+    </form>
+
+  {% elif job.context.record_snapshot %}
+    <p class="stop">
+      This sender has no persona at all yet. Rule authoring (deciding what
+      fields to extract and how) is a separate, manual step outside this
+      queue — but if you know what these fields should actually say, correct
+      them below. Each correction becomes a candidate gold fixture once
+      promoted (<code>docintel promote-correction</code>) — the eval corpus
+      grows as a side effect of this review, not a separate labelling project.
+    </p>
+    <form method="post" action="{{ url_for('review_correct', job_id=job.id) }}">
+      {% if job.context.record_snapshot.fields %}
+        <table>
+          <thead><tr><th>Field</th><th>Extracted value</th><th>Correction</th></tr></thead>
+          <tbody>
+            {% for name, value in job.context.record_snapshot.fields.items() %}
+              <tr>
+                <td>{{ name }}</td>
+                <td>{{ value if value is not none else '—' }}</td>
+                <td><input type="text" name="field:{{ name }}" value="{{ value if value is not none else '' }}"></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>Nothing was extracted at all — there is nothing here to correct against.</p>
+      {% endif %}
+      <label style="display:block;margin:0.4rem 0;">
+        Reviewer name
+        <input type="text" name="reviewer" required>
+      </label>
+      <label style="display:block;margin:0.4rem 0;">
+        Note (optional)
+        <input type="text" name="note" style="width:100%;">
+      </label>
+      <button type="submit">Save corrections (leave a field unchanged to confirm it)</button>
+    </form>
+  {% else %}
+    <p class="stop">
+      This sender has no persona at all yet. Rule authoring (deciding what
+      fields to extract and how) is a separate, manual step outside this
+      queue — resolving here only clears the job once that's been done by hand.
+    </p>
+    <form method="post" action="{{ url_for('review_resolve', job_id=job.id) }}">
+      <label style="display:block;margin:0.4rem 0;">
+        Reviewer name
+        <input type="text" name="reviewer" required>
+      </label>
+      <label style="display:block;margin:0.4rem 0;">
+        Note (optional)
+        <input type="text" name="note" style="width:100%;">
+      </label>
+      <button type="submit">Mark resolved</button>
+    </form>
+  {% endif %}
+{% endblock %}

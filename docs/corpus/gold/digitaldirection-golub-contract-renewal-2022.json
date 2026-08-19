@@ -1,0 +1,51 @@
+{
+  "gold_id": "digitaldirection-golub-contract-renewal-2022",
+  "source_file": "corpus/contracts/golub-windstream-renewal-2022-08-30.pdf",
+  "pack": "digital-direction",
+  "labelled_by": "corpus-analysis pass, 2026-08-17, real Golub/Windstream contract set",
+  "notes": "A renewal/amendment layered on top of the base 2020 agreement (contract_number 2110613) - one of the real layered contracts docs/BUGS-FEATURES-PRODUCTION.md's open item names. Read in full (5 pages: cover amendment page, signature page, then the referenced quote/schedule pages).",
+  "teaches": [
+    "F20",
+    "F21"
+  ],
+  "classification": {
+    "doc_type": "contract",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 5,
+    "page_roles": [
+      "primary",
+      "supporting",
+      "supporting",
+      "supporting",
+      "supporting"
+    ]
+  },
+  "fields": {
+    "vendor_name": "Kinetic Business by Windstream",
+    "bill_to_name": "The Golub Corporation",
+    "contract_number": "2494434",
+    "supersedes_contract_number": "2110613",
+    "signatory_name": "Don Wheatley",
+    "signatory_title": "VP Information Technology & Security",
+    "signed_date": "2022-08-29"
+  },
+  "assertions": [
+    {
+      "check": "doc_type",
+      "equals": "contract",
+      "note": "An amendment/renewal is still a contract document, not a bill - no total_printed, no line-item table."
+    },
+    {
+      "check": "supersedes_contract_number",
+      "equals": "2110613",
+      "note": "This amendment explicitly amends the base 2020 agreement rather than standing alone - the multi-contract-per-account case the reconciliation design (Phase 6) has to resolve, not guess at."
+    }
+  ],
+  "expected_routing": {
+    "lane": "review",
+    "review_flag": true,
+    "regen_flag": false,
+    "reason": "Backed by a real, active persona (golub-windstream-contract.json) - routing reflects genuine, measured field coverage on this specific document."
+  }
+}

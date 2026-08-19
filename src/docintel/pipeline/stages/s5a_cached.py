@@ -35,8 +35,10 @@ class ApplyCachedRules:
             return ctx
         ctx.log("s5a: apply_cached_rules")
         if ctx.persona is None:
-            # A persona status without a persona means Stage 4 is still a stub
-            # (it becomes real in C7). Nothing to run, and no route to claim.
+            # Defensive: Stage 4 (`PersonaLookup`) only ever sets `persona_status`
+            # to "hit"/"soft_miss" alongside a real persona, never on its own -
+            # this guards the invariant rather than describing a real, reachable
+            # gap in the current pipeline. Nothing to run, and no route to claim.
             return ctx
         ctx = self._factory(ctx.persona).apply(ctx)
         ctx.extraction_route = "5a_cached"

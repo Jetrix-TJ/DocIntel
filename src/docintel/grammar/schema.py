@@ -58,6 +58,9 @@ BASE_ADJUST_OPS: frozenset[str] = frozenset({
     "normalize_credit_sign",
     "subtract_prior_balance_if_present",
     "prefer_current_charges_line",
+    # weight-tiered manufacturing pricing - a second derivation family,
+    # unrelated to telecom F1 (see grammar/ops/pricing.py's own docstring)
+    "derive_price_per_foot",
     # 4.3 consistency - scoring only, never value-changing
     "crosscheck_line_sum",
     "crosscheck_total_composition",

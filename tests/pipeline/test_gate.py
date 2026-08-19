@@ -392,3 +392,137 @@ def test_an_unforced_empty_confidence_map_is_still_low():
     out = _gate(thresholds={}).run(new_context("d", "/x.pdf"))
     assert out.lane == "low"
     assert out.regen_flag is False
+
+
+# ==========================================================================
+# The human-in-the-loop queue: `_enqueue_unknown_basis`
+# ==========================================================================
+
+
+class _SpyJobs:
+    """Records every `enqueue_once` call instead of touching a real store."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def enqueue_once(self, sender_fingerprint, doc_type, kind, context=None, match_key=""):
+        self.calls.append((sender_fingerprint, doc_type, kind, context, match_key))
+        return True
+
+
+def _basis_ctx():
+    ctx = new_context("d", "/x.pdf", sender_fingerprint="northstar|edco", doc_type="standard_invoice")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_tag("unknown_prior_balance_basis")
+    ctx.extracted.set("prior_balance", 298.34, 0.99)
+    ctx.extracted.set("current_charges", 69.62, 0.99)
+    ctx.extracted.set("total_printed", 367.96, 0.99)
+    return ctx
+
+
+def test_the_tag_enqueues_a_prior_balance_basis_job():
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_basis_ctx())
+    assert len(jobs.calls) == 1
+    sender_fingerprint, doc_type, kind, _context, _match_key = jobs.calls[0]
+    assert sender_fingerprint == "northstar|edco"
+    assert doc_type == "standard_invoice"
+    assert kind == "prior_balance_basis"
+
+
+def test_the_job_context_snapshot_carries_only_the_populated_basis_fields():
+    """`payments_credits` is one of the four fields the job snapshots, but this
+    document never extracted it - it must be absent, not present as null."""
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_basis_ctx())
+    _, _, _, context, _match_key = jobs.calls[0]
+    assert context == {"prior_balance": 298.34, "current_charges": 69.62, "total_printed": 367.96}
+    assert "payments_credits" not in context
+
+
+def test_a_decimal_context_value_is_json_safe():
+    from decimal import Decimal
+
+    jobs = _SpyJobs()
+    ctx = _basis_ctx()
+    ctx.extracted.set("prior_balance", Decimal("298.34"), 0.99)
+    _gate(thresholds={}, jobs=jobs).run(ctx)
+    _, _, _, context, _match_key = jobs.calls[0]
+    assert context["prior_balance"] == "298.34"
+    assert isinstance(context["prior_balance"], str)
+
+
+def test_no_tag_means_no_enqueue_even_with_jobs_present():
+    jobs = _SpyJobs()
+    ctx = _basis_ctx()
+    ctx.tags.remove("unknown_prior_balance_basis")
+    _gate(thresholds={}, jobs=jobs).run(ctx)
+    assert jobs.calls == []
+
+
+def test_jobs_none_with_the_tag_present_is_a_safe_no_op():
+    """The default - must not crash just because nothing was queued into."""
+    out = _gate(thresholds={}).run(_basis_ctx())
+    assert out.lane in {"high", "medium", "review", "low"}
+
+
+def test_enqueueing_is_independent_of_lane_routing():
+    """The tag alone does not force review (only `arith_balance_mismatch`, a
+    modifier, does that) - the queue entry and the lane are two separate
+    facts, exactly as `_enqueue_unknown_basis`'s docstring says."""
+    jobs = _SpyJobs()
+    ctx = _basis_ctx()  # confidence is high and nothing else forces review
+    out = _gate(thresholds={}, jobs=jobs).run(ctx)
+    assert len(jobs.calls) == 1
+    assert out.lane == "high"
+
+
+# ==========================================================================
+# The processing profile's follow-up jobs: reconciliation and export
+# ==========================================================================
+
+
+def _profile_ctx(**profile):
+    ctx = new_context("d1", "/x.pdf", sender_fingerprint="northstar|veritiv", doc_type="standard_invoice")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.processing_profile = {"reconciliation": "none", "export": [], **profile}
+    return ctx
+
+
+def test_reconciliation_auto_enqueues_a_document_scoped_job():
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_profile_ctx(reconciliation="auto"))
+    matches = [c for c in jobs.calls if c[2] == "reconciliation_pending"]
+    assert len(matches) == 1
+    sender_fingerprint, _doc_type, _kind, context, match_key = matches[0]
+    assert sender_fingerprint == "northstar|veritiv"
+    assert context == {"document_id": "d1"}
+    assert match_key == "d1"  # per-document, not per-vendor - see the docstring
+
+
+def test_reconciliation_none_enqueues_nothing():
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_profile_ctx(reconciliation="none"))
+    assert [c for c in jobs.calls if c[2] == "reconciliation_pending"] == []
+
+
+def test_export_enqueues_one_job_per_named_layout():
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_profile_ctx(export=["standard", "telecom_detail"]))
+    matches = [c for c in jobs.calls if c[2] == "excel_export_pending"]
+    assert len(matches) == 2
+    layouts = {c[3]["layout"] for c in matches}
+    assert layouts == {"standard", "telecom_detail"}
+    match_keys = {c[4] for c in matches}
+    assert match_keys == {"d1:standard", "d1:telecom_detail"}
+
+
+def test_empty_export_list_enqueues_nothing():
+    jobs = _SpyJobs()
+    _gate(thresholds={}, jobs=jobs).run(_profile_ctx(export=[]))
+    assert [c for c in jobs.calls if c[2] == "excel_export_pending"] == []
+
+
+def test_no_jobs_queue_with_an_auto_profile_is_a_safe_no_op():
+    out = _gate(thresholds={}).run(_profile_ctx(reconciliation="auto", export=["standard"]))
+    assert out.lane in {"high", "medium", "review", "low"}

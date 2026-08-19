@@ -21,6 +21,7 @@ A flat JSON object, `key -> entry`:
     "model": "claude-opus-5",
     "document": "Complete_Beverage_32930.pdf",
     "field_names": ["vendor_name", "invoice_number", "invoice_date", "total_printed"],
+    "field_hints": {"total_printed": "labelled \"Total Amount Due\", in the totals box"},
     "fields": {"total_printed": "1,177.70"},
     "confidence": {"total_printed": 0.82},
     "irregularities": ["handwriting_detected"]
@@ -28,10 +29,12 @@ A flat JSON object, `key -> entry`:
 }
 ```
 
-The key is `sha256(version || source bytes || field names)`, truncated — see
-`CassetteVision.key`. It follows the **document's content**, not its path, so a
-cassette survives the corpus directory moving and goes stale (as a loud miss) the
-moment the PDF itself changes.
+The key is `sha256(version || source bytes || field names || field hints)`,
+truncated — see `CassetteVision.key`. Hints only enter the hash when a call
+actually passes them, so a cassette recorded with none still keys the same way
+it always did. It follows the **document's content**, not its path, so a
+cassette survives the corpus directory moving and goes stale (as a loud miss)
+the moment the PDF itself changes.
 
 `provenance` is the field to read first:
 

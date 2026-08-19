@@ -86,18 +86,30 @@ Line = tuple[float, list[tuple[str, float, float]]]
 
 
 def _shipped_persona() -> dict[str, Any]:
-    """The real `digitaldirection|windstream` persona as shipped.
+    """The real `digitaldirection|windstream` INVOICE persona as shipped.
 
     Read out of the loaded pack rather than re-typed here: a re-typed copy
     would test a copy of the rule, not the rule that ships.
+
+    Filtered on `doc_type` as well as `sender_fingerprint`, not fingerprint
+    alone: since the contract-doc_type work, this carrier ships a SECOND
+    persona under the identical fingerprint (`golub-windstream-contract.json`,
+    `doc_type: "contract"`) - fingerprinting depends only on the carrier's
+    name, not doc_type, by design. Personas load in sorted filename order
+    (`golub-...` sorts before `windstream.json`), so matching on fingerprint
+    alone would silently pick up the contract persona here instead of the
+    real invoice persona this test suite is actually about.
     """
     for pack in load_packs():
         if pack.name != "digitaldirection":
             continue
         for persona in pack.personas():
-            if persona.get("sender_fingerprint") == "digitaldirection|windstream":
+            if (
+                persona.get("sender_fingerprint") == "digitaldirection|windstream"
+                and persona.get("doc_type") == "telecom_bill"
+            ):
                 return persona
-    raise AssertionError("digitaldirection|windstream persona not found in the loaded packs")
+    raise AssertionError("digitaldirection|windstream telecom_bill persona not found in the loaded packs")
 
 
 def _page(lines: list[Line], source: str = "native") -> PageText:

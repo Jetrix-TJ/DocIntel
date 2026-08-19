@@ -1,0 +1,103 @@
+# docintel
+
+Turn a vendor invoice or bill into a confidence-scored structured record — without a human in
+the middle, except for the cases where a human genuinely should be, which the system says so
+about rather than guessing.
+
+## Run your first document
+
+```bash
+pip install -e ".[dev,ui]"
+docintel process path/to/an/invoice.pdf --json
+```
+
+That's the whole loop: read the page, figure out which company it belongs to and what kind of
+document it is, extract the fields that company cares about, apply any business rules that
+decide what's actually owed, and emit one JSON record — always one, even when nothing could be
+extracted (see `disposition` in the output: `processed`, `skipped`, or `dead_letter`).
+
+Not just PDFs: an `.eml` or Outlook `.msg` is unwrapped and every attachment processed in its
+own right, and a `.docx`/`.xlsx` is converted to PDF first (needs LibreOffice installed —
+see `pyproject.toml` for details).
+
+## As a library, in your own code
+
+```python
+from docintel import build_pipeline
+from docintel.adapters.vision.fake import FakeVision  # or a real vision adapter
+
+pipeline = build_pipeline(vision=FakeVision())
+record = pipeline.process(document_id="d1", source_path="invoice.pdf")
+```
+
+**One `Runner` per concurrent worker, not one shared across threads.** A `Runner`
+keeps small mutable state for the documents it processes (an in-run duplicate-detection
+index, a processed-document counter) — safe for one worker calling `.process()`
+repeatedly, not safe for two threads calling `.process()` on the *same* `Runner` at
+once. `build_pipeline()` is cheap to call again per worker (the packs and personas it
+loads are cached process-wide), so the right pattern for a concurrent service is one
+`Runner` per worker/thread, built once and reused for that worker's whole lifetime —
+never a single `Runner` shared across concurrent callers.
+
+## Real-time notification
+
+`docintel` doesn't include an inbox watcher or a webhook receiver — that's your own
+infrastructure's job, whatever it looks like — but `pipeline.process(...)` is a plain synchronous
+call, so wire it into whatever already tells you a document has arrived. To know the *instant* a
+document needs a human, without polling, register a hook before building the pipeline:
+
+```python
+from docintel import build_pipeline, HookRegistry
+from docintel.adapters.vision.fake import FakeVision  # or a real vision adapter
+
+def notify_if_needs_review(ctx, nxt):
+    ctx = nxt(ctx)  # let the pipeline finish deciding lane/review_flag first
+    if ctx.review_flag or ctx.lane == "low":
+        my_own_notifier(ctx.document_id, ctx.lane)  # your Slack/email/webhook — your choice
+    return ctx
+
+hooks = HookRegistry()
+hooks.register("beforeEmit", notify_if_needs_review, pack="my_integration")
+pipeline = build_pipeline(vision=FakeVision(), hooks=hooks)
+```
+
+`beforeEmit` fires after the pipeline has already decided `lane`/`review_flag`/`regen_flag` for
+every document it emits a record for (including skipped and dead-lettered ones), so this hook sees
+the real routing decision, not a guess — and it runs inline, in the same call that processed the
+document, so there's no polling interval to wait out. `docintel` deliberately doesn't pick the
+channel (email/Slack/webhook) for you; that stays your own code, in `my_own_notifier`.
+
+## Onboard your first vendor
+
+Start with **[`docs/onboarding/COMPANY-CONFIG-TEMPLATE.md`](docs/onboarding/COMPANY-CONFIG-TEMPLATE.md)**
+— fill it in with the company's document types and the fields your team actually needs, attach
+one real sample document per type, and hand it to whoever reviews new vendors. No engineering
+background required to fill it in.
+
+For how what you fill in actually turns into a working configuration — and what's automated
+versus what a human always checks — see
+**[`docs/onboarding/CONFIG-SPACE.md`](docs/onboarding/CONFIG-SPACE.md)** or the illustrated version,
+**[`docs/onboarding/ONBOARDING-EXPLAINER.html`](docs/onboarding/ONBOARDING-EXPLAINER.html)** (open
+directly in a browser).
+
+## Go deeper
+
+**[`docs/DOCINTEL-ARCHITECTURE-GUIDE.html`](docs/DOCINTEL-ARCHITECTURE-GUIDE.html)** — the full
+reference: every pipeline stage, how classification and extraction actually work, when and how
+the vision fallback runs, every currently-configured vendor, and how correctness is measured
+against a hand-labelled gold corpus (`docintel replay-gold`). Open it directly in a browser.
+
+## Everyday commands
+
+| Command | What it does |
+|---|---|
+| `docintel process <paths...>` | Run one or more documents through the real pipeline |
+| `docintel serve` | Local web UI — upload one document, see the result, work the review queue |
+| `docintel replay-gold` | Score the labelled corpus — the number that matters when you change anything |
+| `docintel accuracy-report` | The same score, read aloud: percent correct by company and document type, every failure named — hand this to someone who isn't reading code |
+| `docintel queue-status` | How many documents are waiting on a human decision, and for how long |
+| `docintel new-pack` | Scaffold a brand-new company's `pack.json` + a starter persona |
+| `docintel validate-persona` | Self-check a persona file — scaffolded or hand-edited — before asking anyone else to look at it |
+| `docintel draft-gold` | Turn one clean pipeline run into a draft gold fixture — no review-queue correction needed first |
+
+Full command list: `docintel --help`.

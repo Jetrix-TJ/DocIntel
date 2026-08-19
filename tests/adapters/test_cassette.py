@@ -24,7 +24,7 @@ def _write(path, entries: dict) -> None:
 
 
 class Exploding:
-    def extract(self, pages, field_names, *, source_path=None):
+    def extract(self, pages, field_names, *, source_path=None, field_hints=None):
         raise AssertionError("must not be called in replay mode")
 
 
@@ -33,7 +33,7 @@ class Stub:
         self.result = result
         self.calls = 0
 
-    def extract(self, pages, field_names, *, source_path=None):
+    def extract(self, pages, field_names, *, source_path=None, field_hints=None):
         self.calls += 1
         return self.result
 

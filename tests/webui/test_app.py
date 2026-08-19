@@ -10,10 +10,12 @@ import copy
 import io
 import json
 import os
+import tempfile
 
 from docintel.adapters.vision.fake import FakeVision
 from docintel.core.coverage import ScalarSelector
 from docintel.grammar.schema import parse_persona
+from docintel.jobs.store import SQLiteJobQueue
 from docintel.packs.registry import load_packs, register_all
 from docintel.packs.store import PackPersonaStore
 from docintel.pipeline.hooks import HookRegistry
@@ -22,6 +24,12 @@ from docintel.pipeline.stages import build_default_stages, build_pipeline
 from docintel.webui.app import _label, create_app
 
 DTSS_PDF = "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf"
+
+# None of these tests exercise /review, but `create_app` still needs SOME
+# queue for those routes to be wired against - one shared, throwaway,
+# OS-temp-backed queue for the whole module, so a forgotten `jobs=` here never
+# writes into the real, shared `var/jobs.sqlite3` the way omitting it once did.
+_TEST_JOBS = SQLiteJobQueue(os.path.join(tempfile.mkdtemp(), "jobs.sqlite3"))
 
 COMCAST_GOLD = os.path.join(
     "docs", "corpus", "gold", "digitaldirection-comcast-8495444620365242.json"
@@ -80,14 +88,14 @@ def _upload(client, path: str, filename: str | None = None):
 
 
 def test_upload_form_renders():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = app.test_client().get("/")
     assert resp.status_code == 200
     assert b"form" in resp.data.lower()
 
 
 def test_a_clean_document_shows_extracted_fields_and_auto_approved():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     assert resp.status_code == 200
     body = resp.data.decode()
@@ -99,8 +107,35 @@ def test_a_clean_document_shows_extracted_fields_and_auto_approved():
     assert "Auto-approved" in body
 
 
+def test_an_image_upload_is_accepted_not_rejected_at_the_extension_gate(tmp_path):
+    """The upload route used to hardcode `.pdf` as the only acceptable
+    extension - a scanned image now reaches the real pipeline instead of a
+    400 at the door."""
+    from PIL import Image
+
+    png = tmp_path / "scan.png"
+    Image.new("RGB", (850, 1100), (255, 255, 255)).save(png)
+
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
+    resp = _upload(app.test_client(), str(png))
+
+    assert resp.status_code == 200
+    assert b"Only PDF files are accepted" not in resp.data
+
+
+def test_a_genuinely_unsupported_extension_is_still_rejected_with_a_clear_message():
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
+    resp = app.test_client().post(
+        "/process",
+        data={"pdf": (io.BytesIO(b"hello"), "notes.txt")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    assert b"not accepted" in resp.data
+
+
 def test_a_clean_document_shows_company_doc_type_and_persona_used():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
     assert "D.T.S.S" in body  # company, from the printed vendor_name
@@ -110,7 +145,7 @@ def test_a_clean_document_shows_company_doc_type_and_persona_used():
 
 
 def test_a_clean_document_shows_per_field_confidence():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
     assert "Confidence" in body  # column header
@@ -121,7 +156,7 @@ def test_a_clean_document_shows_per_field_confidence():
 
 
 def test_a_non_pdf_is_rejected_before_the_pipeline_runs():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     client = app.test_client()
     resp = client.post(
         "/process",
@@ -133,13 +168,13 @@ def test_a_non_pdf_is_rejected_before_the_pipeline_runs():
 
 
 def test_no_file_is_rejected_before_the_pipeline_runs():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = app.test_client().post("/process", data={}, content_type="multipart/form-data")
     assert resp.status_code == 400
 
 
 def test_a_document_with_no_matching_persona_shows_the_stop_message_only():
-    app = create_app(runner_factory=_no_persona_runner_factory())
+    app = create_app(runner_factory=_no_persona_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     assert resp.status_code == 200
     body = resp.data.decode()
@@ -153,7 +188,7 @@ def test_no_persona_screen_still_shows_doc_type_and_says_no_persona_was_used():
     and the persona line should say plainly that none matched - not be silently
     blank - so a person knows what still needs authoring.
     """
-    app = create_app(runner_factory=_no_persona_runner_factory())
+    app = create_app(runner_factory=_no_persona_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
     assert "standard_invoice" in body
@@ -162,7 +197,7 @@ def test_no_persona_screen_still_shows_doc_type_and_says_no_persona_was_used():
 
 def test_a_collapsed_persona_shows_a_distinct_message_from_no_persona():
     factory, gold = _collapsed_runner_factory()
-    app = create_app(runner_factory=factory)
+    app = create_app(runner_factory=factory, jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), os.path.join("docs", gold["source_file"]))
     assert resp.status_code == 200
     body = resp.data.decode()
@@ -179,7 +214,7 @@ def test_extracted_document_shows_every_declared_field_as_extracted():
     declared = [s.field for s in persona.field_selectors if isinstance(s, ScalarSelector)]
     assert declared, "the test did not achieve the condition it is asserting about"
 
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
 
@@ -205,7 +240,7 @@ def test_a_collapsed_persona_shows_which_declared_fields_are_missing():
         "the test did not achieve the condition it is asserting about"
     )
 
-    app = create_app(runner_factory=factory)
+    app = create_app(runner_factory=factory, jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), os.path.join("docs", gold["source_file"]))
     body = resp.data.decode()
 
@@ -264,7 +299,7 @@ def test_view_passes_through_possible_duplicate_of():
 def test_result_template_renders_the_severe_modifier_class():
     from docintel.webui.app import create_app
 
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     with app.app_context(), app.test_request_context():
         from flask import render_template
 
@@ -289,7 +324,7 @@ def test_result_template_renders_the_severe_modifier_class():
 def test_result_template_renders_the_note_modifier_class():
     from docintel.webui.app import create_app
 
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     with app.app_context(), app.test_request_context():
         from flask import render_template
 
@@ -313,7 +348,7 @@ def test_result_template_renders_the_note_modifier_class():
 def test_result_template_renders_the_duplicate_banner_without_the_opaque_id():
     from docintel.webui.app import create_app
 
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     with app.app_context(), app.test_request_context():
         from flask import render_template
 
@@ -349,8 +384,50 @@ def test_view_record_json_url_round_trips_the_full_record():
 
 
 def test_a_clean_document_offers_a_json_download_link():
-    app = create_app(runner_factory=_real_runner_factory())
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = _upload(app.test_client(), DTSS_PDF)
     body = resp.data.decode()
     assert "Download raw JSON" in body
     assert "data:application/json;charset=utf-8," in body
+
+
+# ==========================================================================
+# Escalated-upload retention (Phase 2 of the evals plan): the upload route's
+# temp file is removed right after processing, so a document that raises a
+# review job needs its source bytes copied somewhere durable BEFORE that -
+# `docintel.evals.corrections` (promote-correction) needs a real PDF later,
+# and by the time a human opens /review the original temp file is long gone.
+# ==========================================================================
+
+
+def _no_persona_runner_factory_with_jobs(jobs):
+    """Same shape as `_no_persona_runner_factory` above, but actually threads
+    `jobs` into the stages, so a hard miss really enqueues - the module-level
+    helper deliberately doesn't, and so never exercises escalation at all."""
+    return lambda: Runner(
+        stages=build_default_stages(vision=FakeVision(), jobs=jobs), hooks=HookRegistry()
+    )
+
+
+def test_an_escalated_upload_retains_its_source_bytes(tmp_path):
+    jobs = SQLiteJobQueue(tmp_path / "jobs.sqlite3")
+    app = create_app(runner_factory=_no_persona_runner_factory_with_jobs(jobs), jobs=jobs)
+    resp = _upload(app.test_client(), DTSS_PDF)
+    assert resp.status_code == 200
+
+    open_jobs = jobs.list_open("persona_authoring")
+    assert len(open_jobs) == 1
+    document_id = open_jobs[0].context["record_snapshot"]["document_id"]
+
+    retained = tmp_path / "eval_corrections" / f"{document_id}.pdf"
+    assert retained.exists()
+    with open(DTSS_PDF, "rb") as fh:
+        assert retained.read_bytes() == fh.read()
+
+
+def test_a_clean_upload_retains_nothing(tmp_path):
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
+    resp = _upload(app.test_client(), DTSS_PDF)
+    assert resp.status_code == 200
+
+    assert not (tmp_path / "eval_corrections").exists()

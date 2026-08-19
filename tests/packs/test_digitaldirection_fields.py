@@ -53,3 +53,47 @@ def test_the_row_classifications_are_not_registered() -> None:
     rest of the derived work rather than added."""
     for name in ("service_type", "charge_type", "row_type"):
         assert name not in fields.FIELDS
+
+
+# ==========================================================================
+# doc_type-awareness (Phase 4): a contract's field shape genuinely differs
+# from a bill's, so `fields_for`/etc. must actually branch on `doc_type`
+# rather than ignoring it (the bug this phase found and fixed).
+# ==========================================================================
+
+
+def test_a_bills_field_set_is_unchanged_by_the_new_contract_branch() -> None:
+    """Regression guard: adding the contract branch must be purely additive."""
+    for doc_type in fields.DOC_TYPES:
+        if doc_type == "contract":
+            continue
+        assert fields.fields_for(doc_type) == fields.FIELDS
+        assert fields.required_fields(doc_type) == fields.REQUIRED
+        assert fields.required_any_of(doc_type) == fields.REQUIRED_ANY_OF
+        assert fields.derived_only_fields(doc_type) == fields.DERIVED_ONLY
+
+
+def test_contract_gets_its_own_field_set_not_the_bill_shaped_one() -> None:
+    assert fields.fields_for("contract") == fields.CONTRACT_FIELDS
+    assert fields.required_fields("contract") == fields.CONTRACT_REQUIRED
+    assert fields.required_any_of("contract") == fields.CONTRACT_REQUIRED_ANY_OF
+    assert fields.derived_only_fields("contract") == fields.CONTRACT_DERIVED_ONLY
+
+
+def test_contract_fields_do_not_overlap_the_bill_shaped_amount_fields() -> None:
+    """A contract carries a contracted rate and a term, never a payable total
+    or a line-item table (corpus-analysis.md F20) - the two field sets should
+    not silently reconverge on the billing vocabulary."""
+    billing_only = {"total_printed", "current_charges", "prior_balance", "balance_due"}
+    assert not (fields.CONTRACT_FIELDS & billing_only)
+
+
+def test_contract_required_is_a_subset_of_contract_fields() -> None:
+    assert fields.CONTRACT_REQUIRED <= fields.CONTRACT_FIELDS
+    for group in fields.CONTRACT_REQUIRED_ANY_OF:
+        assert group, "an empty group can never be satisfied"
+        assert group <= fields.CONTRACT_FIELDS, f"{sorted(group - fields.CONTRACT_FIELDS)} not registered"
+
+
+def test_contract_is_declared_in_doc_types() -> None:
+    assert "contract" in fields.DOC_TYPES

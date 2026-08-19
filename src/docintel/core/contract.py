@@ -116,6 +116,12 @@ def build_record(ctx: JobContext) -> dict[str, Any]:
         "regen_flag": ctx.regen_flag,
         "audit_sample": ctx.audit_sample,
         "lane": ctx.lane,
+        # Not in REQUIRED_KEYS on purpose: validate_record only checks that
+        # required keys are present, so an additive key here cannot break any
+        # existing consumer. Lets the human-in-the-loop review UI show the
+        # exact refusal message an op logged (e.g. derive.py's F1b text)
+        # instead of inventing new copy for the same fact.
+        "events": list(ctx.events),
     }
 
 

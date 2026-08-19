@@ -1,4 +1,4 @@
-"""Filesystem intake: the 'pass any PDF' path.
+"""Filesystem intake: the 'pass any accepted document' path.
 
 An IMAP source slots in behind the same port later without the pipeline changing.
 """
@@ -10,6 +10,7 @@ import os
 from collections.abc import Iterator
 
 from docintel.adapters.intake.port import IntakeItem
+from docintel.extract.convert import ACCEPTED_SUFFIXES
 
 
 def _stable_id(path: str) -> str:
@@ -39,16 +40,20 @@ class FilesystemIntake:
     def _walk(root: str) -> Iterator[IntakeItem]:
         """Walk a directory tree, deepest paths included.
 
-        Recursion is deliberate. A flat listdir leaves a PDF one directory down
-        completely invisible - not skipped, not dead-lettered, not counted in
-        `intaken` - which is the one failure mode this pipeline refuses. os.walk
-        also separates directories from files, so a *directory* named
-        `archive.pdf` is walked into rather than mistaken for a document.
+        Recursion is deliberate. A document one directory down left invisible -
+        not skipped, not dead-lettered, not counted in `intaken` - is the one
+        failure mode this pipeline refuses. os.walk also separates directories
+        from files, so a *directory* named `archive.pdf` is walked into rather
+        than mistaken for a document.
+
+        Filtered against `convert.ACCEPTED_SUFFIXES`, the same constant Stage 2
+        checks - a suffix this walk doesn't yield never reaches Stage 2 at all,
+        so the two lists must stay identical, not just similar.
         """
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames.sort()  # deterministic traversal order
             for name in sorted(filenames):
-                if name.lower().endswith(".pdf"):
+                if os.path.splitext(name)[1].lower() in ACCEPTED_SUFFIXES:
                     yield IntakeItem(
                         _stable_id(os.path.join(dirpath, name)),
                         os.path.join(dirpath, name),

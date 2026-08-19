@@ -1,0 +1,63 @@
+{
+  "rule_version": "v1",
+  "status": "active",
+  "doc_type": "carbon_bar_invoice",
+  "sender_fingerprint": "spt_metals|spt_metals",
+  "notes": "Every raw field lives on its own 'Label: value' line in the Order Detail block, so near-anchor (same row, rightward) reaches every one of them without a table. `total_printed` carries the weight-tiered pricing chain (derive_price_per_foot) the same way a telecom persona's total_printed carries the F1 chain - the printed total is the vendor's own claim, real but not authoritative; the derivation decides what SPT is actually owed from the computed order weight, never from the invoice's own tier claim.",
+  "field_selectors": [
+    {
+      "field": "size_od",
+      "anchor": "Material:",
+      "region": "near-anchor",
+      "pattern": "([0-9]{1,2}\\.[0-9]{1,2}\" OD)",
+      "required": false
+    },
+    {
+      "field": "weight_per_ft",
+      "anchor": "Unit Weight:",
+      "region": "near-anchor",
+      "pattern": "decimal"
+    },
+    {
+      "field": "base_cost_per_lb",
+      "anchor": "Base Cost:",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "footage",
+      "anchor": "Footage Ordered:",
+      "region": "near-anchor",
+      "pattern": "integer"
+    },
+    {
+      "field": "ship_to_state",
+      "anchor": "Ship To State:",
+      "region": "near-anchor",
+      "pattern": "([A-Z]{2})"
+    },
+    {
+      "field": "energy_surcharge",
+      "anchor": "Energy Surcharge:",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "total_printed",
+      "anchor": "TOTAL AMOUNT DUE",
+      "region": "near-anchor",
+      "pattern": "currency",
+      "adjust": [
+        "derive_price_per_foot"
+      ]
+    }
+  ],
+  "layout_fingerprint": {
+    "page_count": {
+      "min": 1,
+      "max": 1
+    },
+    "has_table": false,
+    "text_source": "native"
+  }
+}

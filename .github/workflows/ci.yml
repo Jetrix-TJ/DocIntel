@@ -1,0 +1,121 @@
+name: CI
+
+# Everything docs/BUGS-FEATURES-PRODUCTION.md's Production Plan item 1 asked
+# for and this repo didn't have until now: ruff + mypy + the full test suite
+# on every change, plus the three eval suites recorded and compared against
+# the last main-branch run.
+#
+# Gate policy, stated explicitly (the real design decision Phase 5 of the
+# evals plan named): this gates on REGRESSION vs. the last recorded run on
+# main, not on "100% green". The gold corpus is at 1/15 today - gating on
+# all-green would block every future PR immediately and teach people to
+# route around CI, not fix real drift.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tesseract (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+
+      - name: Install Tesseract (Windows)
+        if: runner.os == 'Windows'
+        run: choco install tesseract --version=5.3.3.20231005 -y
+
+      - name: Install docintel
+        run: pip install -e ".[dev,ui]"
+
+      - name: ruff
+        run: ruff check src
+
+      - name: mypy
+        run: mypy
+
+      - name: pytest
+        run: pytest -q
+
+      # Eval history is per-runner-ephemeral by default; cache it per-branch
+      # so a PR's "candidate" run has a real "baseline" (the last push to
+      # main) to compare against, restored here and saved back only below on
+      # a main push. This is the one part of Phase 5 with no obviously-right
+      # answer (a committed binary DB would diff noisily); a GitHub Actions
+      # cache keyed on a fixed name is simpler and matches "not a hosted
+      # service" - it's always restored (a PR's candidate run needs the same
+      # baseline main just recorded), and only a push to main saves it back.
+      # Eval recording/comparison runs once, on ubuntu-latest only - the
+      # gold-corpus score itself isn't expected to vary by OS the way a raw
+      # path bug would, and running it per matrix leg would mean two
+      # confusingly-separate cache writes and comparisons per push.
+      #
+      # A cache key is immutable once saved - reusing one fixed key across
+      # every main push would mean the SECOND push silently fails to save
+      # (the key would already exist), freezing the baseline at the first
+      # run forever. Save under a unique, per-run key instead, and restore
+      # via the `eval-history-main-` prefix, which resolves to whichever
+      # matching key was created most recently.
+      - name: Restore eval history cache
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/cache/restore@v4
+        with:
+          path: var/eval_history.sqlite3
+          key: eval-history-main-${{ github.run_id }}
+          restore-keys: |
+            eval-history-main-
+
+      # A push to main becomes the new baseline (labelled "main" directly -
+      # `EvalHistoryStore.latest()` always returns the newest row under a
+      # label, so no separate "relabel" step is needed). A PR branch is
+      # always the "candidate" side, compared against whatever "main" run
+      # the cache above just restored.
+      # `eval-gate`/`eval-vision`/`replay-gold` each exit 1 whenever the
+      # corpus isn't 100% green (true today - 1/15 on replay-gold alone) -
+      # that is expected, not a CI failure, per this workflow's own stated
+      # gate policy (regression vs. main, not all-green). Only `eval-compare`
+      # below is allowed to fail the build; `|| true` here stops each
+      # recording command's own "not everything passed" exit code from
+      # doing that instead.
+      - name: Record this run's eval suites
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          RUN_LABEL: ${{ github.ref == 'refs/heads/main' && 'main' || format('pr-{0}', github.sha) }}
+        run: |
+          docintel eval-gate --vision fake --json --record-history --label "$RUN_LABEL" > /dev/null || true
+          docintel eval-vision --vision cassette --json --record-history --label "$RUN_LABEL" > /dev/null || true
+          docintel replay-gold --json --vision cassette --record-history --label "$RUN_LABEL" > /dev/null || true
+
+      - name: Compare against the last main-branch run (if one exists yet)
+        if: matrix.os == 'ubuntu-latest' && github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          for suite in full_pipeline gate_classifier vision_one_shot; do
+            if [ "$(docintel eval-history --suite "$suite" --limit 1000 --json | python -c 'import json,sys; print(any(r["label"]=="main" for r in json.load(sys.stdin)))')" = "True" ]; then
+              echo "Comparing $suite against main..."
+              docintel eval-compare main "pr-${{ github.sha }}" --suite "$suite"
+            else
+              echo "No prior 'main' run recorded for $suite yet - nothing to compare, not a failure."
+            fi
+          done
+
+      - name: Save eval history cache
+        if: matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: var/eval_history.sqlite3
+          key: eval-history-main-${{ github.run_id }}

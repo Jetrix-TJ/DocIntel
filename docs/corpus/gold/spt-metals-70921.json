@@ -1,0 +1,56 @@
+{
+  "gold_id": "spt-metals-70921",
+  "source_file": "SPT_Metals_Invoice_70921.pdf",
+  "pack": "spt_metals",
+  "labelled_by": "spt_metals onboarding exercise, 2026-08-18",
+  "teaches": [
+    "SPT1"
+  ],
+  "notes": "SPT Metals, Inc. - carbon bar distributor, weight-tiered pricing (grammar/ops/pricing.py::derive_price_per_foot), the first pack onboarded with a formula family structurally unrelated to telecom F1. The trap: the invoice's own narrative claims Tier 1 (0-2,000 lb, 1.12x margin), but 700 ft x 3.03 lb/ft = 2,121 lbs is just OVER the 2,000 lb cutoff, so the correct tier is Tier 2 (1.08x). The printed total ($1,712.78) is therefore an OVERCHARGE against the correct total ($1,656.78, a $56.00 / 3.38% difference) - the derivation must price from the computed weight, never from the vendor's own tier claim, exactly the way F1 already refuses to trust a printed total over a composed one.",
+  "classification": {
+    "doc_type": "carbon_bar_invoice",
+    "tags": [],
+    "text_source": "native",
+    "page_count": 1,
+    "page_roles": [
+      "primary"
+    ]
+  },
+  "fields": {
+    "size_od": "3.50\" OD",
+    "weight_per_ft": 3.03,
+    "base_cost_per_lb": 0.63,
+    "footage": 700,
+    "ship_to_state": "NY",
+    "energy_surcharge": 4.15,
+    "total_printed": 1712.78,
+    "total_weight": 2121.0,
+    "weight_tier": "Tier 2",
+    "weight_tier_margin": 1.08,
+    "state_freight_rate": 0.03,
+    "ctl_adder": 0.10
+  },
+  "derived": {
+    "price_per_foot": 2.27,
+    "material_total": 1589.0,
+    "freight": 63.63,
+    "order_total": 1656.78
+  },
+  "assertions": [
+    {
+      "check": "weight_tier_from_computed_weight_not_claimed_tier",
+      "expr": "700 * 3.03 = 2121.00 lbs -> Tier 2 (1.08x), despite the invoice's own 'Tier 1' narrative claim",
+      "equals": "Tier 2"
+    },
+    {
+      "check": "printed_total_overstates_correct_total",
+      "expr": "1712.78 - 1656.78",
+      "equals": 56.0
+    }
+  ],
+  "expected_routing": {
+    "lane": "high",
+    "review_flag": false,
+    "regen_flag": false
+  }
+}

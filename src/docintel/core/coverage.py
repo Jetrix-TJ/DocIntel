@@ -43,6 +43,15 @@ from typing import Protocol, runtime_checkable
 
 from docintel.core.models import JobContext
 
+# Share of a persona's declared selectors that must produce nothing before a
+# document reads as "the rules no longer fit this template" rather than "one
+# field moved". Lives here, not in whichever stage first needed it, because it
+# is a fact about what `miss_share` means - both `s5b_vision`'s escalation
+# check and `s7_gate`'s lane routing compare against this same number, and a
+# stage-5 module importing a stage-7 module's constant would be a
+# backwards-looking dependency for no reason.
+DEFAULT_COLLAPSE_SHARE = 0.60
+
 
 @runtime_checkable
 class ScalarSelector(Protocol):

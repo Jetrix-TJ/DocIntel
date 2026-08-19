@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from docintel.core.models import JobContext
-from docintel.grammar.ops import base, crosscheck, derive, infer
+from docintel.grammar.ops import base, crosscheck, derive, infer, pricing
 
 DocumentOp = Callable[[JobContext], JobContext]
 
@@ -37,6 +37,9 @@ OPS: dict[str, DocumentOp] = {
     "derive_amount_payable": derive.derive_amount_payable,
     "subtract_prior_balance_if_present": derive.subtract_prior_balance_if_present,
     "prefer_current_charges_line": derive.prefer_current_charges_line,
+    # weight-tiered manufacturing pricing - a second derivation family,
+    # unrelated to telecom F1 (see grammar/ops/pricing.py's own docstring)
+    "derive_price_per_foot": pricing.derive_price_per_foot,
     # 4.3 consistency - scoring only, never value-changing
     "crosscheck_line_sum": crosscheck.crosscheck_line_sum,
     "crosscheck_total_composition": crosscheck.crosscheck_total_composition,
@@ -78,6 +81,12 @@ ORDER: tuple[str, ...] = (
     "resolve_carried_balance",
     "subtract_prior_balance_if_present",
     "derive_amount_payable",
+    # No dependency on anything above or below - a self-contained formula
+    # over its own pack-supplied inputs (see pricing.py's own docstring).
+    # Positioned here rather than appended at the very end only because
+    # `test_every_document_op_appears_in_order` requires every OPS name to
+    # appear in ORDER at all, not because relative order matters here.
+    "derive_price_per_foot",
     "infer_currency",
     "resolve_vendor_alias",
     # After the vendor, before the cross-checks: it only reads page text and the

@@ -4,6 +4,31 @@
     "default": "telecom_bill",
     "rungs": [
       {
+        "name": "contract_document",
+        "doc_type": "contract",
+        "_why": "A signed service agreement, amendment, or renewal is not a bill: it carries a contracted rate and a term, never a payable total or a line-item table (corpus-analysis.md F20). Confirmed against the real Golub/Windstream contract set (docs/corpus/contracts/) and against every existing gold/real invoice in this corpus - none print 'service agreement', 'this amendment', or a Quote# on their primary page. Placed above credit_memo_title/suspension_without_current_charges because contract vocabulary is more specific and must not be shadowed by them. The absence check mirrors suspension_without_current_charges's own pattern: a bill that happens to reference 'this agreement' in boilerplate terms-and-conditions must still be a bill.",
+        "when": {
+          "all_of": [
+            {
+              "signal": "pattern_in_scope",
+              "params": {
+                "pattern": "\\b(service agreement|this amendment|amendment to (the )?agreement|amendment to windstream agreement|master service agreement|quote\\s*#)\\b",
+                "scope": "primary"
+              }
+            },
+            {
+              "not": {
+                "signal": "pattern_in_scope",
+                "params": {
+                  "pattern": "\\b(total amount due|current charges|please pay|subtotal current charges)\\b",
+                  "scope": "primary"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
         "name": "credit_memo_title",
         "doc_type": "credit_memo",
         "_defect": "KNOWN, PARKED. This is a bare search while the rung is named credit_memo_title - a bill that merely MENTIONS a credit memo is classified as one, which on this pack loads the wrong persona. Northstar's identical rung was fixed with title_near_top on 2026-08-06 and this one never was. Latent: 0 of 7 telecom second-samples print the wording. Fixing it is now a two-line edit to this file.",
