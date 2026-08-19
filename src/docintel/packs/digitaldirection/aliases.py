@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import re
 
-from docintel.packs.registry import normalize_name
+from docintel.packs.registry import load_extra_aliases, normalize_name
+
+PACK_NAME = "digitaldirection"
 
 LITERAL_ALIASES: dict[str, str] = {
     "lumen": "lumen",
@@ -42,6 +44,13 @@ LITERAL_ALIASES: dict[str, str] = {
     "comcast": "comcast",
     "comcast business": "comcast",
     "centracom": "centracom",
+    # Spectrum bills for its enterprise/business line remit to the legal
+    # entity (F5's "payee wins") - Charter Communications - while the printed
+    # customer-facing brand is Spectrum/Spectrum Business. One carrier either
+    # way (a real City of Dublin bill: docs/corpus - "Spectrum - 133432501.pdf").
+    "spectrum": "spectrum",
+    "spectrum business": "spectrum",
+    "charter communications": "spectrum",
 }
 
 PATTERN_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -53,6 +62,8 @@ PATTERN_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\blumen\b"), "lumen"),
     (re.compile(r"\bcomcast\b"), "comcast"),
     (re.compile(r"\bcentracom\b"), "centracom"),
+    (re.compile(r"\bspectrum\b"), "spectrum"),
+    (re.compile(r"\bcharter communications\b"), "spectrum"),
 )
 
 KNOWN_CARRIERS: frozenset[str] = frozenset(LITERAL_ALIASES.values())
@@ -75,6 +86,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "comcast": "Comcast Business",
     "lumen": "Lumen",
     "windstream": "Kinetic Business by Windstream",
+    "spectrum": "Spectrum Business",
 }
 
 # Sender-email domain -> canonical key, for the fallback in
@@ -126,6 +138,19 @@ def _lookup(printed: str) -> str | None:
         return literal
     for pattern, key in PATTERN_ALIASES:
         if pattern.search(normalized):
+            return key
+    # A new carrier from an external contributor's own directory
+    # (DOCINTEL_EXTRA_PERSONAS_DIR) - substring/word-boundary matched, same as
+    # PATTERN_ALIASES above, because `printed` here is realistically the
+    # WHOLE primary-page text (`canonical`'s only real caller passes
+    # `registry.primary_text(ctx)`), and an exact-match `.get()` the way
+    # LITERAL_ALIASES uses it would almost never fire against a multi-line
+    # blob. The contributor still only ever writes a plain company name -
+    # this is the same matching DataPack._canonical_vendor already does for
+    # a data-only pack's own aliases.literal table.
+    for name, key in load_extra_aliases(PACK_NAME).items():
+        needle = normalize_name(name)
+        if needle and re.search(rf"\b{re.escape(needle)}\b", normalized):
             return key
     return None
 

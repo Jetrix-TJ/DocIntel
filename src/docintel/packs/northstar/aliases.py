@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import re
 
-from docintel.packs.registry import normalize_name
+from docintel.packs.registry import load_extra_aliases, normalize_name
+
+PACK_NAME = "northstar"
 
 # Normalized printed name -> canonical key. Order is irrelevant; longest match
 # is not attempted, because these are whole-name comparisons rather than
@@ -85,6 +87,17 @@ def _lookup(printed: str) -> str | None:
         return literal
     for pattern, key in PATTERN_ALIASES:
         if pattern.search(normalized):
+            return key
+    # A new vendor from an external contributor's own directory
+    # (DOCINTEL_EXTRA_PERSONAS_DIR) - substring/word-boundary matched, same as
+    # PATTERN_ALIASES above, since `printed` here is realistically the WHOLE
+    # primary-page text and an exact-match `.get()` the way LITERAL_ALIASES
+    # uses it would almost never fire against a multi-line blob. See
+    # digitaldirection.aliases._lookup's identical comment for the full
+    # reasoning - this is the same fix, same pack shape.
+    for name, key in load_extra_aliases(PACK_NAME).items():
+        needle = normalize_name(name)
+        if needle and re.search(rf"\b{re.escape(needle)}\b", normalized):
             return key
     return None
 

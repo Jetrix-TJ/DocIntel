@@ -60,6 +60,22 @@ def _primary_text(ctx: JobContext) -> str:
     return primary_text(ctx)
 
 
+def _load_extra_personas(pack_name: str) -> list[dict[str, Any]]:
+    """`registry.load_extra_personas`, imported lazily - same cycle reason as
+    `_primary_text` above."""
+    from docintel.packs.registry import load_extra_personas
+
+    return load_extra_personas(pack_name)
+
+
+def _load_extra_aliases(pack_name: str) -> dict[str, str]:
+    """`registry.load_extra_aliases`, imported lazily - same cycle reason as
+    `_primary_text` above."""
+    from docintel.packs.registry import load_extra_aliases
+
+    return load_extra_aliases(pack_name)
+
+
 class DataPack:
     """The `registry.Pack` protocol, implemented from a spec dict."""
 
@@ -172,12 +188,17 @@ class DataPack:
         session had to restart the process to see its own edit."""
         out: list[dict[str, Any]] = []
         directory = os.path.join(self.directory, "personas")
-        if not os.path.isdir(directory):
-            return out
-        for filename in sorted(os.listdir(directory)):
-            if filename.endswith(".json"):
-                with open(os.path.join(directory, filename)) as fh:
-                    out.append(json.load(fh))
+        if os.path.isdir(directory):
+            for filename in sorted(os.listdir(directory)):
+                if filename.endswith(".json"):
+                    with open(os.path.join(directory, filename)) as fh:
+                        out.append(json.load(fh))
+        # A vendor from a directory the CALLER owns (DOCINTEL_EXTRA_PERSONAS_DIR)
+        # - lets a third party extend even a shared, community data pack's own
+        # vendor list without editing its pack.json/personas/ at all. See
+        # registry.load_extra_personas's own docstring; `spt_metals` (a thin
+        # wrapper delegating straight to a DataPack) gets this for free.
+        out.extend(_load_extra_personas(self.name))
         return out
 
     # -- vendor fingerprint ---------------------------------------------------
@@ -185,13 +206,15 @@ class DataPack:
     def _canonical_vendor(self, ctx: JobContext) -> str | None:
         """The canonical vendor key for this document, from data alone.
 
-        Matches each `(printed, canonical)` pair in `aliases.literal` against
-        the primary-page text - substring, word-boundary safe, on normalized
-        names - so a pack author writes a plain company name, never a regex.
-        This is the same matching power `northstar.aliases`' `PATTERN_ALIASES`
-        gives it (its own `LITERAL_ALIASES` alone would need an exact
-        whole-page match to fire, which real page text never gives it); here
-        it comes for free from a name string.
+        Matches each `(printed, canonical)` pair in `aliases.literal`, merged
+        with any external `DOCINTEL_EXTRA_PERSONAS_DIR` overlay
+        (`registry.load_extra_aliases`), against the primary-page text -
+        substring, word-boundary safe, on normalized names - so a pack author
+        writes a plain company name, never a regex. This is the same matching
+        power `northstar.aliases`' `PATTERN_ALIASES` gives it (its own
+        `LITERAL_ALIASES` alone would need an exact whole-page match to fire,
+        which real page text never gives it); here it comes for free from a
+        name string.
 
         Falls back to this pack's own single shipped persona when nothing
         matched and there is exactly one - the common case for a newly
@@ -204,7 +227,8 @@ class DataPack:
         """
         text = normalize_name(_primary_text(ctx))
         if text:
-            for printed, canonical in self._aliases.items():
+            merged_aliases = {**self._aliases, **_load_extra_aliases(self.name)}
+            for printed, canonical in merged_aliases.items():
                 needle = normalize_name(printed)
                 if needle and re.search(rf"\b{re.escape(needle)}\b", text):
                     return canonical

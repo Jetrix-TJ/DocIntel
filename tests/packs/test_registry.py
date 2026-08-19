@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from docintel.core.models import PageMeta, PageText, Word, new_context
 from docintel.grammar.schema import Pack as GrammarPack
-from docintel.packs.registry import Pack, load_basis_overlay, load_packs, register_all, resolve_pack
+from docintel.packs.registry import (
+    Pack,
+    load_basis_overlay,
+    load_extra_aliases,
+    load_extra_personas,
+    load_packs,
+    register_all,
+    resolve_pack,
+)
 from docintel.pipeline.hooks import SOCKETS, HookRegistry
 
 
@@ -274,3 +282,131 @@ def test_the_overlay_mechanism_is_symmetric_on_the_digitaldirection_pack(
     out = dd_conventions.apply_prior_balance_basis(ctx)
     assert out.extracted.get("prior_balance_basis") == "gross"
     assert "unknown_prior_balance_basis" not in out.tags
+
+
+# ==========================================================================
+# `load_extra_personas` / `load_extra_aliases` - the external, third-party
+# vendor extension point for an ALREADY-REGISTERED shipped pack, generalizing
+# `load_basis_overlay`'s own "external, gitignored, read-fresh" discipline to
+# personas and alias tables.
+# ==========================================================================
+
+
+def test_extra_personas_is_empty_when_the_env_var_is_unset(monkeypatch) -> None:
+    """The common case for every existing caller - zero behavior change."""
+    monkeypatch.delenv("DOCINTEL_EXTRA_PERSONAS_DIR", raising=False)
+    assert load_extra_personas("digitaldirection") == []
+
+
+def test_extra_personas_is_empty_when_the_pack_subdirectory_does_not_exist(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+    assert load_extra_personas("digitaldirection") == []
+
+
+def test_extra_personas_reads_every_json_file_in_the_packs_own_subdirectory(tmp_path, monkeypatch) -> None:
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "spectrum.json").write_text(
+        '{"sender_fingerprint": "digitaldirection|spectrum", "status": "draft"}'
+    )
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    out = load_extra_personas("digitaldirection")
+
+    assert out == [{"sender_fingerprint": "digitaldirection|spectrum", "status": "draft"}]
+
+
+def test_extra_personas_skips_the_aliases_overlay_file(tmp_path, monkeypatch) -> None:
+    """`aliases.local.json` lives in the SAME per-pack directory as personas -
+    it must never be misread as a persona itself."""
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "spectrum.json").write_text('{"sender_fingerprint": "digitaldirection|spectrum"}')
+    (directory / "aliases.local.json").write_text('{"spectrum": "spectrum"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    out = load_extra_personas("digitaldirection")
+
+    assert out == [{"sender_fingerprint": "digitaldirection|spectrum"}]
+
+
+def test_extra_personas_only_returns_the_named_packs_own_subdirectory(tmp_path, monkeypatch) -> None:
+    """A vendor placed under `northstar/` must never leak into
+    `digitaldirection`'s own persona list, or vice versa."""
+    (tmp_path / "northstar").mkdir()
+    (tmp_path / "northstar" / "acme.json").write_text('{"sender_fingerprint": "northstar|acme"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    assert load_extra_personas("digitaldirection") == []
+    assert load_extra_personas("northstar") == [{"sender_fingerprint": "northstar|acme"}]
+
+
+def test_extra_aliases_is_empty_when_the_env_var_is_unset(monkeypatch) -> None:
+    monkeypatch.delenv("DOCINTEL_EXTRA_PERSONAS_DIR", raising=False)
+    assert load_extra_aliases("digitaldirection") == {}
+
+
+def test_extra_aliases_reads_the_packs_own_overlay_file(tmp_path, monkeypatch) -> None:
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text(
+        '{"spectrum": "spectrum", "charter communications": "spectrum"}'
+    )
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    assert load_extra_aliases("digitaldirection") == {
+        "spectrum": "spectrum",
+        "charter communications": "spectrum",
+    }
+
+
+def test_extra_aliases_malformed_json_is_treated_as_no_overlay(tmp_path, monkeypatch) -> None:
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text("{not valid json")
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    assert load_extra_aliases("digitaldirection") == {}
+
+
+def test_digitaldirection_resolves_a_carrier_only_known_through_the_overlay(tmp_path, monkeypatch) -> None:
+    """Proves the real consumer, not just the loader: `aliases.canonical`
+    must actually find a name that ONLY exists in the external overlay -
+    word-boundary matched against real, whole-page text, the same way
+    PATTERN_ALIASES already works, not an exact `.get()` that would never
+    fire against a multi-line blob."""
+    import docintel.packs.digitaldirection.aliases as dd_aliases
+
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text('{"spectrum business": "spectrum"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    page_text = "Some Company\nThank you for choosing Spectrum Business for enterprise.\nTotal: $1.00"
+    assert dd_aliases.canonical(page_text) == "spectrum"
+
+
+def test_digitaldirection_personas_include_the_overlay_ones(tmp_path, monkeypatch) -> None:
+    from docintel.packs.digitaldirection import PACK as dd_pack
+
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "spectrum.json").write_text(
+        '{"sender_fingerprint": "digitaldirection|spectrum", "status": "draft"}'
+    )
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    fingerprints = {p["sender_fingerprint"] for p in dd_pack.personas()}
+    assert "digitaldirection|spectrum" in fingerprints
+
+
+def test_northstar_resolves_a_vendor_only_known_through_the_overlay(tmp_path, monkeypatch) -> None:
+    import docintel.packs.northstar.aliases as ns_aliases
+
+    directory = tmp_path / "northstar"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text('{"acme widgets": "acme_widgets"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    page_text = "Acme Widgets Inc\n123 Main St\nInvoice #1\nTotal: $1.00"
+    assert ns_aliases.canonical(page_text) == "acme_widgets"

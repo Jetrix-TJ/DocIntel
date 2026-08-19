@@ -27,6 +27,7 @@ import os
 from typing import Any
 
 from docintel.core.models import JobContext
+from docintel.packs import claims, registry
 from docintel.packs.digitaldirection import (
     aliases,
     conventions,
@@ -36,7 +37,6 @@ from docintel.packs.digitaldirection import (
     references,
     thresholds,
 )
-from docintel.packs import claims
 from docintel.pipeline.hooks import HookRegistry
 
 PERSONA_DIR = os.path.join(os.path.dirname(__file__), "personas")
@@ -121,13 +121,16 @@ class DigitalDirectionPack:
 
     def personas(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
-        if not os.path.isdir(PERSONA_DIR):
-            return out
-        for filename in sorted(os.listdir(PERSONA_DIR)):
-            if not filename.endswith(".json"):
-                continue
-            with open(os.path.join(PERSONA_DIR, filename)) as fh:
-                out.append(json.load(fh))
+        if os.path.isdir(PERSONA_DIR):
+            for filename in sorted(os.listdir(PERSONA_DIR)):
+                if not filename.endswith(".json"):
+                    continue
+                with open(os.path.join(PERSONA_DIR, filename)) as fh:
+                    out.append(json.load(fh))
+        # A new carrier's persona, from a directory the CALLER owns - see
+        # registry.load_extra_personas's own docstring for why this lives
+        # outside the installed package rather than beside PERSONA_DIR.
+        out.extend(registry.load_extra_personas(self.name))
         return out
 
     def register_hooks(self, registry: HookRegistry) -> None:

@@ -67,7 +67,12 @@ def build_default_stages(
     ]
 
 
-def build_pipeline(vision: object, jobs: object | None = None, hooks: object | None = None) -> object:
+def build_pipeline(
+    vision: object,
+    jobs: object | None = None,
+    hooks: object | None = None,
+    extra_packs: list[object] | None = None,
+) -> object:
     """A Runner with every pack loaded, its hooks registered and its personas indexed.
 
     One function so the three things that must agree cannot drift: the packs whose
@@ -89,6 +94,18 @@ def build_pipeline(vision: object, jobs: object | None = None, hooks: object | N
     hooks and the packs' hooks coexist instead of the caller's being silently
     discarded. Omitting `hooks` reproduces the old behavior exactly: a fresh
     registry with only the packs' own hooks on it.
+
+    `extra_packs`, if given, is a list of caller-supplied `Pack`-protocol objects
+    (e.g. `docintel.packs.datapack.load_pack_file("my_packs/acme/pack.json")`)
+    appended after the shipped packs. This is the extension point for a wholly
+    new company that no shipped pack claims at all - the caller's `pack.json`/
+    `personas/` live entirely in their own project, never inside this installed
+    package, so nothing here needs editing or upgrading in lockstep. For adding
+    a new vendor to an EXISTING shipped pack instead (e.g. a new carrier under
+    `digitaldirection`), see `DOCINTEL_EXTRA_PERSONAS_DIR`
+    (`registry.load_extra_personas`/`load_extra_aliases`) - a different
+    extension point, since that data has to reach a pack already in this list,
+    not arrive as a new entry in it.
     """
     from docintel.export import layout_names
     from docintel.packs.registry import load_packs, register_all
@@ -96,7 +113,7 @@ def build_pipeline(vision: object, jobs: object | None = None, hooks: object | N
     from docintel.pipeline.hooks import HookRegistry
     from docintel.pipeline.runner import Runner
 
-    packs = load_packs()
+    packs = load_packs() + list(extra_packs or [])
     hooks = hooks if hooks is not None else HookRegistry()
     register_all(hooks, packs)
     return Runner(

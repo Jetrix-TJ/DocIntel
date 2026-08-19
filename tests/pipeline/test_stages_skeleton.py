@@ -283,3 +283,50 @@ def test_build_pipeline_without_hooks_reproduces_old_behavior():
     runner = build_pipeline(vision=FakeVision())
     rec = runner.process("d1", CORPUS)
     validate_record(rec)
+
+
+def _throwaway_pack(directory):
+    """A minimal, valid `DataPack` for testing `extra_packs` - not a fixture
+    from disk, since the test only needs the object to exist and be present
+    in `Classify.packs`, never to actually claim a real document."""
+    from docintel.packs.datapack import DataPack
+
+    spec = {
+        "name": "acme_widgets",
+        "doc_types": ["standard_invoice"],
+        "fields": {"standard_invoice": {"all": [], "required": [], "any_of": [], "derived_only": []}},
+        "claim": {
+            "rules": [{"kind": "markers", "scope": "primary", "values": ["acme widgets"]}],
+            "vetoes": [],
+        },
+        "ladder": {
+            "default": "standard_invoice",
+            "rungs": [{
+                "name": "r", "doc_type": "standard_invoice",
+                "when": {"signal": "pattern_in_scope", "params": {"pattern": "never-matches", "scope": "primary"}},
+            }],
+        },
+    }
+    return DataPack(spec, directory=str(directory))
+
+
+def test_build_pipeline_appends_extra_packs_to_the_shipped_ones(tmp_path):
+    """The extension point for a wholly new company no shipped pack claims at
+    all (see `registry.load_extra_personas`/`load_extra_aliases` for the
+    OTHER extension point: a new vendor inside an already-shipped pack)."""
+    pack = _throwaway_pack(tmp_path)
+
+    runner = build_pipeline(vision=FakeVision(), extra_packs=[pack])
+
+    classify = next(s for s in runner.stages if s.name == "classify")
+    assert pack in classify.packs
+    assert any(p.name == "northstar" for p in classify.packs), "shipped packs must still be present"
+
+
+def test_build_pipeline_extra_packs_defaults_to_no_change():
+    """Omitting `extra_packs` must still process a document exactly as
+    before - the new parameter is purely additive, same discipline as
+    `hooks=`."""
+    runner = build_pipeline(vision=FakeVision())
+    rec = runner.process("d1", CORPUS)
+    validate_record(rec)

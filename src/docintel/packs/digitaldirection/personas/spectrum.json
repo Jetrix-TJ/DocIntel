@@ -1,0 +1,70 @@
+{
+  "rule_version": "v1",
+  "status": "draft",
+  "doc_type": "telecom_bill",
+  "sender_fingerprint": "digitaldirection|spectrum",
+  "notes": "First draft against one real bill (City of Dublin, Spectrum Business Internet, invoice 133432501081425). The bill-to (managed client) occupies the top-left position a vendor's own letterhead normally would - Spectrum's own brand only appears mid-page ('Thank you for choosing Spectrum Business'), so vendor_name reads that line rather than top-left. Not yet checked against a second Spectrum bill from a different managed client - status stays draft until it is.",
+  "field_selectors": [
+    {
+      "field": "vendor_name",
+      "anchor": "Thank you for choosing",
+      "region": "near-anchor",
+      "pattern": "(Spectrum Business|Spectrum)"
+    },
+    {
+      "field": "bill_to_name",
+      "region": "top-left",
+      "pattern": "text"
+    },
+    {
+      "field": "invoice_number",
+      "anchor": "Invoice Number:",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "account_number",
+      "anchor": "Account Number:",
+      "region": "near-anchor",
+      "pattern": "text"
+    },
+    {
+      "field": "bill_date",
+      "anchor": "Invoice Date:",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"]
+    },
+    {
+      "field": "due_date",
+      "anchor": "Due Date:",
+      "region": "near-anchor",
+      "pattern": "date",
+      "adjust": ["normalize_date_iso"]
+    },
+    {
+      "field": "prior_balance",
+      "anchor": "Previous Statement Balance",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "payments_credits",
+      "anchor": "Payments",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "current_charges",
+      "anchor": "Current Charges Subtotal",
+      "region": "near-anchor",
+      "pattern": "currency"
+    },
+    {
+      "field": "total_printed",
+      "anchor": "BALANCE DUE",
+      "region": "near-anchor",
+      "pattern": "currency"
+    }
+  ]
+}

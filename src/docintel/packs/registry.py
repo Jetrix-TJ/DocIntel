@@ -248,6 +248,81 @@ def load_basis_overlay(pack_dir: str) -> dict[str, str]:
     return {str(k): str(v) for k, v in data.items()}
 
 
+# Same discipline as `load_basis_overlay` above, generalized to personas and
+# alias tables: a directory the CALLER owns (never inside this installed
+# package), read fresh on every call, opt-in via an env var, empty/missing
+# means zero behavior change. This is the extension point for adding a new
+# vendor to an ALREADY-REGISTERED shipped pack (`northstar`, `digitaldirection`,
+# `spt_metals`) without editing installed source or monkey-patching module
+# globals at runtime - both of which work today but neither of which this
+# project promises to keep stable across a `pip install --upgrade`.
+#
+# For a wholly new company no shipped pack claims at all, see
+# `build_pipeline(extra_packs=...)` instead - a different extension point,
+# since that data arrives as a new pack, not new data for an existing one.
+_EXTRA_PERSONAS_ENV_VAR = "DOCINTEL_EXTRA_PERSONAS_DIR"
+
+# The one reserved filename in a pack's overlay directory - `load_extra_aliases`
+# reads it as the alias dict, so `load_extra_personas` must skip it rather than
+# trying to parse it as a persona (every OTHER `*.json` file in the same
+# directory is a persona, same layout `DataPack.personas()` already uses).
+_ALIASES_OVERLAY_FILENAME = "aliases.local.json"
+
+
+def load_extra_personas(pack_name: str) -> list[dict[str, Any]]:
+    """Personas from `$DOCINTEL_EXTRA_PERSONAS_DIR/<pack_name>/*.json`.
+
+    Same shape and the same "read from disk every call" discipline as
+    `DataPack.personas()` - a caller's own persona is data, not code, and a
+    cache would mean they had to restart their process to see their own edit.
+    """
+    base = os.environ.get(_EXTRA_PERSONAS_ENV_VAR)
+    if not base:
+        return []
+    directory = os.path.join(base, pack_name)
+    if not os.path.isdir(directory):
+        return []
+    out: list[dict[str, Any]] = []
+    for filename in sorted(os.listdir(directory)):
+        if filename == _ALIASES_OVERLAY_FILENAME:
+            continue
+        if filename.endswith(".json"):
+            with open(os.path.join(directory, filename)) as fh:
+                out.append(json.load(fh))
+    return out
+
+
+def load_extra_aliases(pack_name: str) -> dict[str, str]:
+    """A printed-name -> canonical-key dict from
+    `$DOCINTEL_EXTRA_PERSONAS_DIR/<pack_name>/aliases.local.json`.
+
+    The caller writes a plain company name, never a pattern - the same reason
+    `datapack.DataPack`'s own `aliases.literal` is a plain dict rather than a
+    regex table. Each consumer (`digitaldirection.aliases._lookup`,
+    `northstar.aliases._lookup`, `DataPack._canonical_vendor`) still matches
+    it as a word-boundary substring against the whole primary-page text, not
+    an exact key lookup - see those functions' own docstrings for why an
+    exact match would almost never fire. A carrier whose printed name
+    genuinely needs real regex matching (state-specific entities, OCR-mangled
+    brands) still needs a code change to that pack's own `PATTERN_ALIASES`,
+    the same as it would for any shipped vendor.
+    """
+    base = os.environ.get(_EXTRA_PERSONAS_ENV_VAR)
+    if not base:
+        return {}
+    path = os.path.join(base, pack_name, _ALIASES_OVERLAY_FILENAME)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items()}
+
+
 def all_text(ctx: JobContext) -> str:
     """Every page. For reference patterns, which legitimately run everywhere."""
     return "\n".join(page.text for page in ctx.pages)
