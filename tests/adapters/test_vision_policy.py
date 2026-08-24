@@ -146,3 +146,52 @@ def test_a_flag_outside_the_observable_set_is_dropped(flag):
 def test_duplicate_flags_are_collapsed_in_order():
     result = VisionResult(irregularities=["high_skew", "handwriting_detected", "high_skew"])
     assert sanitize(result, []).irregularities == ["high_skew", "handwriting_detected"]
+
+
+# -- tables (line items) -----------------------------------------------------
+
+
+def test_only_a_requested_table_survives():
+    result = VisionResult(row_groups={"line_items": [{"amount": "1.00"}], "charges": [{"a": "1"}]})
+    cleaned = sanitize(result, [], {"line_items": ["amount"]})
+    assert set(cleaned.row_groups) == {"line_items"}
+
+
+def test_only_declared_columns_survive_in_each_row():
+    """Same rule-1 allowlist reasoning as scalar fields, one level down: a
+    model returning an extra, unrequested column must not leak it through."""
+    result = VisionResult(row_groups={"line_items": [{"amount": "1.00", "notes": "chatty"}]})
+    cleaned = sanitize(result, [], {"line_items": ["amount"]})
+    assert cleaned.row_groups["line_items"] == [{"amount": "1.00"}]
+
+
+def test_a_missing_cell_is_an_empty_string_not_a_dropped_key():
+    """Unlike a scalar field (where absence means the field itself is
+    missing), a blank CELL in a real row is a legitimate value - the row
+    still exists, so every declared column stays present on it."""
+    result = VisionResult(row_groups={"line_items": [{"amount": "1.00"}]})
+    cleaned = sanitize(result, [], {"line_items": ["amount", "description"]})
+    assert cleaned.row_groups["line_items"] == [{"amount": "1.00", "description": ""}]
+
+
+def test_a_non_dict_row_is_dropped_not_raised():
+    result = VisionResult(row_groups={"line_items": ["not a row", {"amount": "1.00"}]})
+    cleaned = sanitize(result, [], {"line_items": ["amount"]})
+    assert cleaned.row_groups["line_items"] == [{"amount": "1.00"}]
+
+
+def test_a_non_list_table_value_is_dropped_not_raised():
+    result = VisionResult(row_groups={"line_items": "not a list"})  # type: ignore[dict-item]
+    cleaned = sanitize(result, [], {"line_items": ["amount"]})
+    assert cleaned.row_groups["line_items"] == []
+
+
+def test_a_table_that_was_not_requested_is_absent_even_if_the_model_supplied_one():
+    result = VisionResult(row_groups={"secret_table": [{"a": "1"}]})
+    cleaned = sanitize(result, [], {"line_items": ["amount"]})
+    assert cleaned.row_groups == {"line_items": []}
+
+
+def test_no_table_requests_means_no_row_groups_at_all():
+    result = VisionResult(row_groups={"line_items": [{"amount": "1.00"}]})
+    assert sanitize(result, ["a"]).row_groups == {}

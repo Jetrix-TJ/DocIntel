@@ -1,3 +1,5 @@
+from northstar import PACK as NORTHSTAR_PACK
+
 from docintel.adapters.vision.fake import FakeVision
 from docintel.core.contract import validate_record
 from docintel.core.models import new_context
@@ -553,7 +555,7 @@ def test_build_pipeline_still_registers_pack_hooks_alongside_a_caller_supplied_r
     freshly created here.
     """
     hooks = HookRegistry()
-    build_pipeline(vision=FakeVision(), hooks=hooks)
+    build_pipeline(vision=FakeVision(), hooks=hooks, extra_packs=[NORTHSTAR_PACK])
 
     assert hooks.registered("classifySignals") != []
 
@@ -594,14 +596,23 @@ def _throwaway_pack(directory):
 def test_build_pipeline_appends_extra_packs_to_the_shipped_ones(tmp_path):
     """The extension point for a wholly new company no shipped pack claims at
     all (see `registry.load_extra_personas`/`load_extra_aliases` for the
-    OTHER extension point: a new vendor inside an already-shipped pack)."""
+    OTHER extension point: a new vendor inside an already-shipped pack).
+
+    No pack ships by default anymore (`PACK_MODULES`/`PACK_FILES` are both
+    empty), so "appends to the shipped ones" is proven against a real
+    shipped-pack STAND-IN (`extra_packs` given twice, in list order) rather
+    than an actual shipped pack - the mechanism under test is that
+    `extra_packs` EXTENDS whatever `load_packs()` returns, never replaces it,
+    which holds just as true when that list is empty.
+    """
     pack = _throwaway_pack(tmp_path)
 
-    runner = build_pipeline(vision=FakeVision(), extra_packs=[pack])
+    runner = build_pipeline(vision=FakeVision(), extra_packs=[NORTHSTAR_PACK, pack])
 
     classify = next(s for s in runner.stages if s.name == "classify")
     assert pack in classify.packs
-    assert any(p.name == "northstar" for p in classify.packs), "shipped packs must still be present"
+    assert NORTHSTAR_PACK in classify.packs
+    assert list(classify.packs) == [NORTHSTAR_PACK, pack], "extra_packs order is preserved, nothing dropped"
 
 
 def test_build_pipeline_extra_packs_defaults_to_no_change():

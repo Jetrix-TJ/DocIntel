@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import os
 
-from docintel.adapters.vision.hints import field_names_for_persona, hints_for_persona
+from docintel.adapters.vision.hints import (
+    field_names_for_persona,
+    hints_for_persona,
+    table_hints_for_persona,
+    table_requests_for_persona,
+    vision_type_prose,
+)
 from docintel.core import coverage
 from docintel.core.confidence import MODIFIERS
 from docintel.core.models import JobContext
@@ -53,17 +59,37 @@ def _collapsed(ctx: JobContext) -> bool:
     return cov.collapsed
 
 
+def _pack_vision_defaults(ctx: JobContext) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    """`(ctx.pack.vision_defaults(ctx.doc_type))`, or `({}, {})` when there is
+    no matched pack, no doc_type yet, or the pack declares this method at all
+    (see `DataPack.vision_defaults`'s own docstring for why this is read
+    defensively via `getattr` rather than a required `registry.Pack` Protocol
+    method: the two hand-coded module packs, `northstar`/`digitaldirection`,
+    declare none today)."""
+    getter = getattr(ctx.pack, "vision_defaults", None)
+    if getter is None or ctx.doc_type is None:
+        return {}, {}
+    return getter(ctx.doc_type)
+
+
 class VisionOneShot:
     name = "vision_one_shot"
 
-    def __init__(self, vision: object, field_names: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        vision: object,
+        field_names: list[str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
+    ) -> None:
         self.vision = vision
-        # `None` means "derive from the persona when one is known" (see
-        # `_field_names_and_hints`) - an explicit list here is a caller's
-        # override and always wins, the same contract this parameter has
-        # always had (e.g. the isolated vision eval, which deliberately wants
-        # a fixed, vendor-independent field set to score against).
+        # `None` means "derive from the persona, then the pack, when either is
+        # known" (see `_field_names_and_hints`/`_table_requests_and_hints`) -
+        # an explicit value here is a caller's override and always wins, the
+        # same contract `field_names` has always had (e.g. the isolated vision
+        # eval, which deliberately wants a fixed, vendor-independent field set
+        # to score against).
         self._field_names_override = field_names
+        self._table_requests_override = table_requests
 
     def run(self, ctx: JobContext) -> JobContext:
         if ctx.extraction_route == "5a_cached" and not _collapsed(ctx):
@@ -84,14 +110,22 @@ class VisionOneShot:
             return ctx
         ctx.log("s5b: vision_one_shot")
         field_names, hints = self._field_names_and_hints(ctx)
+        table_requests, table_hints = self._table_requests_and_hints(ctx)
         # The path is what makes this vision rather than a text call - see
         # `adapters.vision.port`. Passed by keyword so a stand-in may ignore it.
         result = self.vision.extract(  # type: ignore[attr-defined]
             ctx.pages, field_names,
             source_path=self._vision_source_path(ctx), field_hints=hints,
+            table_requests=table_requests, table_hints=table_hints,
         )
         for name, value in result.fields.items():
             ctx.extracted.set(name, value, result.confidence.get(name, 0.50))
+        # Same dict `grammar.executor.Executor._apply_row_group` writes to for
+        # the persona/5a path - `core.contract.build_record`'s promotion of
+        # `line_items`/`charges`/`sub_account` already reads from here
+        # unconditionally, regardless of which stage populated it.
+        for table_name, rows in result.row_groups.items():
+            ctx.row_groups[table_name] = rows
         ctx.extraction_route = "5b_vision"
         for flag in result.irregularities:
             # A vision irregularity that names a section 5 modifier must *be* one,
@@ -113,19 +147,19 @@ class VisionOneShot:
     def _field_names_and_hints(self, ctx: JobContext) -> tuple[list[str], dict[str, str]]:
         """What to ask vision for, and how to describe where to find it.
 
-        An explicit constructor override always wins - a caller that built
-        this stage with its own list already knows what it wants, and asked
-        for no hints along with it. Otherwise: a KNOWN persona's own declared
-        fields plus its own anchor/region prose (`adapters.vision.hints`) -
-        the vendor's own field list is a strictly better request than the
-        4-field generic default, whether this document reached vision because
-        there was no persona at all or because a known persona's read
-        collapsed. A persona that (unusually) declares no scalar fields at
-        all falls through to the same generic default a true first-time
-        vendor gets, since there is nothing more specific to ask for either
-        way. A genuinely brand-new vendor (no persona) has no vendor
-        knowledge to draw on, so it gets the generic default with no hints -
-        exactly what vision was always asked for in that case.
+        Four tiers, each falling through only when the one before has
+        nothing to offer: **(1)** an explicit constructor override always
+        wins - a caller that built this stage with its own list already knows
+        what it wants, and asked for no hints along with it. **(2)** a KNOWN
+        persona's own declared fields plus its own anchor/region prose
+        (`adapters.vision.hints`) - the vendor's own field list is a strictly
+        better request than the generic default, whether this document
+        reached vision because there was no persona at all or because a known
+        persona's read collapsed. **(3)** the matched PACK's own
+        `vision_defaults` for this doc_type, if it declares any - the
+        1000-unknown-vendor case, where no persona exists and none ever will
+        (`_pack_vision_defaults`). **(4)** the hardcoded generic default, for
+        a document under neither a persona nor a pack declaration.
         """
         if self._field_names_override is not None:
             return self._field_names_override, {}
@@ -133,7 +167,42 @@ class VisionOneShot:
             names = field_names_for_persona(ctx.persona)
             if names:
                 return names, hints_for_persona(ctx.persona)
+        pack_fields, _ = _pack_vision_defaults(ctx)
+        if pack_fields:
+            hints = {
+                name: prose
+                for name, type_name in pack_fields.items()
+                if (prose := vision_type_prose(type_name)) is not None
+            }
+            return list(pack_fields), hints
         return DEFAULT_FIELDS, {}
+
+    def _table_requests_and_hints(
+        self, ctx: JobContext
+    ) -> tuple[dict[str, list[str]], dict[str, dict[str, str]]]:
+        """The table-extraction mirror of `_field_names_and_hints`, same four
+        tiers: constructor override, then a known persona's own `row_group`
+        selector(s), then the matched pack's `vision_defaults` tables, then
+        nothing (no table asked for at all - not every document has one)."""
+        if self._table_requests_override is not None:
+            return self._table_requests_override, {}
+        if ctx.persona is not None:
+            requests = table_requests_for_persona(ctx.persona)
+            if requests:
+                return requests, table_hints_for_persona(ctx.persona)
+        _, pack_tables = _pack_vision_defaults(ctx)
+        if pack_tables:
+            requests = {name: list(columns) for name, columns in pack_tables.items()}
+            hints = {
+                name: {
+                    col: prose
+                    for col, type_name in columns.items()
+                    if (prose := vision_type_prose(type_name)) is not None
+                }
+                for name, columns in pack_tables.items()
+            }
+            return requests, hints
+        return {}, {}
 
     def _vision_source_path(self, ctx: JobContext) -> str:
         """The path to hand the vision adapter for its bytes-on-disk read.

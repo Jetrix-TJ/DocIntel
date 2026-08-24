@@ -5,7 +5,10 @@ human. A pack owns a document when the document belongs to that pack's *domain*,
 which is a fact on the page - but what makes it that pack's domain differs by
 pack, so `claims` is the pack's own decision rather than a rule imposed here.
 
-The two shipped packs illustrate why the choice cannot be centralized:
+Two real-world examples illustrate why the choice cannot be centralized - kept
+as test fixtures (`tests/fixtures/packs/`) rather than shipped packs, since
+each is real, measured configuration for one specific real company, not
+general-purpose library code:
 
 * **Northstar** is an AP department. Every invoice it handles is billed *to*
   Northstar, so its guard is the bill-to - and `bill_to_name` is a required field
@@ -35,8 +38,9 @@ from docintel.packs import datapack, signals
 from docintel.pipeline.hooks import HookRegistry
 
 # `normalize_name` is re-exported (not re-defined) for existing callers
-# (`digitaldirection.__init__`, `.aliases`, `northstar.__init__`, `.aliases`)
-# that import it from this module. The implementation lives in `core.senders`
+# (`tests/fixtures/packs/digitaldirection/__init__.py`, `.aliases`,
+# `tests/fixtures/packs/northstar/__init__.py`, `.aliases`) that import it
+# from this module. The implementation lives in `core.senders`
 # now - `core` is the lower layer and packs already depend on it, so this is
 # the direction that cannot cycle. `core.senders` used to import FROM here,
 # which only avoided an `ImportError` at interpreter start because pack
@@ -47,11 +51,19 @@ from docintel.pipeline.hooks import HookRegistry
 # Packs are named rather than discovered by directory scan. A pack is a
 # deliberate business decision with a spec in docs/packs/, so it should not
 # become active because someone dropped a folder in place.
-PACK_MODULES: tuple[str, ...] = (
-    "docintel.packs.northstar",
-    "docintel.packs.digitaldirection",
-    "docintel.packs.spt_metals",
-)
+#
+# This list, and `PACK_FILES` below, are deliberately EMPTY. `docintel` ships
+# as a pure framework/engine with zero pre-configured company shape of any
+# kind, real or fictional - `northstar`/`digitaldirection` (real, measured
+# configuration for two real companies) and `spt_metals`/`acme_freight`
+# (synthetic reference examples, no real corpus) all live as test fixtures
+# (`tests/fixtures/packs/`) instead of being shipped to every adopter by
+# default. See that directory, and `pyproject.toml`'s `pythonpath`, for how
+# the project's own test suite still loads any of them explicitly, on
+# purpose, when a test needs one. A fresh adopter's `load_packs()` returns an
+# empty list; every document is `unclaimed_document` and falls through to
+# the generic vision path until the adopter supplies their own `extra_packs`.
+PACK_MODULES: tuple[str, ...] = ()
 
 # Data-only packs: a directory holding `pack.json` and `personas/`, with no
 # Python at all. Listed here for exactly the reason modules are listed above -
@@ -61,7 +73,7 @@ PACK_MODULES: tuple[str, ...] = (
 # modules), not whether one gets made.
 #
 # Paths are relative to this file's directory.
-PACK_FILES: tuple[str, ...] = ("acme_freight/pack.json",)
+PACK_FILES: tuple[str, ...] = ()
 
 
 @runtime_checkable
@@ -252,8 +264,8 @@ def load_basis_overlay(pack_dir: str) -> dict[str, str]:
 # alias tables: a directory the CALLER owns (never inside this installed
 # package), read fresh on every call, opt-in via an env var, empty/missing
 # means zero behavior change. This is the extension point for adding a new
-# vendor to an ALREADY-REGISTERED shipped pack (`northstar`, `digitaldirection`,
-# `spt_metals`) without editing installed source or monkey-patching module
+# vendor to an ALREADY-REGISTERED shipped pack (`spt_metals`, or a caller's
+# own via `extra_packs`) without editing installed source or monkey-patching module
 # globals at runtime - both of which work today but neither of which this
 # project promises to keep stable across a `pip install --upgrade`.
 #

@@ -97,7 +97,34 @@ def _clean_confidence(value: object) -> float | None:
     return min(_CEILING, max(VISION_FLOOR, float(value)))
 
 
-def sanitize(result: VisionResult, field_names: list[str]) -> VisionResult:
+def _clean_cell(value: object) -> str:
+    """A row cell, coerced to a string. Unlike a scalar field, a missing or
+    unreadable CELL is a legitimate row value (an empty invoice column), not
+    absence of the field itself - so this returns `""` rather than dropping
+    the key, keeping every declared column present on every row."""
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _clean_table(rows: object, columns: list[str]) -> list[dict[str, str]]:
+    """Rule 1's allowlist, one level down: only declared columns survive in
+    each row, and a row that is not even a mapping is dropped rather than
+    raised - the same 'give us the nine good values' discipline `sanitize`
+    already applies to fields, applied to rows instead of field names."""
+    if not isinstance(rows, list):
+        return []
+    cleaned: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        cleaned.append({col: _clean_cell(row.get(col)) for col in columns})
+    return cleaned
+
+
+def sanitize(
+    result: VisionResult,
+    field_names: list[str],
+    table_requests: dict[str, list[str]] | None = None,
+) -> VisionResult:
     """The subset of `result` the pipeline is allowed to act on."""
     allowed = {n for n in field_names if n not in DERIVED_ONLY}
 
@@ -120,8 +147,15 @@ def sanitize(result: VisionResult, field_names: list[str]) -> VisionResult:
         if isinstance(flag, str) and flag in VISION_OBSERVABLE
     ]
 
+    # Only a table that was actually asked for may pass - same allowlist
+    # reasoning as rule 1 for scalar fields, applied to table names.
+    row_groups: dict[str, list[dict[str, str]]] = {}
+    for table_name, columns in (table_requests or {}).items():
+        row_groups[table_name] = _clean_table(result.row_groups.get(table_name), columns)
+
     return VisionResult(
-        fields=fields, confidence=confidence, irregularities=irregularities
+        fields=fields, confidence=confidence, irregularities=irregularities,
+        row_groups=row_groups,
     )
 
 

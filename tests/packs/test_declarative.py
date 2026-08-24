@@ -198,8 +198,11 @@ def test_tags_do_not_stop_at_the_first_match() -> None:
 
 
 SHIPPED = [
-    "src/docintel/packs/northstar/classification.json",
-    "src/docintel/packs/digitaldirection/classification.json",
+    # Not shipped with docintel (real business config for two real companies,
+    # kept as test fixtures - see registry.py's PACK_MODULES comment), but
+    # their classification.json specs are still real and worth compiling here.
+    "tests/fixtures/packs/northstar/classification.json",
+    "tests/fixtures/packs/digitaldirection/classification.json",
 ]
 
 

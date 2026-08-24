@@ -117,3 +117,81 @@ def hints_for_persona(persona: Any) -> dict[str, str]:
         if parts:
             hints[sel.field] = ", ".join(parts)
     return hints
+
+
+# -- row-group (table) derivation --------------------------------------------
+#
+# Same reuse principle as the scalar functions above: a `row_group` selector
+# already declares everything a vision table request needs (`table_anchor`
+# for identity, `columns` for names + expected per-column shape,
+# `column_headers` for labels) - there is no separate, hand-authored "vision
+# table config" anywhere in a persona. See the docintel session plan
+# ("Gemini Vision Support for Line-Item / Table Extraction") for why a second,
+# manually-written spec was rejected: it would duplicate what the selector
+# already says, and the two copies could silently drift apart.
+
+
+def _row_group_selectors(persona: Any) -> list[Any]:
+    """The persona's row-group (table) selectors - the mirror of
+    `_scalar_selectors`, filtering to selectors that declare a `row_group`
+    name rather than a scalar `field`."""
+    out: list[Any] = []
+    for sel in getattr(persona, "field_selectors", None) or ():
+        if getattr(sel, "row_group", None):
+            out.append(sel)
+    return out
+
+
+def table_requests_for_persona(persona: Any) -> dict[str, list[str]]:
+    """This vendor's own declared table(s), by name, with their column names
+    in the persona's declared order."""
+    return {sel.row_group: list(sel.columns) for sel in _row_group_selectors(persona)}
+
+
+def table_hints_for_persona(persona: Any) -> dict[str, dict[str, str]]:
+    """`{table_name: {column_name: one descriptive sentence fragment}}` -
+    reuses the SAME `_PATTERN_PROSE` shape vocabulary the scalar hints above
+    use for a column's declared pattern (`columns[col]`), plus the column's
+    own header label (`column_headers[col]`) as the anchor-like description a
+    human would look for. A column with nothing describable is simply absent,
+    matching `hints_for_persona`'s "no vague placeholder" rule."""
+    hints: dict[str, dict[str, str]] = {}
+    for sel in _row_group_selectors(persona):
+        column_headers = getattr(sel, "column_headers", None) or {}
+        table_hints: dict[str, str] = {}
+        for col, pattern in (getattr(sel, "columns", None) or {}).items():
+            parts: list[str] = []
+            if header := column_headers.get(col):
+                parts.append(f'labelled "{header}"')
+            if shape := _shape_prose(pattern):
+                parts.append(shape)
+            if parts:
+                table_hints[col] = ", ".join(parts)
+        hints[sel.row_group] = table_hints
+    return hints
+
+
+# -- pack-level "vision_defaults" vocabulary ---------------------------------
+#
+# A pack's `vision_defaults` (packs/datapack.py) lets a user declare Gemini-
+# only field/table types in plain language ("text", "currency" or "$",
+# "decimal", "date"...) for a document that has no persona to derive from at
+# all - the 1000-unknown-vendor case. Reuses this same `_PATTERN_PROSE`
+# vocabulary rather than inventing a second one, with a small alias layer for
+# friendlier spellings.
+VISION_TYPE_ALIASES: dict[str, str] = {"$": "currency", "money": "currency", "number": "integer"}
+_PLAIN_TYPE = "text"
+
+
+def recognized_vision_types() -> frozenset[str]:
+    """Every type name a pack's `vision_defaults` may use: the shape
+    vocabulary above, its friendly aliases, and `"text"` (no describable
+    shape - the field/column is simply requested, no hint)."""
+    return frozenset({*_PATTERN_PROSE, *VISION_TYPE_ALIASES, _PLAIN_TYPE})
+
+
+def vision_type_prose(type_name: str) -> str | None:
+    """The hint sentence for a `vision_defaults` type name, or `None` for
+    `"text"` or an alias that resolves to nothing describable."""
+    resolved = VISION_TYPE_ALIASES.get(type_name, type_name)
+    return _PATTERN_PROSE.get(resolved)

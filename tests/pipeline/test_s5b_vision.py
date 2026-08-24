@@ -25,6 +25,34 @@ def _selector(field: str, required: bool = True) -> FieldSelector:
     return FieldSelector(field=field, pattern="text", region="near-anchor", required=required)
 
 
+class _RowGroup:
+    """Minimal stand-in for a `RowGroupSelector` - only the attributes
+    `hints.py`'s table functions read."""
+
+    def __init__(self, row_group, columns):
+        self.row_group = row_group
+        self.columns = columns
+        self.column_headers = {}
+
+
+class _Pack:
+    """Minimal stand-in for a matched `Pack` - only `vision_defaults` is
+    read here."""
+
+    def __init__(self, vision_defaults):
+        self._vision_defaults = vision_defaults
+
+    def vision_defaults(self, doc_type):
+        return self._vision_defaults.get(doc_type, ({}, {}))
+
+
+class _PackWithNoVisionDefaults:
+    """A pack that simply doesn't implement `vision_defaults` at all - the
+    two shipped module packs (northstar, digitaldirection) today."""
+
+    pass
+
+
 def _ctx(source_path: str = "/corpus/x.pdf", **kw) -> JobContext:
     words = (Word(text="TOTAL", x0=10.0, y0=100.0, x1=50.0, y1=110.0),)
     return JobContext(
@@ -196,6 +224,98 @@ def test_a_persona_with_no_scalar_fields_falls_back_to_the_generic_default():
 
     assert fake.calls == [["vendor_name", "invoice_number", "invoice_date", "total_printed"]]
     assert fake.hints == [{}]
+
+
+# -- tables: four resolution tiers, mirroring the scalar-field tiers above --
+
+
+def test_no_table_is_asked_for_when_nothing_declares_one():
+    """The baseline: neither a constructor override, a persona row_group, nor
+    a pack vision_defaults table - so no table is requested at all, not every
+    document has one."""
+    ctx = _ctx()
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.table_calls == [{}]
+
+
+def test_tier1_an_explicit_table_requests_override_always_wins():
+    persona = _Persona([_RowGroup("line_items", {"amount": "currency"})])
+    ctx = _ctx(persona=persona, doc_type="standard_invoice")
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake, table_requests={"charges": ["amount"]}).run(ctx)
+
+    assert fake.table_calls == [{"charges": ["amount"]}]
+
+
+def test_tier2_a_known_persona_s_row_group_is_derived_automatically():
+    """No new authoring: the SAME `row_group` selector a real vendor persona
+    already declares for the grammar/5a path also drives the vision table
+    request, with hints built from its own columns/column_headers."""
+    persona = _Persona([_RowGroup("line_items", {"date": "date", "amount": "currency"})])
+    ctx = _ctx(persona=persona, doc_type="standard_invoice")
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.table_calls == [{"line_items": ["date", "amount"]}]
+
+
+def test_tier3_a_pack_s_vision_defaults_table_is_used_when_there_is_no_persona():
+    """The 1000-unknown-vendor case: no persona exists and none ever will,
+    but the matched pack declares a generic table shape for this doc_type -
+    zero Python bypass needed, straight through the pack's own declaration."""
+    pack = _Pack({"standard_invoice": ({}, {"line_items": {"date": "date", "amount": "currency"}})})
+    ctx = _ctx(pack=pack, doc_type="standard_invoice")
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.table_calls == [{"line_items": ["date", "amount"]}]
+
+
+def test_tier4_a_pack_with_no_vision_defaults_method_falls_through_cleanly():
+    """`getattr(ctx.pack, "vision_defaults", None)` must not raise on a pack
+    that simply doesn't implement it - the two shipped module packs today."""
+    ctx = _ctx(pack=_PackWithNoVisionDefaults(), doc_type="standard_invoice")
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.table_calls == [{}]
+
+
+def test_a_known_persona_s_row_group_wins_over_the_pack_s_vision_defaults():
+    """Tier 2 (persona) is checked before tier 3 (pack) - a known vendor's own
+    declared table is a strictly better request than the pack's generic one."""
+    persona = _Persona([_RowGroup("line_items", {"amount": "currency"})])
+    pack = _Pack({"standard_invoice": ({}, {"charges": {"amount": "currency"}})})
+    ctx = _ctx(persona=persona, pack=pack, doc_type="standard_invoice")
+    fake = FakeVision({"total_printed": "9.99"})
+
+    VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.table_calls == [{"line_items": ["amount"]}]
+
+
+def test_vision_derived_rows_land_in_ctx_row_groups():
+    """This is what makes `record["line_items"]` populate through the vision
+    path: `core.contract.build_record`'s existing promotion of
+    `ctx.row_groups` picks this up unconditionally, regardless of which
+    stage wrote it."""
+    ctx = _ctx(doc_type="standard_invoice")
+    rows = [{"date": "07/01/25", "amount": "402.00"}]
+    fake = FakeVision(
+        {"total_printed": "9.99"},
+        canned_tables={"line_items": rows},
+    )
+
+    VisionOneShot(vision=fake, table_requests={"line_items": ["date", "amount"]}).run(ctx)
+
+    assert ctx.row_groups["line_items"] == rows
 
 
 # -- what the output may do ----------------------------------------------

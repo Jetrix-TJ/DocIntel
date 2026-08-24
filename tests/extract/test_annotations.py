@@ -1,4 +1,5 @@
 import glob
+import os
 
 import pdfplumber
 from PIL import Image, ImageDraw
@@ -32,7 +33,7 @@ def test_only_federal_recycling_is_flagged_across_the_whole_corpus():
     for path in sorted(glob.glob("docs/*.pdf")):
         pages, meta, _ = load_document(path)
         flagged = detect_flattened(path, pages, meta)
-        assert flagged == (path == FEDERAL), f"unexpected result for {path}"
+        assert flagged == (path.replace(os.sep, "/") == FEDERAL), f"unexpected result for {path}"
 
 
 def test_detection_is_memoized_and_does_not_mutate_shared_state():

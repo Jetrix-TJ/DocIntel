@@ -14,12 +14,19 @@ from __future__ import annotations
 
 import pytest
 
+from digitaldirection import PACK as DIGITALDIRECTION_PACK
+from northstar import PACK as NORTHSTAR_PACK
+
 from docintel.core.models import DERIVED_ONLY
 from docintel.grammar.schema import parse_persona
 from docintel.grammar.validator import validate_persona
 from docintel.packs.registry import load_packs
 
-PACKS = load_packs()
+# northstar/digitaldirection are real, measured configuration for two real
+# companies - kept as test fixtures rather than shipped (see registry.py's
+# PACK_MODULES comment) - but their personas still deserve this guardrail's
+# coverage, so they're included here explicitly rather than silently dropped.
+PACKS = load_packs() + [NORTHSTAR_PACK, DIGITALDIRECTION_PACK]
 PERSONAS = [(pack, p) for pack in PACKS for p in pack.personas()]
 
 
@@ -78,7 +85,7 @@ def test_every_persona_fingerprint_names_a_known_vendor() -> None:
     """The fingerprint a persona declares and the one the `beforePersonaLookup`
     hook computes from page text must be the same string, or the persona is
     unreachable and nothing says so."""
-    from docintel.packs.northstar import aliases
+    from northstar import aliases
 
     for pack, persona in PERSONAS:
         if pack.name != "northstar":

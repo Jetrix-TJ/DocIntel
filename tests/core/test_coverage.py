@@ -4,6 +4,8 @@ and `s7_gate.ConfidenceGate._collapsed` both consult.
 
 from __future__ import annotations
 
+from digitaldirection import PACK as DIGITALDIRECTION_PACK
+
 from docintel.core import coverage as coverage_mod
 from docintel.core.coverage import Coverage
 from docintel.core.models import new_context
@@ -69,7 +71,7 @@ def test_the_absolute_floor_alone_is_not_sufficient_without_the_share() -> None:
 def _golub_windstream_contract_persona():
     from docintel.grammar.schema import parse_persona
 
-    for pack in load_packs():
+    for pack in load_packs() + [DIGITALDIRECTION_PACK]:
         if pack.name != "digitaldirection":
             continue
         for persona in pack.personas():

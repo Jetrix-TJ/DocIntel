@@ -84,15 +84,34 @@ def test_an_unparsable_persona_file_fails_cleanly(tmp_path, capsys):
     assert "could not read" in capsys.readouterr().err
 
 
-def test_pack_checks_field_registration_and_names_the_pack_on_success(capsys):
-    persona_path = "src/docintel/packs/northstar/personas/dtss.json"
+def test_pack_checks_field_registration_and_names_the_pack_on_success(capsys, monkeypatch):
+    """`northstar` is a test fixture (`tests/fixtures/packs/`), not a shipped
+    pack, so `--pack northstar` needs it injected into `load_packs()` for
+    this test's own duration - same narrow, explicit pattern used in
+    `test_cli_process.py`'s reconcile test."""
+    import docintel.packs.registry as registry
+    from northstar import PACK as NORTHSTAR_PACK
+
+    real_load_packs = registry.load_packs
+    monkeypatch.setattr(registry, "load_packs", lambda: real_load_packs() + [NORTHSTAR_PACK])
+
+    persona_path = "tests/fixtures/packs/northstar/personas/dtss.json"
 
     assert main(["validate-persona", persona_path, "--pack", "northstar"]) == 0
 
     assert "pack 'northstar'" in capsys.readouterr().out
 
 
-def test_an_unknown_pack_name_fails_cleanly_and_lists_whats_registered(tmp_path, capsys):
+def test_an_unknown_pack_name_fails_cleanly_and_lists_whats_registered(tmp_path, capsys, monkeypatch):
+    """No pack ships by default, so this injects one (same narrow,
+    test-local pattern used elsewhere in this file) purely to prove the
+    error message actually NAMES what IS registered, not just what isn't."""
+    import docintel.packs.registry as registry
+    from spt_metals import PACK as SPT_METALS_PACK
+
+    real_load_packs = registry.load_packs
+    monkeypatch.setattr(registry, "load_packs", lambda: real_load_packs() + [SPT_METALS_PACK])
+
     persona_path = _write(tmp_path, "persona.json", _GOOD_PERSONA)
 
     result = main(["validate-persona", persona_path, "--pack", "nonexistent"])
@@ -100,7 +119,7 @@ def test_an_unknown_pack_name_fails_cleanly_and_lists_whats_registered(tmp_path,
     assert result == 1
     err = capsys.readouterr().err
     assert "nonexistent" in err
-    assert "northstar" in err  # a real registered pack, named as a hint
+    assert "spt_metals" in err  # a real registered pack, named as a hint
 
 
 def test_pack_file_checks_a_draft_unregistered_pack(capsys):
@@ -108,8 +127,8 @@ def test_pack_file_checks_a_draft_unregistered_pack(capsys):
     proves --pack-file is actually loading and checking against it, not
     silently behaving like no pack was given."""
     result = main([
-        "validate-persona", "src/docintel/packs/northstar/personas/dtss.json",
-        "--pack-file", "src/docintel/packs/acme_freight/pack.json",
+        "validate-persona", "tests/fixtures/packs/northstar/personas/dtss.json",
+        "--pack-file", "tests/fixtures/packs/acme_freight/pack.json",
     ])
 
     assert result == 1

@@ -32,6 +32,13 @@ class VisionResult:
     fields: dict[str, str] = field(default_factory=dict)
     confidence: dict[str, float] = field(default_factory=dict)
     irregularities: list[str] = field(default_factory=list)
+    # Table/line-item rows, keyed by table name - `{"line_items": [{"date": ...,
+    # "description": ..., "amount": ...}, ...]}`. Kept separate from `fields`
+    # for the same reason `JobContext.row_groups` is kept separate from
+    # `ExtractedFields` (core/models.py): a repeating table is not a
+    # name->value pair, and flattening it into `fields` would make one
+    # entry a list in a mapping every other consumer reads as scalars.
+    row_groups: dict[str, list[dict[str, str]]] = field(default_factory=dict)
 
 
 class VisionExtractor(Protocol):
@@ -42,4 +49,6 @@ class VisionExtractor(Protocol):
         *,
         source_path: str | None = None,
         field_hints: dict[str, str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
+        table_hints: dict[str, dict[str, str]] | None = None,
     ) -> VisionResult: ...

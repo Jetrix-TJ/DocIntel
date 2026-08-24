@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from docintel.adapters.vision.hints import field_names_for_persona, hints_for_persona
+from docintel.adapters.vision.hints import (
+    field_names_for_persona,
+    hints_for_persona,
+    recognized_vision_types,
+    table_hints_for_persona,
+    table_requests_for_persona,
+    vision_type_prose,
+)
 from docintel.grammar.schema import FieldSelector
 
 
@@ -90,3 +97,67 @@ def test_the_regex_itself_is_never_sent_verbatim():
 def test_derived_only_fields_never_get_a_hint_either():
     persona = _Persona([_sel("amount_payable", anchor="Amount Due", region="totals-block")])
     assert hints_for_persona(persona) == {}
+
+
+# -- table_requests_for_persona / table_hints_for_persona --------------------
+
+
+class _RowGroup:
+    """Minimal stand-in for a `RowGroupSelector` - only the attributes
+    `hints.py`'s table functions actually read."""
+
+    def __init__(self, row_group, columns, column_headers=None):
+        self.row_group = row_group
+        self.columns = columns
+        self.column_headers = column_headers or {}
+
+
+def test_table_requests_come_from_the_persona_s_row_group_columns_in_order():
+    persona = _Persona([
+        _sel("total_printed"),
+        _RowGroup("line_items", {"date": "date", "description": "text", "amount": "currency"}),
+    ])
+    assert table_requests_for_persona(persona) == {
+        "line_items": ["date", "description", "amount"]
+    }
+
+
+def test_a_persona_with_no_row_group_selector_has_no_table_requests():
+    assert table_requests_for_persona(_Persona([_sel("total_printed")])) == {}
+
+
+def test_table_hints_reuse_the_same_shape_vocabulary_as_scalar_hints():
+    persona = _Persona([_RowGroup(
+        "line_items",
+        {"date": "date", "amount": "currency"},
+        column_headers={"amount": "AMOUNT"},
+    )])
+    hints = table_hints_for_persona(persona)
+    assert hints["line_items"]["date"] == "a date"
+    assert hints["line_items"]["amount"] == 'labelled "AMOUNT", a money amount'
+
+
+def test_a_column_with_no_header_or_describable_shape_is_absent():
+    persona = _Persona([_RowGroup("line_items", {"mystery": "not-a-real-pattern"})])
+    assert table_hints_for_persona(persona) == {"line_items": {}}
+
+
+# -- pack-level vision_defaults vocabulary -----------------------------------
+
+
+def test_currency_and_its_friendly_dollar_alias_produce_the_same_prose():
+    assert vision_type_prose("currency") == "a money amount"
+    assert vision_type_prose("$") == "a money amount"
+
+
+def test_plain_text_has_no_describable_shape():
+    assert vision_type_prose("text") is None
+
+
+def test_an_unrecognized_type_name_is_not_in_the_recognized_set():
+    assert "not-a-real-type" not in recognized_vision_types()
+
+
+def test_every_pattern_prose_key_and_every_alias_and_text_are_recognized():
+    recognized = recognized_vision_types()
+    assert {"currency", "date", "decimal", "integer", "$", "money", "text"} <= recognized

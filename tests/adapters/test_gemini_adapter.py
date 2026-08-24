@@ -89,12 +89,19 @@ _DEFAULT_FIELDS = {"vendor_name": "ACME", "total_printed": "1,177.70"}
 _DEFAULT_CONFIDENCE = {"vendor_name": 0.9, "total_printed": 0.8}
 
 
-def _ok(fields: dict[str, str] | None = None, confidence=None, irregularities=None) -> _Response:
+def _ok(
+    fields: dict[str, str] | None = None,
+    confidence=None,
+    irregularities=None,
+    tables: dict[str, list[dict[str, str]]] | None = None,
+) -> _Response:
     payload = {
         "fields": _DEFAULT_FIELDS if fields is None else fields,
         "confidence": _DEFAULT_CONFIDENCE if confidence is None else confidence,
         "irregularities": irregularities or [],
     }
+    if tables is not None:
+        payload["tables"] = tables
     return _Response(json.dumps(payload))
 
 
@@ -368,6 +375,105 @@ def test_a_model_invented_field_is_dropped_even_though_the_schema_forbade_it(tmp
 
     assert set(result.fields) == {"vendor_name"}
     assert result.irregularities == []
+
+
+# -- tables (line items) --------------------------------------------------
+
+LINE_ITEM_COLUMNS = ["date", "description", "amount"]
+
+
+def test_tables_alone_without_fields_still_calls_the_api(tmp_path):
+    client = FakeClient(_ok(tables={"line_items": []}))
+    result = GeminiVision(client=client).extract(
+        _pages(), [], source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    assert client.calls != []
+    assert result.row_groups == {"line_items": []}
+
+
+def test_the_schema_includes_a_tables_property_when_requested(tmp_path):
+    client = FakeClient(_ok(tables={"line_items": []}))
+    GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    schema = client.calls[0]["config"].response_schema
+    assert "tables" in schema.required
+    row_schema = schema.properties["tables"].properties["line_items"].items
+    assert set(row_schema.properties) == set(LINE_ITEM_COLUMNS)
+    assert row_schema.required == LINE_ITEM_COLUMNS
+
+
+def test_the_schema_omits_tables_when_none_requested(tmp_path):
+    client = FakeClient(_ok())
+    GeminiVision(client=client).extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
+
+    schema = client.calls[0]["config"].response_schema
+    assert "tables" not in schema.properties
+    assert "tables" not in schema.required
+
+
+def test_the_prompt_lists_the_table_name_and_its_columns(tmp_path):
+    client = FakeClient(_ok(tables={"line_items": []}))
+    GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    prompt = client.calls[0]["contents"][1]
+    assert '"line_items" table' in prompt
+    for col in LINE_ITEM_COLUMNS:
+        assert col in prompt
+    assert "subtotal" in prompt.lower()
+
+
+def test_a_table_column_hint_is_appended_next_to_its_column_name(tmp_path):
+    client = FakeClient(_ok(tables={"line_items": []}))
+    GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+        table_hints={"line_items": {"amount": "a money amount"}},
+    )
+
+    prompt = client.calls[0]["contents"][1]
+    assert "amount: a money amount" in prompt
+
+
+def test_table_rows_in_the_response_become_row_groups(tmp_path):
+    rows = [
+        {"date": "07/01/25", "description": "HAULING FEE", "amount": "402.00"},
+        {"date": "07/02/25", "description": "LANDFILL FEE", "amount": "58.80"},
+    ]
+    client = FakeClient(_ok(tables={"line_items": rows}))
+    result = GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    assert result.row_groups["line_items"] == rows
+
+
+def test_a_non_dict_row_is_dropped_rather_than_raised(tmp_path):
+    client = FakeClient(_ok(tables={"line_items": ["not a row", {"date": "07/01/25"}]}))
+    result = GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    assert len(result.row_groups["line_items"]) == 1
+
+
+def test_a_table_absent_from_the_response_is_an_empty_list_not_missing(tmp_path):
+    client = FakeClient(_ok())  # no "tables" key in the raw payload at all
+    result = GeminiVision(client=client).extract(
+        _pages(), FIELDS, source_path=_pdf(tmp_path),
+        table_requests={"line_items": LINE_ITEM_COLUMNS},
+    )
+
+    assert result.row_groups == {"line_items": []}
 
 
 # -- error classification -------------------------------------------------

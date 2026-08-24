@@ -27,12 +27,23 @@ import json
 import os
 from decimal import Decimal
 
+from PIL import Image, ImageDraw, ImageFont
+
+from digitaldirection import PACK as DIGITALDIRECTION_PACK
+
 from docintel import build_pipeline
 from docintel.adapters.vision.fake import FakeVision
 from docintel.core.contract import validate_record
+from docintel.packs.datapack import load_pack_file
 
 CENTRACOM_PDF = "docs/Centracom_0384043574_01012026_BILL.pdf"
 CENTRACOM_GOLD = "docs/corpus/gold/digitaldirection-centracom-0384043574.json"
+
+# digitaldirection is a test fixture (tests/fixtures/packs/), not a shipped
+# pack - real, measured config for one real company, kept out of the
+# installed library. Every test below that needs it to actually claim
+# Centracom's real document passes this explicitly.
+_WITH_DIGITALDIRECTION = [DIGITALDIRECTION_PACK]
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +56,7 @@ CENTRACOM_GOLD = "docs/corpus/gold/digitaldirection-centracom-0384043574.json"
 
 def test_a_known_vendor_document_extracts_and_derives_correctly_end_to_end():
     vision = FakeVision()
-    pipeline = build_pipeline(vision=vision)
+    pipeline = build_pipeline(vision=vision, extra_packs=_WITH_DIGITALDIRECTION)
 
     record = pipeline.process(document_id="e2e-centracom", source_path=CENTRACOM_PDF)
 
@@ -100,7 +111,7 @@ def test_the_known_vendor_run_actually_traverses_every_pipeline_stage():
     """`events` is the record's own trace of what ran (`core.contract.
     build_record`) - proof the full 8-stage/11-module sequence executed for
     this real document, not just that the final fields happen to be right."""
-    pipeline = build_pipeline(vision=FakeVision())
+    pipeline = build_pipeline(vision=FakeVision(), extra_packs=_WITH_DIGITALDIRECTION)
     record = pipeline.process(document_id="e2e-centracom-stages", source_path=CENTRACOM_PDF)
 
     stage_markers = ["s1:", "s2:", "s3:", "s4:", "s4b:", "s5a:", "s6:", "s7:", "s8:"]
@@ -149,6 +160,98 @@ def test_an_unknown_vendor_document_falls_back_to_vision_and_is_flagged_for_revi
     #    invoice number or account+period - the soft_fingerprint fallback
     #    this session's P1 fix added.
     assert record["derived"]["identity_basis"] == "soft_fingerprint"
+
+
+# ---------------------------------------------------------------------------
+# 2b. Line-item table extraction through the vision path - the flagship case
+#     the "Gemini Vision line-item/array support" plan was built for: ANY of
+#     1000+ unknown vendors, claimed by a pack that has no persona for it at
+#     all, still gets a full charge table - declared once, in plain JSON, on
+#     the pack's own `vision_defaults`, with zero Python bypass.
+# ---------------------------------------------------------------------------
+
+_FONT = ImageFont.load_default(size=26)
+
+
+def _text_image(path, lines: list[str], size=(900, 260)) -> str:
+    img = Image.new("RGB", size, "white")
+    draw = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        draw.text((20, 20 + i * 45), line, font=_FONT, fill="black")
+    img.save(path)
+    return str(path)
+
+
+def _generic_pack_with_line_items(tmp_path):
+    """A minimal, content-based, accept-any-vendor pack - the shape
+    `northstar_new`/`general_invoices` took on in this session's own sandbox
+    testing - declaring a `line_items` table via `vision_defaults` instead of
+    a persona, since there is no one fixed layout to anchor a `row_group`
+    selector against."""
+    pack_dir = tmp_path / "genericpack"
+    pack_dir.mkdir()
+    (pack_dir / "pack.json").write_text(json.dumps({
+        "name": "genericpack",
+        "default_currency": "USD",
+        "doc_types": ["standard_invoice"],
+        "fields": {
+            "standard_invoice": {
+                "all": ["total_printed"], "required": [], "any_of": [], "derived_only": [],
+            }
+        },
+        "claim": {
+            "rules": [{"kind": "markers", "scope": "primary", "values": ["RICH PRODUCTS"]}],
+            "vetoes": [],
+        },
+        "ladder": {
+            "default": "standard_invoice",
+            "rungs": [{
+                "name": "confirm",
+                "doc_type": "standard_invoice",
+                "when": {"signal": "pattern_in_scope",
+                         "params": {"pattern": "RICH PRODUCTS", "scope": "primary"}},
+            }],
+        },
+        "vision_defaults": {
+            "standard_invoice": {
+                "fields": {},
+                "tables": {"line_items": {"date": "date", "description": "text", "amount": "currency"}},
+            }
+        },
+        "tags": [],
+    }))
+    return load_pack_file(str(pack_dir / "pack.json"))
+
+
+def test_a_persona_less_document_under_a_pack_declaring_vision_defaults_gets_line_items(tmp_path):
+    pack = _generic_pack_with_line_items(tmp_path)
+    png = _text_image(tmp_path / "rich-products.png", ["RICH PRODUCTS CORPORATION", "TOTAL 16044.94"])
+
+    rows = [
+        {"date": "07/01/25", "description": "HAULING FEE", "amount": "402.00"},
+        {"date": "07/02/25", "description": "LANDFILL FEE", "amount": "58.80"},
+    ]
+    vision = FakeVision({"total_printed": "16044.94"}, canned_tables={"line_items": rows})
+    pipeline = build_pipeline(vision=vision, extra_packs=[pack])
+
+    record = pipeline.process(document_id="e2e-line-items", source_path=png)
+    validate_record(record)
+
+    # -- the pack actually claimed it, on content, never a vendor name ------
+    assert record["disposition"] == "processed"
+    assert "unclaimed_document" not in record["tags"]
+    assert record["doc_type"] == "standard_invoice"
+
+    # -- no persona exists for this document; vision did the work -----------
+    assert record["extraction_route"] == "5b_vision"
+
+    # -- the pack's own vision_defaults reached the adapter, unprompted by
+    #    any hand-built Runner or VisionOneShot override -----------------
+    assert vision.table_calls == [{"line_items": ["date", "description", "amount"]}]
+
+    # -- and the rows it returned landed in the emitted record, through the
+    #    SAME `core.contract` promotion the persona/5a path already uses ---
+    assert record["line_items"] == rows
 
 
 # ---------------------------------------------------------------------------

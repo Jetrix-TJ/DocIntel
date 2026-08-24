@@ -332,13 +332,16 @@ def test_apply_prior_balance_basis_fires_for_centracom_and_edco() -> None:
     import json
     import os
 
+    from digitaldirection import PACK as DIGITALDIRECTION_PACK
+    from northstar import PACK as NORTHSTAR_PACK
+
     from docintel.adapters.vision.fake import FakeVision
     from docintel.pipeline.stages import build_pipeline
 
     def _run(gold_id: str) -> dict:
         with open(os.path.join("docs", "corpus", "gold", f"{gold_id}.json")) as fh:
             gold = json.load(fh)
-        runner = build_pipeline(FakeVision())
+        runner = build_pipeline(FakeVision(), extra_packs=[NORTHSTAR_PACK, DIGITALDIRECTION_PACK])
         return runner.process(
             document_id=gold["gold_id"],
             source_path=os.path.join("docs", gold["source_file"]),

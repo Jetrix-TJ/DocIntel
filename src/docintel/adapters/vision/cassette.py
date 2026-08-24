@@ -80,6 +80,7 @@ class CassetteVision:
         field_names: list[str],
         source_path: str | None = None,
         field_hints: dict[str, str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
     ) -> str:
         """A stable identifier for "this document, these fields, these hints".
 
@@ -122,6 +123,18 @@ class CassetteVision:
                 h.update(b"\0")
                 h.update(field_hints[name].encode())
                 h.update(b"\0")
+        if table_requests:
+            # Same additive-only reasoning as `field_hints` above: a cassette
+            # recorded before table support existed has no table_requests, so
+            # this only enters the key (and changes it) once a caller actually
+            # asks for a table.
+            h.update(b"tables\0")
+            for name in sorted(table_requests):
+                h.update(name.encode())
+                h.update(b"\0")
+                for col in table_requests[name]:
+                    h.update(col.encode())
+                    h.update(b"\0")
         return h.hexdigest()[:_KEY_LENGTH]
 
     # -- the port ----------------------------------------------------------
@@ -133,14 +146,22 @@ class CassetteVision:
         *,
         source_path: str | None = None,
         field_hints: dict[str, str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
+        table_hints: dict[str, dict[str, str]] | None = None,
     ) -> VisionResult:
-        cassette_key = self.key(pages, field_names, source_path, field_hints)
+        cassette_key = self.key(pages, field_names, source_path, field_hints, table_requests)
         if self.mode == "replay":
-            return self._replay(cassette_key, field_names, source_path)
-        return self._record(cassette_key, pages, field_names, source_path, field_hints)
+            return self._replay(cassette_key, field_names, source_path, table_requests)
+        return self._record(
+            cassette_key, pages, field_names, source_path, field_hints, table_requests, table_hints
+        )
 
     def _replay(
-        self, cassette_key: str, field_names: list[str], source_path: str | None
+        self,
+        cassette_key: str,
+        field_names: list[str],
+        source_path: str | None,
+        table_requests: dict[str, list[str]] | None,
     ) -> VisionResult:
         entries = self._load()
         entry = entries.get(cassette_key)
@@ -150,7 +171,7 @@ class CassetteVision:
                 f"{os.path.basename(source_path or '<no source>')} "
                 f"fields={field_names}; re-run with --vision record to record it"
             )
-        return sanitize(_result_from(entry), field_names)
+        return sanitize(_result_from(entry), field_names, table_requests)
 
     def _record(
         self,
@@ -158,11 +179,14 @@ class CassetteVision:
         pages: tuple[PageText, ...],
         field_names: list[str],
         source_path: str | None,
-        field_hints: dict[str, str] | None = None,
+        field_hints: dict[str, str] | None,
+        table_requests: dict[str, list[str]] | None,
+        table_hints: dict[str, dict[str, str]] | None,
     ) -> VisionResult:
         assert self.inner is not None  # guaranteed by __init__
         result = self.inner.extract(  # type: ignore[attr-defined]
-            pages, field_names, source_path=source_path, field_hints=field_hints
+            pages, field_names, source_path=source_path, field_hints=field_hints,
+            table_requests=table_requests, table_hints=table_hints,
         )
         entries = self._load()
         entries[cassette_key] = {
@@ -174,9 +198,10 @@ class CassetteVision:
             "fields": dict(result.fields),
             "confidence": dict(result.confidence),
             "irregularities": list(result.irregularities),
+            "tables": {name: [dict(row) for row in rows] for name, rows in result.row_groups.items()},
         }
         self._save(entries)
-        return sanitize(result, field_names)
+        return sanitize(result, field_names, table_requests)
 
     # -- file --------------------------------------------------------------
 
@@ -208,14 +233,23 @@ def _result_from(entry: Any) -> VisionResult:
     fields = entry.get("fields") or {}
     confidence = entry.get("confidence") or {}
     irregularities = entry.get("irregularities") or []
+    tables = entry.get("tables") or {}
     if not isinstance(fields, dict) or not isinstance(confidence, dict):
         raise ValueError("cassette entry 'fields' and 'confidence' must be objects")
     if not isinstance(irregularities, list):
         raise ValueError("cassette entry 'irregularities' must be an array")
+    if not isinstance(tables, dict):
+        raise ValueError("cassette entry 'tables' must be an object")
+    row_groups = {
+        name: [row for row in rows if isinstance(row, dict)]
+        for name, rows in tables.items()
+        if isinstance(rows, list)
+    }
     return VisionResult(
         fields=dict(fields),
         confidence=dict(confidence),
         irregularities=list(irregularities),
+        row_groups=row_groups,
     )
 
 

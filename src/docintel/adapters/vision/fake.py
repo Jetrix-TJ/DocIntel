@@ -22,12 +22,15 @@ class FakeVision:
         self,
         canned: dict[str, str] | None = None,
         irregularities: list[str] | None = None,
+        canned_tables: dict[str, list[dict[str, str]]] | None = None,
     ) -> None:
         self.canned = canned or {}
         self.irregularities = irregularities or []
+        self.canned_tables = canned_tables or {}
         self.calls: list[list[str]] = []
         self.sources: list[str | None] = []
         self.hints: list[dict[str, str]] = []
+        self.table_calls: list[dict[str, list[str]]] = []
 
     def extract(
         self,
@@ -36,13 +39,21 @@ class FakeVision:
         *,
         source_path: str | None = None,
         field_hints: dict[str, str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
+        table_hints: dict[str, dict[str, str]] | None = None,
     ) -> VisionResult:
         self.calls.append(list(field_names))
         self.sources.append(source_path)
         self.hints.append(dict(field_hints or {}))
+        self.table_calls.append(dict(table_requests or {}))
         fields = {k: v for k, v in self.canned.items() if k in field_names}
+        row_groups = {
+            name: [dict(row) for row in self.canned_tables.get(name, [])]
+            for name in (table_requests or {})
+        }
         return VisionResult(
             fields=fields,
             confidence={k: 0.50 for k in fields},
             irregularities=list(self.irregularities),
+            row_groups=row_groups,
         )

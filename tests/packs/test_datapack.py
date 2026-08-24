@@ -16,12 +16,17 @@ import pathlib
 
 import pytest
 
+from northstar import PACK as NORTHSTAR_PACK
+
 from docintel.core.models import PageMeta, PageText, Word, new_context
 from docintel.packs import registry
 from docintel.packs.datapack import DataPack, PackSpecError, load_pack_file
 from docintel.packs.registry import Pack, load_packs, resolve_pack
 
-PACK_DIR = pathlib.Path(registry.__file__).parent / "acme_freight"
+# acme_freight is a synthetic reference example (no real corpus), kept as a
+# test fixture rather than shipped by default - see registry.py's
+# PACK_MODULES/PACK_FILES comment.
+PACK_DIR = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "packs" / "acme_freight"
 
 
 def _ctx(text: str, role: str = "primary", source: str = "native"):
@@ -57,12 +62,13 @@ def test_the_third_pack_contains_no_python_at_all() -> None:
 
 
 def test_the_third_pack_is_not_a_python_module() -> None:
-    """It is listed in PACK_FILES, not PACK_MODULES. Discovery stays deliberate
-    either way - a pack is a business decision and must not activate because
-    somebody dropped a folder on disk - but the DECISION now costs a config file
-    rather than eight modules."""
+    """Never listed in `PACK_MODULES` at all - a data pack has no module to
+    list there. Not in `PACK_FILES` either anymore: both are empty (docintel
+    ships zero pre-configured packs, real or synthetic - see registry.py's
+    own comment); acme_freight lives on only as a test fixture, loaded
+    explicitly via `load_pack_file`, never auto-discovered."""
     assert not any("acme" in module for module in registry.PACK_MODULES)
-    assert "acme_freight/pack.json" in registry.PACK_FILES
+    assert registry.PACK_FILES == ()
 
 
 def test_it_satisfies_the_same_protocol_as_the_module_packs() -> None:
@@ -72,12 +78,11 @@ def test_it_satisfies_the_same_protocol_as_the_module_packs() -> None:
 
 
 def test_it_is_loaded_by_the_real_registry() -> None:
-    # spt_metals joined PACK_MODULES between digitaldirection and the
-    # data-only acme_freight (PACK_FILES) - a module pack with a custom hook,
-    # not a drift in this list.
-    assert [p.name for p in load_packs()] == [
-        "northstar", "digitaldirection", "spt_metals", "acme_freight",
-    ]
+    # docintel ships as a pure framework: PACK_MODULES and PACK_FILES are
+    # both empty. northstar/digitaldirection (real, measured config for two
+    # real companies) and spt_metals/acme_freight (synthetic reference
+    # examples, no real corpus) all live as test fixtures instead.
+    assert load_packs() == []
 
 
 # --------------------------------------------------------------------------
@@ -87,7 +92,7 @@ def test_it_is_loaded_by_the_real_registry() -> None:
 
 def test_it_claims_its_own_documents() -> None:
     ctx = _ctx("SUMMIT CARRIERS LLC|INVOICE 8891|BILL TO: ACME FREIGHT SERVICES|TOTAL 1,200.00")
-    assert resolve_pack(ctx, load_packs()).name == "acme_freight"
+    assert resolve_pack(ctx, load_packs() + [_acme()]).name == "acme_freight"
 
 
 def test_one_pack_file_is_one_object_however_often_it_is_loaded() -> None:
@@ -102,16 +107,19 @@ def test_one_pack_file_is_one_object_however_often_it_is_loaded() -> None:
 
     `build_pipeline` happens to load once and share the list, so the shipped
     path was safe. "Happens to" is not a contract, so this pins it.
+
+    Not exercised through `load_packs()` anymore - `acme_freight` is a test
+    fixture now, not shipped - but `load_pack_file`'s own memoize-by-path
+    behavior is the real, non-trivial mechanism this test protects (a module
+    pack's singleton-ness is just Python's own `sys.modules` cache, not
+    something this codebase implements or could regress).
     """
-    first = {p.name: p for p in load_packs()}
-    second = {p.name: p for p in load_packs()}
-    assert first["acme_freight"] is second["acme_freight"]
-    assert first["northstar"] is second["northstar"]
+    assert _acme() is _acme()
 
 
 def test_it_does_not_claim_another_packs_document() -> None:
     ctx = _ctx("VERITIV|INVOICE 715|BILL TO: NORTHSTAR RECYCLING COMPANY LLC|TOTAL 100.00")
-    assert resolve_pack(ctx, load_packs()).name == "northstar"
+    assert resolve_pack(ctx, load_packs() + [NORTHSTAR_PACK]).name == "northstar"
 
 
 def test_its_ship_to_veto_works_like_the_pack_it_was_copied_from() -> None:
@@ -317,3 +325,83 @@ def test_a_pack_without_a_name_is_rejected() -> None:
 def test_a_missing_pack_file_is_a_load_error_not_a_silent_skip() -> None:
     with pytest.raises(PackSpecError, match="cannot be read"):
         load_pack_file(str(PACK_DIR / "nope.json"))
+
+
+# --------------------------------------------------------------------------
+# vision_defaults - GEMINI-ONLY pack-level field/table declaration
+# --------------------------------------------------------------------------
+
+
+def test_a_pack_with_no_vision_defaults_key_returns_nothing_for_every_doc_type() -> None:
+    """Every existing shipped pack has no `vision_defaults` key at all - this
+    must stay a clean, silent `({}, {})`, not an error."""
+    fields, tables = _acme().vision_defaults("standard_invoice")
+    assert fields == {} and tables == {}
+
+
+def test_vision_defaults_are_read_per_doc_type() -> None:
+    spec = _spec(vision_defaults={
+        "standard_invoice": {
+            "fields": {"account_number": "text", "total_printed": "currency"},
+            "tables": {"line_items": {"date": "date", "amount": "currency"}},
+        }
+    })
+    pack = DataPack(spec, directory=str(PACK_DIR))
+
+    fields, tables = pack.vision_defaults("standard_invoice")
+    assert fields == {"account_number": "text", "total_printed": "currency"}
+    assert tables == {"line_items": {"date": "date", "amount": "currency"}}
+
+
+def test_vision_defaults_for_a_doc_type_with_no_entry_is_empty() -> None:
+    spec = _spec(vision_defaults={
+        "standard_invoice": {"fields": {"account_number": "text"}, "tables": {}}
+    })
+    pack = DataPack(spec, directory=str(PACK_DIR))
+
+    fields, tables = pack.vision_defaults("credit_memo")
+    assert fields == {} and tables == {}
+
+
+def test_vision_defaults_declared_for_an_undeclared_doc_type_is_rejected() -> None:
+    spec = _spec(vision_defaults={
+        "telecom_bill": {"fields": {"account_number": "text"}, "tables": {}}
+    })
+    with pytest.raises(PackSpecError, match="undeclared doc_types"):
+        DataPack(spec, directory=str(PACK_DIR))
+
+
+def test_an_unrecognized_field_type_fails_at_load_not_at_extraction_time() -> None:
+    spec = _spec(vision_defaults={
+        "standard_invoice": {"fields": {"account_number": "not-a-real-type"}, "tables": {}}
+    })
+    with pytest.raises(PackSpecError, match="unrecognized type"):
+        DataPack(spec, directory=str(PACK_DIR))
+
+
+def test_an_unrecognized_table_column_type_fails_at_load() -> None:
+    spec = _spec(vision_defaults={
+        "standard_invoice": {
+            "fields": {}, "tables": {"line_items": {"amount": "not-a-real-type"}}
+        }
+    })
+    with pytest.raises(PackSpecError, match="unrecognized type"):
+        DataPack(spec, directory=str(PACK_DIR))
+
+
+def test_the_dollar_alias_is_a_recognized_field_type() -> None:
+    """The friendly spelling a non-technical pack author would reach for."""
+    spec = _spec(vision_defaults={
+        "standard_invoice": {"fields": {"total_printed": "$"}, "tables": {}}
+    })
+    pack = DataPack(spec, directory=str(PACK_DIR))
+    fields, _ = pack.vision_defaults("standard_invoice")
+    assert fields == {"total_printed": "$"}
+
+
+def test_vision_defaults_is_not_a_required_pack_protocol_method() -> None:
+    """`s5b_vision.py` must read this defensively - the two module-backed
+    packs declare none today and must not be forced to implement it."""
+    for pack in load_packs():
+        if pack.name in ("northstar", "digitaldirection"):
+            assert getattr(pack, "vision_defaults", None) is None

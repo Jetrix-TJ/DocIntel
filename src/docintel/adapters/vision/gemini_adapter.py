@@ -146,29 +146,61 @@ class GeminiVision:
         *,
         source_path: str | None = None,
         field_hints: dict[str, str] | None = None,
+        table_requests: dict[str, list[str]] | None = None,
+        table_hints: dict[str, dict[str, str]] | None = None,
     ) -> VisionResult:
-        if not field_names:
+        tables = table_requests or {}
+        if not field_names and not tables:
             return VisionResult()
         document_bytes, mime_type, page_count = _read_document(source_path)
         hints = self.field_hints if field_hints is None else field_hints
-        prompt = self._prompt(field_names, page_count, hints)
-        payload = self._send(document_bytes, mime_type, prompt, _schema(field_names))
-        return sanitize(_result_from(payload), field_names)
+        prompt = self._prompt(field_names, page_count, hints, tables, table_hints or {})
+        payload = self._send(document_bytes, mime_type, prompt, _schema(field_names, tables))
+        return sanitize(_result_from(payload), field_names, tables)
 
     # -- request -------------------------------------------------------------
 
-    def _prompt(self, field_names: list[str], page_count: int, hints: dict[str, str]) -> str:
-        lines = []
-        for name in field_names:
-            hint = hints.get(name)
-            lines.append(f"  - {name}: {hint}" if hint else f"  - {name}")
+    def _prompt(
+        self,
+        field_names: list[str],
+        page_count: int,
+        hints: dict[str, str],
+        tables: dict[str, list[str]],
+        table_hints: dict[str, dict[str, str]],
+    ) -> str:
         pages_note = f"This document has {page_count} page{'s' if page_count != 1 else ''}."
-        return (
-            f"{pages_note}\n\nTranscribe the following values from this document:\n"
-            + "\n".join(lines)
-            + "\n\nReturn every name listed above, using an empty string for any "
-            "you cannot read off the document."
-        )
+        parts = [pages_note]
+
+        if field_names:
+            lines = []
+            for name in field_names:
+                hint = hints.get(name)
+                lines.append(f"  - {name}: {hint}" if hint else f"  - {name}")
+            parts.append(
+                "Transcribe the following values from this document:\n"
+                + "\n".join(lines)
+                + "\n\nReturn every name listed above, using an empty string for any "
+                "you cannot read off the document."
+            )
+
+        for table_name, columns in tables.items():
+            column_hints = table_hints.get(table_name, {})
+            col_lines = []
+            for col in columns:
+                hint = column_hints.get(col)
+                col_lines.append(f"  - {col}: {hint}" if hint else f"  - {col}")
+            parts.append(
+                f'Also transcribe every row of the "{table_name}" table, if this '
+                "document has one, with these columns:\n"
+                + "\n".join(col_lines)
+                + "\n\nReturn one object per row, in the order printed on the page, "
+                "using an empty string for any cell you cannot read. Return an "
+                "empty list if this table is not present in the document at all. "
+                "Do NOT include a subtotal, prior-balance, payment-received, or "
+                "total row as a line item - only genuine charge/detail rows."
+            )
+
+        return "\n\n".join(parts)
 
     def _send(self, document_bytes: bytes, mime_type: str, prompt: str, schema: Any) -> dict[str, Any]:
         from google.genai import types
@@ -231,30 +263,43 @@ class GeminiVision:
 # ---------------------------------------------------------------------------
 
 
-def _schema(field_names: list[str]) -> Any:
+def _schema(field_names: list[str], tables: dict[str, list[str]] | None = None) -> Any:
     """The response schema.
 
     Gemini's schema subset has no `additionalProperties: false`, which makes
     `policy.sanitize` load-bearing rather than a belt-and-braces second check
-    here. Every value is a plain string; coercion into a real type happens
-    downstream in the pipeline (Stage 6's `pattern`).
+    here. Every scalar value is a plain string; coercion into a real type
+    happens downstream in the pipeline (Stage 6's `pattern`). Table rows are
+    the same discipline one level down: every column is a plain string, one
+    object per row, so a table adds a repeating shape rather than a new type.
     """
     from google.genai import types
 
     def obj(props: dict[str, Any], required: list[str]) -> Any:
         return types.Schema(type=types.Type.OBJECT, properties=props, required=required)
 
-    return obj(
-        {
-            "fields": obj({n: types.Schema(type=types.Type.STRING) for n in field_names}, field_names),
-            "confidence": obj({n: types.Schema(type=types.Type.NUMBER) for n in field_names}, field_names),
-            "irregularities": types.Schema(
+    properties: dict[str, Any] = {
+        "fields": obj({n: types.Schema(type=types.Type.STRING) for n in field_names}, field_names),
+        "confidence": obj({n: types.Schema(type=types.Type.NUMBER) for n in field_names}, field_names),
+        "irregularities": types.Schema(
+            type=types.Type.ARRAY,
+            items=types.Schema(type=types.Type.STRING, enum=sorted(VISION_OBSERVABLE)),
+        ),
+    }
+    required = ["fields", "confidence", "irregularities"]
+
+    if tables:
+        row_schema = {
+            table_name: types.Schema(
                 type=types.Type.ARRAY,
-                items=types.Schema(type=types.Type.STRING, enum=sorted(VISION_OBSERVABLE)),
-            ),
-        },
-        ["fields", "confidence", "irregularities"],
-    )
+                items=obj({col: types.Schema(type=types.Type.STRING) for col in columns}, list(columns)),
+            )
+            for table_name, columns in tables.items()
+        }
+        properties["tables"] = obj(row_schema, list(tables))
+        required.append("tables")
+
+    return obj(properties, required)
 
 
 def _read_document(source_path: str | None) -> tuple[bytes, str, int]:
@@ -327,10 +372,17 @@ def _result_from(payload: dict[str, Any]) -> VisionResult:
     fields = payload.get("fields")
     confidence = payload.get("confidence")
     irregularities = payload.get("irregularities")
+    tables = payload.get("tables")
+    row_groups: dict[str, list[dict[str, str]]] = {}
+    if isinstance(tables, dict):
+        for name, rows in tables.items():
+            if isinstance(rows, list):
+                row_groups[name] = [row for row in rows if isinstance(row, dict)]
     return VisionResult(
         fields=dict(fields) if isinstance(fields, dict) else {},
         confidence=dict(confidence) if isinstance(confidence, dict) else {},
         irregularities=list(irregularities) if isinstance(irregularities, list) else [],
+        row_groups=row_groups,
     )
 
 

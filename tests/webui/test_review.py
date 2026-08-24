@@ -231,7 +231,16 @@ def test_a_reviewers_decision_takes_effect_on_the_next_document_with_no_restart(
     so its own entry is patched away here to simulate "not yet known" without
     touching the real, audited table.
     """
-    from docintel.packs.northstar import conventions as ns_conventions
+    from northstar import PACK as NORTHSTAR_PACK
+    from northstar import conventions as ns_conventions
+
+    # `northstar` is a test fixture (tests/fixtures/packs/), not a shipped
+    # module - `webui.app._pack_dir` only locates a pack's overlay directory
+    # via `PACK_MODULES`, so this test's own use of a real northstar document
+    # needs it added there too, for this test's duration only. The bare
+    # "northstar" import path resolves via the pythonpath entry that makes
+    # `from northstar import ...` work at all in this test suite.
+    monkeypatch.setattr(app_module, "PACK_MODULES", (*app_module.PACK_MODULES, "northstar"))
 
     monkeypatch.delitem(ns_conventions.PRIOR_BALANCE_BASIS, "edco")
 
@@ -245,7 +254,7 @@ def test_a_reviewers_decision_takes_effect_on_the_next_document_with_no_restart(
     source = os.path.join("docs", gold["source_file"])
 
     queue = _queue(tmp_path)
-    runner = build_pipeline(vision=FakeVision(), jobs=queue)
+    runner = build_pipeline(vision=FakeVision(), jobs=queue, extra_packs=[NORTHSTAR_PACK])
     app = create_app(runner_factory=lambda: runner, jobs=queue)
     client = app.test_client()
 

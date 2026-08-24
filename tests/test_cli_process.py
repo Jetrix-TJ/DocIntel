@@ -50,7 +50,7 @@ def test_missing_file_is_a_skip_not_a_crash(capsys):
     assert rec["disposition"] == "skipped"
 
 
-def test_reconcile_end_to_end_real_contracts_real_invoice_real_queue(tmp_path, capsys):
+def test_reconcile_end_to_end_real_contracts_real_invoice_real_queue(tmp_path, capsys, monkeypatch):
     """The full path this whole feature exists for, exercised once with real
     files: `docintel process` two real document sets, `docintel reconcile`
     them against each other, and confirm a real finding lands in the real
@@ -61,7 +61,21 @@ def test_reconcile_end_to_end_real_contracts_real_invoice_real_queue(tmp_path, c
     contracts, on a completely different account - so the correct, honest
     outcome is `no_matching_contract`, not a fabricated match. That is
     itself the finding this test proves works end to end.
+
+    `digitaldirection` is a test fixture (`tests/fixtures/packs/`), not a
+    shipped pack, so it never reaches `docintel process` on its own - this
+    test needs it specifically, so it injects it into `load_packs()` for its
+    own duration only. `build_pipeline()` re-imports `load_packs` fresh on
+    every call (a lazy import, not a module-level binding), so patching it
+    here propagates through `cli.py`'s own `_build_runner` with no CLI
+    change needed.
     """
+    import docintel.packs.registry as registry
+    from digitaldirection import PACK as DIGITALDIRECTION_PACK
+
+    real_load_packs = registry.load_packs
+    monkeypatch.setattr(registry, "load_packs", lambda: real_load_packs() + [DIGITALDIRECTION_PACK])
+
     records_path = tmp_path / "records.jsonl"
     assert main([
         "process",

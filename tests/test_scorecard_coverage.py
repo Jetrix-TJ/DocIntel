@@ -275,8 +275,8 @@ def test_every_gold_field_is_either_asserted_or_declared_prose() -> None:
 def test_the_deferred_field_list_holds_only_unextractable_names() -> None:
     """An entry here for a field a pack still extracts is a free pass, not a
     deferral — it would hide a real extraction failure behind a spec decision."""
-    from docintel.packs.digitaldirection import fields as dd
-    from docintel.packs.northstar import fields as ns
+    from digitaldirection import fields as dd
+    from northstar import fields as ns
 
     assert not (DEFERRED_FIELDS & (ns.FIELDS | dd.FIELDS))
     assert not (DEFERRED_FIELDS & set(CHECKED_FIELDS))
@@ -299,8 +299,8 @@ def test_extraction_debt_is_measured_rather_than_deferred() -> None:
     deferral was a decision and this is a gap, so the gap stays in the
     denominator where it goes on costing something.
     """
-    from docintel.packs.digitaldirection import fields as dd
-    from docintel.packs.northstar import fields as ns
+    from digitaldirection import fields as dd
+    from northstar import fields as ns
 
     assert not (EXTRACTION_DEBT & DEFERRED_FIELDS), (
         "extraction debt moved into a deferral list — that hides a real gap "
@@ -338,8 +338,15 @@ def test_no_persona_has_quietly_paid_the_extraction_debt() -> None:
     import os
 
     selected: dict[str, list[str]] = {}
-    pattern = os.path.join("src", "docintel", "packs", "*", "personas", "*.json")
-    paths = sorted(glob.glob(pattern))
+    # northstar/digitaldirection moved to tests/fixtures/packs/ (real,
+    # measured config for two real companies, not shipped library code) -
+    # scanned from both locations so this guard keeps covering every real
+    # persona, not just the one still-shipped pack's.
+    patterns = [
+        os.path.join("src", "docintel", "packs", "*", "personas", "*.json"),
+        os.path.join("tests", "fixtures", "packs", "*", "personas", "*.json"),
+    ]
+    paths = sorted(p for pattern in patterns for p in glob.glob(pattern))
     # 12 since spt_metals: golub-windstream-contract.json (doc_type "contract")
     # joined the original ten invoice personas in Phase 4, and
     # spt_metals/personas/spt_metals.json is the twelfth - a deliberate

@@ -12,6 +12,9 @@ import json
 import os
 import tempfile
 
+from digitaldirection import PACK as DIGITALDIRECTION_PACK
+from northstar import PACK as NORTHSTAR_PACK
+
 from docintel.adapters.vision.fake import FakeVision
 from docintel.core.coverage import ScalarSelector
 from docintel.grammar.schema import parse_persona
@@ -22,6 +25,11 @@ from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_default_stages, build_pipeline
 from docintel.webui.app import _label, create_app
+
+# northstar/digitaldirection are test fixtures (tests/fixtures/packs/), not
+# shipped packs - real, measured config for two real companies. This file's
+# real-document tests (DTSS, Comcast) need them explicitly.
+_TEST_PACKS = load_packs() + [NORTHSTAR_PACK, DIGITALDIRECTION_PACK]
 
 DTSS_PDF = "docs/_AP Invoice 6060DTSS        D.T.S.S. Inc. 699.00000.pdf"
 
@@ -38,7 +46,7 @@ NO_MATCH = "(ZZ_NOT_ON_THIS_PAGE_ZZ)"
 
 
 def _real_runner_factory():
-    return lambda: build_pipeline(vision=FakeVision())
+    return lambda: build_pipeline(vision=FakeVision(), extra_packs=[NORTHSTAR_PACK, DIGITALDIRECTION_PACK])
 
 
 def _no_persona_runner_factory():
@@ -57,7 +65,7 @@ def _collapsed_runner_factory():
         gold = json.load(fh)
 
     def factory():
-        packs = load_packs()
+        packs = _TEST_PACKS
         hooks = HookRegistry()
         register_all(hooks, packs)
         store = PackPersonaStore(packs)
@@ -227,7 +235,7 @@ def test_extracted_document_shows_every_declared_field_as_extracted():
     """DTSS is the cleanest document in the corpus - every field the persona
     declares should come back marked extracted, not just the ones shown in the
     general value table."""
-    store = PackPersonaStore(load_packs())
+    store = PackPersonaStore(_TEST_PACKS)
     persona = store.lookup("northstar|dtss", "standard_invoice")
     declared = [s.field for s in persona.field_selectors if isinstance(s, ScalarSelector)]
     assert declared, "the test did not achieve the condition it is asserting about"

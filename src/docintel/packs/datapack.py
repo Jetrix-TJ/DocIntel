@@ -43,6 +43,45 @@ class PackSpecError(ValueError):
     """A pack file that cannot be loaded. Raised at load time, never later."""
 
 
+def _validate_vision_defaults(pack_name: str, spec: dict[str, Any]) -> None:
+    """Fail loudly on a typo'd type name AT PACK-LOAD TIME, not silently at
+    extraction time. `vision_defaults` is GEMINI-ONLY - see `DataPack.
+    vision_defaults`'s own docstring - so a bad type name here can never be
+    caught by the grammar validator (V1-V14), which never sees this key at
+    all."""
+    from docintel.adapters.vision.hints import recognized_vision_types
+
+    recognized = recognized_vision_types()
+    for doc_type, entry in spec.items():
+        if not isinstance(entry, dict):
+            raise PackSpecError(f"{pack_name}: vision_defaults.{doc_type} must be an object")
+        fields = entry.get("fields", {})
+        if not isinstance(fields, dict):
+            raise PackSpecError(f"{pack_name}: vision_defaults.{doc_type}.fields must be an object")
+        for field_name, type_name in fields.items():
+            if type_name not in recognized:
+                raise PackSpecError(
+                    f"{pack_name}: vision_defaults.{doc_type}.fields.{field_name} has "
+                    f"unrecognized type {type_name!r}; expected one of {sorted(recognized)}"
+                )
+        tables = entry.get("tables", {})
+        if not isinstance(tables, dict):
+            raise PackSpecError(f"{pack_name}: vision_defaults.{doc_type}.tables must be an object")
+        for table_name, columns in tables.items():
+            if not isinstance(columns, dict) or not columns:
+                raise PackSpecError(
+                    f"{pack_name}: vision_defaults.{doc_type}.tables.{table_name} must be "
+                    "a non-empty object of column -> type"
+                )
+            for col_name, type_name in columns.items():
+                if type_name not in recognized:
+                    raise PackSpecError(
+                        f"{pack_name}: vision_defaults.{doc_type}.tables.{table_name}."
+                        f"{col_name} has unrecognized type {type_name!r}; expected one "
+                        f"of {sorted(recognized)}"
+                    )
+
+
 def _frozen(value: Any) -> frozenset[str]:
     return frozenset(value or ())
 
@@ -100,6 +139,14 @@ class DataPack:
         self._display: dict[str, str] = dict(spec.get("aliases", {}).get("display", {}))
         self._roster: tuple[str, ...] = tuple(spec.get("bill_to_roster", ()))
 
+        vision_defaults_spec = spec.get("vision_defaults", {})
+        if not isinstance(vision_defaults_spec, dict):
+            raise PackSpecError(f"{name}: vision_defaults must be an object")
+        self._vision_defaults: dict[str, Any] = {
+            k: v for k, v in vision_defaults_spec.items() if k != "_why"
+        }
+        _validate_vision_defaults(name, self._vision_defaults)
+
         # Compiled at load, so a malformed rule is an error when the pack is
         # registered rather than a rung that silently never fires.
         self.ladder, self.tag_rules = declarative.compile_classification(spec)
@@ -114,6 +161,12 @@ class DataPack:
         if unknown:
             raise PackSpecError(
                 f"{name}: fields declared for undeclared doc_types {sorted(unknown)}"
+            )
+        unknown_vision = set(self._vision_defaults) - set(self.doc_types)
+        if unknown_vision:
+            raise PackSpecError(
+                f"{name}: vision_defaults declared for undeclared doc_types "
+                f"{sorted(unknown_vision)}"
             )
         ladder_types = {doc_type for _, doc_type, _ in self.ladder.rungs} | {
             self.ladder.default
@@ -174,6 +227,33 @@ class DataPack:
 
     def derived_only_fields(self, doc_type: str) -> frozenset[str]:
         return _frozen(self._for(doc_type, "derived_only"))
+
+    def vision_defaults(self, doc_type: str) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+        """`(field_name -> type, table_name -> {column -> type})` for a
+        persona-less document of this doc_type - or `({}, {})` if this pack
+        declares none.
+
+        **GEMINI-ONLY. Never read by the rule-based grammar/persona engine
+        (Stage 5a).** This is the declarative answer for the case a
+        `row_group` persona selector cannot cover: 1000+ vendors this pack
+        accepts with no persona and no single fixed layout to anchor a
+        selector against. A user writes plain type names here (`"text"`,
+        `"currency"`/`"$"`, `"decimal"`, `"date"`...) - the same vocabulary
+        `adapters.vision.hints.recognized_vision_types()` validates at load
+        time - never anchors, regions, or other grammar concepts, because
+        Stage 5b's vision call has no page geometry to walk; it reads
+        visually, regardless of layout.
+
+        **Not on the `registry.Pack` Protocol.** Adding a required method
+        there would force the two hand-coded module packs (`northstar`,
+        `digitaldirection`) to implement it immediately even though neither
+        declares any today. `s5b_vision.py` reads this defensively via
+        `getattr(ctx.pack, "vision_defaults", None)`.
+        """
+        entry = self._vision_defaults.get(doc_type, {})
+        fields = dict(entry.get("fields", {}))
+        tables = {name: dict(columns) for name, columns in entry.get("tables", {}).items()}
+        return fields, tables
 
     def adjust_ops(self) -> frozenset[str]:
         """No pack ops. A data pack composes the grammar's closed enum; adding an

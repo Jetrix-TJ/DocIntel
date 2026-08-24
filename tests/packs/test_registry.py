@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from digitaldirection import PACK as DIGITALDIRECTION_PACK
+from northstar import PACK as NORTHSTAR_PACK
+
 from docintel.core.models import PageMeta, PageText, Word, new_context
 from docintel.grammar.schema import Pack as GrammarPack
 from docintel.packs.registry import (
@@ -36,8 +39,12 @@ def _ctx(*texts: str):
     return ctx
 
 
-def test_load_packs_returns_packs() -> None:
-    assert load_packs()
+def test_load_packs_returns_an_empty_list_by_default() -> None:
+    """docintel ships as a pure framework - `PACK_MODULES`/`PACK_FILES` are
+    both empty, so a fresh adopter's `load_packs()` finds nothing until they
+    supply their own `extra_packs`. Not `None`, not an error - an empty list,
+    the same shape `build_pipeline` always expects to extend."""
+    assert load_packs() == []
 
 
 def test_every_pack_satisfies_the_registry_protocol() -> None:
@@ -54,14 +61,14 @@ def test_every_pack_also_satisfies_the_grammar_protocol() -> None:
 
 def test_a_pack_claims_a_document_billed_to_its_organization() -> None:
     ctx = _ctx("Bill", "To", "Northstar", "Recycling", "Company,", "LLC")
-    pack = resolve_pack(ctx)
+    pack = resolve_pack(ctx, load_packs() + [NORTHSTAR_PACK])
     assert pack is not None and pack.name == "northstar"
 
 
 def test_a_pack_claims_on_the_po_box_alone() -> None:
     """EDCO's remittance stub prints the PO Box without the company name."""
     ctx = _ctx("PO", "BOX", "188", "EAST", "LONGMEADOW", "MA", "01028")
-    assert resolve_pack(ctx) is not None
+    assert resolve_pack(ctx, load_packs() + [NORTHSTAR_PACK]) is not None
 
 
 def test_no_pack_claims_someone_elses_invoice() -> None:
@@ -80,9 +87,12 @@ def test_claiming_reads_only_primary_pages() -> None:
 
 
 def test_register_all_registers_into_real_sockets() -> None:
-    registry = HookRegistry()
-    register_all(registry)
-    registered = {s: registry.registered(s) for s in SOCKETS}
+    """No pack ships by default, so this exercises `register_all` against a
+    real fixture pack - the mechanism under test is the socket wiring
+    itself, not which packs happen to be shipped."""
+    hooks = HookRegistry()
+    register_all(hooks, packs=[NORTHSTAR_PACK])
+    registered = {s: hooks.registered(s) for s in SOCKETS}
     assert registered["classifySignals"], "a pack with no ladder cannot classify"
     assert registered["beforePersonaLookup"], "no fingerprint means no persona lookup"
     assert registered["afterExtraction"]
@@ -215,7 +225,7 @@ def test_the_hardcoded_table_wins_over_the_overlay_for_a_known_vendor(tmp_path, 
     docstring ('a wrong entry here is a reviewed code change'). Exercised
     directly against the real northstar convention, not a stand-in, so a
     future refactor that reorders the two lookups fails this test."""
-    import docintel.packs.northstar.conventions as ns_conventions
+    import northstar.conventions as ns_conventions
 
     overlay_path = tmp_path / "prior_balance_basis.local.json"
     overlay_path.write_text('{"edco": "net_of_payments"}')
@@ -236,7 +246,7 @@ def test_the_overlay_supplies_the_basis_for_a_vendor_the_hardcoded_table_does_no
     """The other half of the same precedence: when the hardcoded table has
     nothing for this vendor, the overlay is consulted rather than the F1b
     refusal firing immediately."""
-    import docintel.packs.northstar.conventions as ns_conventions
+    import northstar.conventions as ns_conventions
 
     overlay_path = tmp_path / "prior_balance_basis.local.json"
     overlay_path.write_text('{"dtss": "net_of_payments"}')
@@ -252,7 +262,7 @@ def test_the_overlay_supplies_the_basis_for_a_vendor_the_hardcoded_table_does_no
 def test_a_vendor_in_neither_table_still_tags_unknown_and_sets_no_basis(
     tmp_path, monkeypatch
 ) -> None:
-    import docintel.packs.northstar.conventions as ns_conventions
+    import northstar.conventions as ns_conventions
 
     monkeypatch.setattr(ns_conventions, "_PACK_DIR", str(tmp_path))  # no overlay file at all
 
@@ -270,7 +280,7 @@ def test_the_overlay_mechanism_is_symmetric_on_the_digitaldirection_pack(
     own docstrings) - a fix or a bug in one does not automatically apply to
     the other, so the overlay fallback needs its own proof here too, not just
     on northstar."""
-    import docintel.packs.digitaldirection.conventions as dd_conventions
+    import digitaldirection.conventions as dd_conventions
 
     monkeypatch.delitem(dd_conventions.PRIOR_BALANCE_BASIS, "comcast")
     monkeypatch.setattr(dd_conventions, "_PACK_DIR", str(tmp_path))
@@ -416,7 +426,7 @@ def test_digitaldirection_resolves_a_carrier_only_known_through_the_overlay(tmp_
     word-boundary matched against real, whole-page text, the same way
     PATTERN_ALIASES already works, not an exact `.get()` that would never
     fire against a multi-line blob."""
-    import docintel.packs.digitaldirection.aliases as dd_aliases
+    import digitaldirection.aliases as dd_aliases
 
     directory = tmp_path / "digitaldirection"
     directory.mkdir()
@@ -428,7 +438,7 @@ def test_digitaldirection_resolves_a_carrier_only_known_through_the_overlay(tmp_
 
 
 def test_digitaldirection_personas_include_the_overlay_ones(tmp_path, monkeypatch) -> None:
-    from docintel.packs.digitaldirection import PACK as dd_pack
+    from digitaldirection import PACK as dd_pack
 
     directory = tmp_path / "digitaldirection"
     directory.mkdir()
@@ -452,7 +462,7 @@ def test_digitaldirection_claims_a_carrier_only_known_through_the_overlay(
     time, from `aliases.LITERAL_ALIASES` alone. A carrier this rule never
     claims never reaches persona lookup at all, so proving the other two
     were not enough."""
-    from docintel.packs.digitaldirection import PACK as dd_pack
+    from digitaldirection import PACK as dd_pack
 
     directory = tmp_path / "digitaldirection"
     directory.mkdir()
@@ -469,7 +479,7 @@ def test_digitaldirection_overlay_does_not_widen_the_claim_to_everything(
     """The overlay must widen what the pack recognizes, not make it claim
     everything - an unrelated document with the overlay set must still go
     unclaimed."""
-    from docintel.packs.digitaldirection import PACK as dd_pack
+    from digitaldirection import PACK as dd_pack
 
     directory = tmp_path / "digitaldirection"
     directory.mkdir()
@@ -485,16 +495,16 @@ def test_digitaldirection_still_claims_a_shipped_carrier_with_the_overlay_env_va
 ) -> None:
     """The common case - no overlay directory at all - must keep claiming
     every already-shipped carrier exactly as before this fix."""
-    from docintel.packs.digitaldirection import PACK as dd_pack
+    from digitaldirection import PACK as dd_pack
 
     monkeypatch.delenv("DOCINTEL_EXTRA_PERSONAS_DIR", raising=False)
 
-    ctx = _ctx("Spectrum", "Business", "Account", "Summary")
+    ctx = _ctx("Comcast", "Business", "Account", "Summary")
     assert dd_pack.claims(ctx) is True
 
 
 def test_northstar_resolves_a_vendor_only_known_through_the_overlay(tmp_path, monkeypatch) -> None:
-    import docintel.packs.northstar.aliases as ns_aliases
+    import northstar.aliases as ns_aliases
 
     directory = tmp_path / "northstar"
     directory.mkdir()
