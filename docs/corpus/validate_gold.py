@@ -240,6 +240,20 @@ def check(doc: dict, r: Report) -> None:
 
 
 def main() -> int:
+    # Windows' default console codepage (cp1252) cannot encode the ✓/✗ below,
+    # so a clean 116/116-checks-passing run still crashed with a raw
+    # `UnicodeEncodeError` traceback instead of printing "all gold labels are
+    # internally consistent" and exiting 0 - a naive CI step reading "exit 1 /
+    # traceback" would misdiagnose that as a real failure. `reconfigure` is
+    # unavailable only if stdout has been replaced with something unusual
+    # (e.g. some test-capture shims); fall through silently there rather than
+    # fail the whole script over a cosmetic guard.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     files = sorted(glob.glob(os.path.join(GOLD_DIR, "*.json")))
     if not files:
         print(f"no gold files found in {GOLD_DIR}", file=sys.stderr)

@@ -291,8 +291,28 @@ def derive_document_identity(ctx: JobContext) -> JobContext:
 
     1. `invoice_number` -> basis `invoice_number`
     2. an account number plus the billing period -> basis `account_period`
-    3. neither -> both keys are set to None, so a consumer can tell that the
-       pipeline looked and could not build one
+    3. Stage 1's `soft_fingerprint` (sender + filename + byte size), when even
+       that was set -> basis `soft_fingerprint`. Deliberately the WEAKEST rung:
+       it identifies "the same file arrived again", not "the same business
+       document" - two different documents from the same sender that happen
+       to share a filename and byte count would collide. That is exactly why
+       this basis is distinguishable from the other two (a consumer, e.g. the
+       review UI, can and should treat it as a lower-confidence hint), and why
+       `IdentityIndex` only ever sets the advisory `possible_duplicate_of`
+       field - never `review_flag`/`lane` - regardless of which rung fired.
+    4. none of the above -> all three keys are set to None, so a consumer can
+       tell that the pipeline looked and still could not build anything (Stage
+       1 could not even read the file's size, or ran with no source path at
+       all - see `s1_intake.py`).
+
+    Without rung 3, a document that extracts no invoice number, no account
+    number, and no billing period - the exact case a hard-miss/collapsed
+    persona produces - could never be flagged as a possible duplicate of
+    itself even when it is, byte-for-byte, the identical file reprocessed
+    (a retried webhook, a re-uploaded attachment). `soft_fingerprint` was
+    computed for exactly this at Stage 1 ("clusters likely duplicates, never
+    rejects them") but, before this rung existed, was never actually read by
+    anything.
 
     The account number is **normalized** before it goes into the key. One
     corpus vendor prints its account number as `1234 56 789 0123456` and its
@@ -318,11 +338,22 @@ def derive_document_identity(ctx: JobContext) -> JobContext:
         ctx.derived.set("identity_basis", "account_period")
         return ctx
 
+    soft_fingerprint = ctx.derived.get("soft_fingerprint")
+    if soft_fingerprint:
+        ctx.derived.set("document_identity", f"soft:{soft_fingerprint}")
+        ctx.derived.set("identity_basis", "soft_fingerprint")
+        ctx.log(
+            "s6: document_identity fell back to Stage 1's soft_fingerprint - "
+            "no invoice number or account/period was extracted"
+        )
+        return ctx
+
     ctx.derived.set("document_identity", None)
     ctx.derived.set("identity_basis", None)
     ctx.log(
-        "s6: no document_identity could be built - neither an invoice number nor "
-        "an account number with a billing period was extracted"
+        "s6: no document_identity could be built - neither an invoice number, "
+        "an account number with a billing period, nor a soft_fingerprint was "
+        "available"
     )
     return ctx
 

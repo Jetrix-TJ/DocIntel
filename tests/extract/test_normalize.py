@@ -70,6 +70,56 @@ def test_upak_total_is_on_the_last_page_not_the_first():
     assert "14740.85" not in pages[0].text.replace(",", "")
 
 
+# --- load_image_document: the image-native counterpart, no PDF involved ---
+
+
+def test_load_image_document_always_reports_ocr_and_zero_char_count(tmp_path):
+    """A raster has no text layer at all - `text_source` is always "ocr" and
+    `PageMeta.char_count` is always 0, by construction, never introspected
+    from a converted PDF's own (always-0) text layer."""
+    from docintel.extract.normalize import load_image_document
+
+    path = tmp_path / "scan.png"
+    img = Image.new("L", (400, 200), color=255)
+    ImageDraw.Draw(img).text((20, 20), "SCANNED SNIPPET", font=ImageFont.load_default(size=28), fill=0)
+    img.save(path)
+
+    pages, meta, text_source = load_image_document(str(path))
+
+    assert text_source == "ocr"
+    assert len(pages) == len(meta) == 1
+    assert meta[0].char_count == 0
+    assert meta[0].image_count == 1
+    assert meta[0].annot_count == 0
+    assert "SCANNED" in pages[0].text.upper()
+
+
+def test_load_image_document_is_memoized_like_load_document(tmp_path, monkeypatch):
+    """Same in-process memo discipline as `load_document`: a repeat call for
+    the same, unmodified file must not re-run OCR."""
+    from docintel.extract import ocr as ocr_module
+    from docintel.extract.normalize import load_image_document
+
+    path = tmp_path / "memo.png"
+    img = Image.new("L", (400, 200), color=255)
+    ImageDraw.Draw(img).text((20, 20), "MEMO CHECK", font=ImageFont.load_default(size=28), fill=0)
+    img.save(path)
+
+    calls = []
+    real = ocr_module.pytesseract.image_to_data
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(ocr_module.pytesseract, "image_to_data", spy)
+
+    load_image_document(str(path))
+    load_image_document(str(path))
+
+    assert len(calls) == 1, "a repeat call for the same file must not re-run tesseract"
+
+
 # --- Synthetic mixed-document fixture -------------------------------------
 #
 # No corpus document is mixed (all ten are 0 chars/page or 500+, per F2), so

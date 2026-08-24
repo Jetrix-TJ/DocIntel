@@ -52,6 +52,20 @@ from docintel.core.models import JobContext
 # backwards-looking dependency for no reason.
 DEFAULT_COLLAPSE_SHARE = 0.60
 
+# A document must lose at least this many declared selectors, not just this
+# SHARE of them, before coverage alone calls it "the rules no longer fit this
+# document". Without this floor, a persona with very few declared selectors -
+# e.g. `digitaldirection|golub-windstream-contract`'s 2, both explicitly
+# `required: false` because real amendment layouts vary which of them prints
+# at all - could trip a "regenerate this persona"/vision-fallback verdict from
+# losing just one or two individual optional values on one document, which is
+# exactly the per-document variability that persona's own notes describe as
+# routine, not a sign the rules are broken. 3 is small enough to leave every
+# other shipped persona's behavior unchanged (all have 7+ declared selectors,
+# where the SHARE threshold alone is already the binding constraint) while
+# making the percentage-is-meaningless-below-N case structurally unreachable.
+MIN_COLLAPSE_ABSOLUTE_MISSING = 3
+
 
 @runtime_checkable
 class ScalarSelector(Protocol):
@@ -108,6 +122,28 @@ class Coverage:
         if self.declared <= 0:
             return 0.0
         return (self.declared - self.populated) / self.declared
+
+    @property
+    def collapsed(self) -> bool:
+        """Coverage's own verdict: has "most of what the persona declared"
+        come back empty, in a way that means "the rules no longer fit this
+        document" rather than "one field moved"?
+
+        Both the SHARE (`DEFAULT_COLLAPSE_SHARE`) and the ABSOLUTE COUNT
+        (`MIN_COLLAPSE_ABSOLUTE_MISSING`) must cross their floors - see the
+        latter's own docstring for why a percentage alone is not a meaningful
+        signal on a persona with very few declared selectors. The single
+        source of truth both `s5b_vision._collapsed` and
+        `s7_gate.ConfidenceGate._collapsed` consult, so the two decisions
+        cannot drift apart.
+        """
+        if not self.assessed:
+            return False
+        missing = self.declared - self.populated
+        return (
+            missing >= MIN_COLLAPSE_ABSOLUTE_MISSING
+            and self.miss_share >= DEFAULT_COLLAPSE_SHARE
+        )
 
     def as_record(self) -> dict[str, object]:
         """The `extraction_coverage` block. Names, not just counts, because the

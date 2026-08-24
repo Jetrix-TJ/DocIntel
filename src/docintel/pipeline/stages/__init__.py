@@ -72,6 +72,7 @@ def build_pipeline(
     jobs: object | None = None,
     hooks: object | None = None,
     extra_packs: list[object] | None = None,
+    max_retries: int = 2,
 ) -> object:
     """A Runner with every pack loaded, its hooks registered and its personas indexed.
 
@@ -106,6 +107,16 @@ def build_pipeline(
     (`registry.load_extra_personas`/`load_extra_aliases`) - a different
     extension point, since that data has to reach a pack already in this list,
     not arrive as a new entry in it.
+
+    `max_retries` (default 2, i.e. 3 attempts total) is forwarded straight to
+    `Runner` and governs `_run_one`'s retry loop there - only a stage raising
+    `TransientError` (a rate-limited/unreachable vision call, a timed-out
+    Office/image conversion) is ever retried; every other exception still
+    propagates on the first attempt. A real default here matters because this
+    is the one function every real caller (`cli.py::_build_runner`,
+    `webui/app.py::create_app`) goes through - `Runner`'s own default of `0`
+    exists only for direct, low-level `Runner(...)` construction in tests that
+    want to see a `TransientError` fail on the first try.
     """
     from docintel.export import layout_names
     from docintel.packs.registry import load_packs, register_all
@@ -126,4 +137,5 @@ def build_pipeline(
             export_layouts=layout_names(),
         ),
         hooks=hooks,
+        max_retries=max_retries,
     )

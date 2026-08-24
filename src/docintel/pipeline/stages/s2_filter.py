@@ -25,16 +25,28 @@ allowed to do with a page:
   as a stripped PDF annotation layer. That tag forces review unconditionally
   further down the pipeline (s7); this stage's only job is to raise it.
 
-**Non-PDF formats.** An image or an Office document is converted to a real
-PDF right here, before either of the two facts above is computed - so
-`load_document` and `detect_flattened` never learn a document arrived as
-anything other than a PDF, and neither needed a single change to accept one.
-See `extract.convert` for why this is a conversion at the boundary rather
-than a second, parallel extraction path. A conversion failure
-(`PermanentError`/`TransientError`) is raised, not caught here - the same
-discipline `load_document`'s own OCR failures already follow, letting the
-`Runner`'s existing retry/dead-letter machinery decide, rather than a second,
-inconsistent copy of that decision living in this stage too.
+**Non-PDF formats — three different treatments, not one.** An Office document
+(DOCX/XLSX) is converted to a real PDF right here, before either of the two
+facts above is computed, exactly as before: `grammar/regions.py`'s selectors
+need measured page geometry a flow-layout format doesn't have until it is
+rendered, so `extract.convert.convert_office_to_pdf` is a genuine
+requirement, not a convenience (see `extract.convert`'s own docstring). A
+raster image (`extract.convert.IMAGE_SUFFIXES`) is **never** converted here —
+`normalize.load_image_document`/`annotations.detect_flattened_image` read the
+source bytes directly, because OCR and annotation detection are format-
+agnostic (they only ever needed a rasterizable page, and an image already is
+one) and Gemini (Stage 5b) understands JPEG/PNG natively. TXT/CSV/HTML
+(`extract.convert.TEXT_SUFFIXES`) are **also never converted or OCR'd** —
+`extract.plaintext.load_document` reads them directly into the same
+`PageText`/`PageMeta` shape, since none of the three carries visual/layout
+signal a render or a vision model could add. `ctx.source_format` records
+which treatment a document took, so a later stage (Stage 5b, specifically)
+can tell "already a raster, nothing to convert for OCR purposes" apart from
+"already a PDF" without re-deriving it from a path extension. A conversion
+failure (`PermanentError`/`TransientError`) is raised, not caught here - the
+same discipline `load_document`'s own OCR failures already follow, letting
+the `Runner`'s existing retry/dead-letter machinery decide, rather than a
+second, inconsistent copy of that decision living in this stage too.
 """
 
 from __future__ import annotations
@@ -42,8 +54,8 @@ from __future__ import annotations
 import os
 
 from docintel.core.models import JobContext
-from docintel.extract import annotations, convert, pageroles
-from docintel.extract.normalize import load_document
+from docintel.extract import annotations, convert, pageroles, plaintext, xlsx_hidden
+from docintel.extract.normalize import load_document, load_image_document
 
 ALLOWED_SUFFIXES = convert.ACCEPTED_SUFFIXES
 
@@ -63,15 +75,53 @@ class AttachmentFilter:
             ctx.skip_reason = "source file does not exist"
             return ctx
 
-        path = ctx.source_path
         if suffix in convert.IMAGE_SUFFIXES:
-            path = convert.convert_image_to_pdf(path)
-        elif suffix in convert.OFFICE_SUFFIXES:
-            path = convert.convert_office_to_pdf(path)
-        if path != ctx.source_path:
-            ctx.readable_path = path
+            # A raster image is never converted to PDF here: OCR and
+            # annotation detection both work directly off the source bytes
+            # (see `extract.ocr.ocr_image`/`extract.annotations.
+            # detect_flattened_image`), and Gemini (Stage 5b) understands
+            # JPEG/PNG natively too. `readable_path`/`temp_dirs` stay unset -
+            # there is no converted file to clean up. TIFF/BMP/GIF are not
+            # Gemini-native MIME types, so for those three suffixes only,
+            # Stage 5b converts lazily, once, if and when vision is actually
+            # reached - never here.
+            ctx.source_format = "image"
+            pages, page_meta, text_source = load_image_document(ctx.source_path)
+            has_flattened = annotations.detect_flattened_image(ctx.source_path)
+        elif suffix in convert.TEXT_SUFFIXES:
+            # TXT/CSV/HTML are already text, with no visual/layout signal a
+            # render or a vision model could add (see `extract.plaintext`'s
+            # module docstring) - never converted, never OCR'd, never sent to
+            # vision. `.htm` is just an alias for `.html`.
+            ctx.source_format = "html" if suffix in (".html", ".htm") else suffix.lstrip(".")
+            pages, page_meta, text_source = plaintext.load_document(ctx.source_path, suffix)
+            has_flattened = False  # no raster/annotation layer possible in these formats
+        else:
+            path = ctx.source_path
+            if suffix in convert.OFFICE_SUFFIXES:
+                ctx.source_format = suffix.lstrip(".")
+                # Cache-checked: a cache hit skips LibreOffice entirely and
+                # returns a long-lived path under `extract.convert_cache`,
+                # which must NEVER be registered in `ctx.temp_dirs` (the
+                # Runner unconditionally removes everything there after this
+                # document) - `temp_dir` is `None` on a hit for exactly that
+                # reason, and only a genuine miss's fresh `mkdtemp()` output
+                # gets registered below.
+                path, temp_dir = convert.convert_to_pdf_cached(path, suffix)
+                ctx.readable_path = path
+                if temp_dir is not None:
+                    ctx.temp_dirs.append(temp_dir)
+                if suffix == ".xlsx" and xlsx_hidden.has_hidden_content(ctx.source_path):
+                    # Structurally invisible to the render this document just
+                    # went through - see `extract.xlsx_hidden`'s module
+                    # docstring. Detected against the ORIGINAL workbook, not
+                    # the rendered PDF, since hidden content is exactly what
+                    # the render never carried forward.
+                    ctx.add_tag("xlsx_hidden_content_present")
 
-        pages, page_meta, text_source = load_document(path)
+            pages, page_meta, text_source = load_document(path)
+            has_flattened = annotations.detect_flattened(path, pages, page_meta)
+
         ctx.pages = pages
         ctx.page_meta, used_last_resort_role_fallback = pageroles.assign(pages, page_meta)
         ctx.text_source = text_source
@@ -79,7 +129,7 @@ class AttachmentFilter:
         if used_last_resort_role_fallback:
             ctx.add_tag("page_role_fallback")
 
-        if annotations.detect_flattened(path, pages, page_meta):
+        if has_flattened:
             ctx.add_tag("has_flattened_annotations")
 
         return ctx

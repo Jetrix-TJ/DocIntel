@@ -159,6 +159,15 @@ class JobContext:
     pages: tuple[PageText, ...] = ()
     page_meta: tuple[PageMeta, ...] = ()
     text_source: str = "native"
+    # What format `source_path` actually arrived as - "pdf" | "image" | "docx"
+    # | "xlsx". Set by Stage 2 from the file's suffix. Exists so later stages
+    # (Stage 5b's vision call, in particular) can tell "this is a raster with
+    # no PDF wrapper" from "this is already a PDF" without re-deriving it from
+    # a path extension - and so a raster image is never routed through a PDF
+    # conversion it doesn't need for OCR, annotation detection, or Gemini
+    # (which understands JPEG/PNG natively). Defaults to "pdf" so every
+    # existing caller that never sets it keeps behaving exactly as before.
+    source_format: str = "pdf"
     # The PDF Stage 2 actually read, when it differs from `source_path` - set
     # only when a non-PDF input (an image, a DOCX/XLSX) was converted at
     # intake (`extract.convert`). `source_path` is deliberately left alone:
@@ -169,6 +178,13 @@ class JobContext:
     # disk (Stage 5b's vision call) should read `ctx.readable_path or
     # ctx.source_path` rather than `source_path` alone.
     readable_path: str | None = None
+    # `tempfile.mkdtemp()` directories created converting a non-PDF input
+    # (`extract.convert`) that must outlive Stage 2 itself - Stage 5b's vision
+    # call may still need to read `readable_path` from disk. Never read by any
+    # stage; the Runner is the sole consumer, removing every entry once this
+    # document's whole run (success, dead-letter, or emit-failure alike) is
+    # over. Internal bookkeeping only - never surfaces in the emitted record.
+    temp_dirs: list[str] = field(default_factory=list)
 
     # classification (s3)
     # The domain pack that claimed this document, resolved from the bill-to on

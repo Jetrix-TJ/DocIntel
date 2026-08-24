@@ -204,6 +204,20 @@ def test_temperature_is_zero_for_deterministic_transcription(tmp_path):
     assert client.calls[0]["config"].temperature == 0.0
 
 
+def test_the_request_carries_an_explicit_timeout(tmp_path):
+    """The SDK's own default is no timeout at all - a slow or hung connection
+    would otherwise block the calling `Runner._run_one` attempt indefinitely
+    instead of failing fast into a retry or a dead letter."""
+    from docintel.adapters.vision.gemini_adapter import _REQUEST_TIMEOUT_SECONDS
+
+    client = FakeClient(_ok())
+    GeminiVision(client=client).extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
+
+    http_options = client.calls[0]["config"].http_options
+    assert http_options is not None
+    assert http_options.timeout == _REQUEST_TIMEOUT_SECONDS * 1000
+
+
 # -- source guards -------------------------------------------------------
 
 
@@ -214,11 +228,60 @@ def test_a_missing_source_refuses_rather_than_falling_back_to_page_text(tmp_path
     assert client.calls == []
 
 
-def test_a_non_pdf_source_is_refused(tmp_path):
-    path = tmp_path / "scan.png"
-    path.write_bytes(b"\x89PNG")
-    with pytest.raises(PermanentError, match="handles PDFs"):
+def test_an_unsupported_format_is_refused(tmp_path):
+    """Anything that isn't a `.pdf` or a Gemini-native image suffix - a DOCX,
+    or a TIFF that Stage 5b should have rendered to PDF before ever calling
+    this adapter - is refused loudly rather than guessed at."""
+    path = tmp_path / "scan.tiff"
+    path.write_bytes(b"II*\x00 not a real tiff")
+    with pytest.raises(PermanentError, match="rendered to PDF"):
         GeminiVision(client=FakeClient(_ok())).extract(_pages(), FIELDS, source_path=str(path))
+
+
+@pytest.mark.parametrize("suffix,mime_type", [(".png", "image/png"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg")])
+def test_a_gemini_native_image_is_sent_directly_with_no_pdf_involved(tmp_path, suffix, mime_type):
+    """JPEG/PNG are officially documented Gemini-native image MIME types
+    (ai.google.dev/gemini-api/docs/image-understanding) - unlike a PDF, no
+    `pypdf` page-count parse happens for these, and no conversion is
+    required or attempted; the adapter sends the original bytes as-is."""
+    path = tmp_path / f"scan{suffix}"
+    body = b"\x89PNG raw bytes, not a valid image - the adapter must not parse it"
+    path.write_bytes(body)
+    client = FakeClient(_ok())
+
+    GeminiVision(client=client).extract(_pages(), FIELDS, source_path=str(path))
+
+    document = client.calls[0]["contents"][0]
+    assert document.inline_data.data == body
+    assert document.inline_data.mime_type == mime_type
+
+
+def test_an_image_prompt_reports_one_page(tmp_path):
+    path = tmp_path / "scan.png"
+    path.write_bytes(b"fake png bytes")
+    client = FakeClient(_ok())
+
+    GeminiVision(client=client).extract(_pages(), FIELDS, source_path=str(path))
+
+    prompt = client.calls[0]["contents"][1]
+    assert "1 page." in prompt
+
+
+def test_an_oversized_image_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr("docintel.adapters.vision.gemini_adapter.MAX_IMAGE_BYTES", 8)
+    path = tmp_path / "scan.png"
+    path.write_bytes(b"way too many bytes for the guard")
+    with pytest.raises(PermanentError, match="over the"):
+        GeminiVision(client=FakeClient(_ok())).extract(_pages(), FIELDS, source_path=str(path))
+
+
+def test_the_image_byte_ceiling_reuses_the_documented_inline_part_limit():
+    """Not a separate, invented number - the same general inline-Part ceiling
+    `MAX_PDF_BYTES` already documents (see that constant's own comment: it is
+    Gemini's inline-part limit generally, not a PDF-specific one)."""
+    from docintel.adapters.vision.gemini_adapter import MAX_IMAGE_BYTES
+
+    assert MAX_IMAGE_BYTES == MAX_PDF_BYTES
 
 
 def test_an_oversized_pdf_is_refused_before_it_is_read(tmp_path, monkeypatch):
@@ -332,6 +395,29 @@ def test_client_errors_are_permanent_so_they_are_not_retried(tmp_path, status):
 
 def test_a_connection_failure_is_transient(tmp_path):
     client = FakeClient(raises=ConnectionError("no route"))
+    with pytest.raises(TransientError, match="could not reach"):
+        GeminiVision(client=client).extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
+
+
+def test_the_sdks_own_timeout_exception_is_transient_not_permanent(tmp_path):
+    """The SDK's real transport raises `httpx.TimeoutException` directly on a
+    request that hits `_REQUEST_TIMEOUT_SECONDS` - it does NOT inherit from
+    the built-in `TimeoutError` the check above already covers. Without this,
+    every real timeout would misclassify as `PermanentError` and dead-letter
+    on the very first hit rather than ever being retried - worse than having
+    no timeout at all, since a slow-but-fine connection would never get its
+    second chance."""
+    import httpx
+
+    client = FakeClient(raises=httpx.TimeoutException("timed out"))
+    with pytest.raises(TransientError, match="could not reach"):
+        GeminiVision(client=client).extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
+
+
+def test_the_sdks_own_connect_error_is_transient_not_permanent(tmp_path):
+    import httpx
+
+    client = FakeClient(raises=httpx.ConnectError("no route"))
     with pytest.raises(TransientError, match="could not reach"):
         GeminiVision(client=client).extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
 

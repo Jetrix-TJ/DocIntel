@@ -111,7 +111,7 @@ import os
 
 import pdfplumber
 from pdfplumber.page import Page
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageSequence
 
 from docintel.core.models import PageMeta, PageText
 from docintel.extract import ocr_cache
@@ -233,6 +233,47 @@ def _image_is_annotated(img: Image.Image) -> bool:
         # docstring's DTSS calibration paragraph).
         return False
     return True
+
+
+def detect_flattened_image(path: str) -> bool:
+    """`detect_flattened`'s counterpart for a raw raster image, with no PDF or
+    `pdfplumber` involved at all.
+
+    A converted-to-PDF image always has `annot_count == 0` on every page (an
+    image wrapper never carries a PDF annotation object), so `detect_flattened`
+    would examine every one of its pages anyway — this function is exactly
+    that examination, run directly against the source frames instead of a
+    wrapper PDF's rasterized-back-out pages. Delegates straight to
+    `_image_is_annotated`, the already pixel-only, already independently
+    tested half of the detector (see that function's own docstring) — no
+    `RESOLUTION`-driven rasterization step exists here because there is no
+    PDF page to rasterize; each frame is examined at its own native pixel
+    size.
+
+    Same memoization key shape as `detect_flattened` (abspath, size, mtime,
+    content hash), reusing the same `ocr_cache` primitives and the same
+    `DOCINTEL_OCR_CACHE=0` escape hatch.
+    """
+    if not ocr_cache.enabled():
+        return _detect_uncached_image(path)
+    key = _memo_key(path)
+    if key is None:
+        return _detect_uncached_image(path)
+    return _detect_cached_image(key)
+
+
+@functools.lru_cache(maxsize=_MEMO_CACHE_SIZE)
+def _detect_cached_image(key: _MemoKey) -> bool:
+    return _detect_uncached_image(key[0])
+
+
+def _detect_uncached_image(path: str) -> bool:
+    with Image.open(path) as img:
+        for frame in ImageSequence.Iterator(img):
+            rgb_frame = frame.convert("RGB") if frame.mode != "RGB" else frame
+            if _image_is_annotated(rgb_frame):
+                return True
+    return False
 
 
 def _largest_band(hit_mask: list[bool]) -> tuple[int, int]:

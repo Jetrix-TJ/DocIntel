@@ -32,6 +32,7 @@ from docintel.adapters.vision.policy import VISION_OBSERVABLE, sanitize
 from docintel.adapters.vision.port import VisionResult
 from docintel.core.errors import PermanentError, TransientError
 from docintel.core.models import PageText
+from docintel.extract.convert import VISION_NATIVE_IMAGE_SUFFIXES
 
 MODEL = "gemini-2.5-pro"
 
@@ -47,6 +48,38 @@ MODEL = "gemini-2.5-pro"
 # adjustable as real volume dictates - not a wall to raise reactively later.
 MAX_PAGES = 30
 MAX_PDF_BYTES = 15 * 1024 * 1024  # Gemini's inline-part ceiling; bigger needs the Files API.
+
+# The literal MIME string per vision-native image suffix - which suffixes
+# qualify at all is `extract.convert.VISION_NATIVE_IMAGE_SUFFIXES` (the
+# single source of truth this and `s5b_vision.py` both read), so the two
+# cannot silently drift apart; this dict only adds the MIME-string detail
+# that's specific to this one adapter's API.
+_IMAGE_MIME_TYPES: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+}
+assert set(_IMAGE_MIME_TYPES) == VISION_NATIVE_IMAGE_SUFFIXES, (
+    "_IMAGE_MIME_TYPES must cover exactly VISION_NATIVE_IMAGE_SUFFIXES"
+)
+
+# Reuses `MAX_PDF_BYTES` rather than inventing a second, unverified number:
+# that constant is documented as Gemini's INLINE-PART ceiling generally (any
+# single inline `Part` sent to `generate_content`, "bigger needs the Files
+# API"), not a PDF-specific limit - so the same ceiling is the right guard
+# for an inline image part too. Flagged rather than silently assumed: no
+# official page found on this review states an image-specific byte ceiling
+# distinct from the general inline-part limit; verify against current docs
+# or a live key before trusting this for a production image size guard.
+MAX_IMAGE_BYTES = MAX_PDF_BYTES
+
+# The SDK's own default is no timeout at all (`HttpOptions.timeout=None`, which
+# `_api_client.py` documents as "httpx/aiohttp uses its own default, typically
+# None") - a single call can hang the calling `Runner._run_one` attempt
+# indefinitely rather than failing fast into a retry or a dead letter. 120s is
+# generous for a 30-page inline PDF (the `MAX_PAGES` guard above) while still
+# bounding the worst case to something a caller can plan around.
+_REQUEST_TIMEOUT_SECONDS = 120
 
 _SYSTEM = """\
 You read scanned and native-PDF business documents - vendor invoices, telecom \
@@ -116,10 +149,10 @@ class GeminiVision:
     ) -> VisionResult:
         if not field_names:
             return VisionResult()
-        pdf_bytes, page_count = _read_pdf(source_path)
+        document_bytes, mime_type, page_count = _read_document(source_path)
         hints = self.field_hints if field_hints is None else field_hints
         prompt = self._prompt(field_names, page_count, hints)
-        payload = self._send(pdf_bytes, prompt, _schema(field_names))
+        payload = self._send(document_bytes, mime_type, prompt, _schema(field_names))
         return sanitize(_result_from(payload), field_names)
 
     # -- request -------------------------------------------------------------
@@ -137,11 +170,11 @@ class GeminiVision:
             "you cannot read off the document."
         )
 
-    def _send(self, pdf_bytes: bytes, prompt: str, schema: Any) -> dict[str, Any]:
+    def _send(self, document_bytes: bytes, mime_type: str, prompt: str, schema: Any) -> dict[str, Any]:
         from google.genai import types
 
         client = self._resolve_client()
-        document = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+        document = types.Part.from_bytes(data=document_bytes, mime_type=mime_type)
         try:
             response = client.models.generate_content(
                 model=self.model,
@@ -151,6 +184,8 @@ class GeminiVision:
                     response_mime_type="application/json",
                     response_schema=schema,
                     temperature=0.0,
+                    # Milliseconds - the SDK's own field, not seconds.
+                    http_options=types.HttpOptions(timeout=_REQUEST_TIMEOUT_SECONDS * 1000),
                 ),
             )
         except Exception as exc:
@@ -222,8 +257,20 @@ def _schema(field_names: list[str]) -> Any:
     )
 
 
-def _read_pdf(source_path: str | None) -> tuple[bytes, int]:
-    """The document's bytes and page count, or a clear refusal.
+def _read_document(source_path: str | None) -> tuple[bytes, str, int]:
+    """The document's bytes, the MIME type to send them as, and a page count
+    for the prompt - or a clear refusal.
+
+    Two shapes, dispatched on suffix: a `.pdf` gets the original page-count/
+    byte-ceiling treatment via `pypdf`; a Gemini-native image suffix
+    (`_IMAGE_MIME_TYPES` - currently `.jpg`/`.jpeg`/`.png`) is read as raw
+    bytes with `page_count=1` (an image has no page concept) and its own
+    byte-ceiling check. Anything else is a refusal: Stage 2/Stage 5b's own
+    design (see `pipeline/stages/s2_filter.py`, `s5b_vision.py`) never hands
+    this function a path in any other shape - a DOCX/XLSX/TIFF/BMP/GIF has
+    already been rendered to PDF by the time vision is reached - so reaching
+    this branch means that invariant broke upstream, and this function should
+    say so loudly rather than guess a MIME type.
 
     No text-layer fallback: falling back to `PageText` would turn a vision
     call into a text call at the exact moment vision was asked for.
@@ -232,10 +279,19 @@ def _read_pdf(source_path: str | None) -> tuple[bytes, int]:
         raise PermanentError(
             f"vision needs the source document; {source_path!r} is not a readable file"
         )
-    if not source_path.lower().endswith(".pdf"):
-        raise PermanentError(
-            f"gemini adapter handles PDFs; {os.path.basename(source_path)} is not one"
-        )
+    suffix = os.path.splitext(source_path)[1].lower()
+    if suffix == ".pdf":
+        return _read_pdf(source_path)
+    if suffix in _IMAGE_MIME_TYPES:
+        return _read_image(source_path, suffix)
+    raise PermanentError(
+        f"gemini adapter handles PDFs and {sorted(_IMAGE_MIME_TYPES)} images; "
+        f"{os.path.basename(source_path)} is neither - it should have been "
+        "rendered to PDF before reaching vision"
+    )
+
+
+def _read_pdf(source_path: str) -> tuple[bytes, str, int]:
     size = os.path.getsize(source_path)
     if size > MAX_PDF_BYTES:
         raise PermanentError(
@@ -252,7 +308,19 @@ def _read_pdf(source_path: str | None) -> tuple[bytes, int]:
             f"{os.path.basename(source_path)} is {page_count} pages, over the "
             f"{MAX_PAGES}-page guard - cost scales with page count on this vendor"
         )
-    return data, page_count
+    return data, "application/pdf", page_count
+
+
+def _read_image(source_path: str, suffix: str) -> tuple[bytes, str, int]:
+    size = os.path.getsize(source_path)
+    if size > MAX_IMAGE_BYTES:
+        raise PermanentError(
+            f"{os.path.basename(source_path)} is {size} bytes, over the "
+            f"{MAX_IMAGE_BYTES}-byte inline-part limit"
+        )
+    with open(source_path, "rb") as fh:
+        data = fh.read()
+    return data, _IMAGE_MIME_TYPES[suffix], 1
 
 
 def _result_from(payload: dict[str, Any]) -> VisionResult:
@@ -276,5 +344,21 @@ def _wrap(exc: Exception) -> Exception:
     if isinstance(status, int) and (status in (408, 409, 429) or status >= 500):
         return TransientError(f"vision request failed with status {status}: {exc}")
     if isinstance(exc, (TimeoutError, ConnectionError)):
+        return TransientError(f"vision request could not reach the API: {exc}")
+    # The SDK's own transport (`google.genai._api_client`) raises
+    # `httpx.TimeoutException`/`httpx.ConnectError` directly on a request that
+    # hits `_REQUEST_TIMEOUT_SECONDS` or cannot connect at all - neither
+    # inherits from the built-in `TimeoutError`/`ConnectionError` checked
+    # above, so without this they fell all the way through to
+    # `PermanentError` and a timeout would dead-letter every document on the
+    # first hit instead of ever being retried. Imported lazily, matching
+    # `_resolve_client`'s own guard: whenever the SDK path actually ran far
+    # enough to raise one of these, httpx (a transitive `google-genai`
+    # dependency) is necessarily already installed.
+    try:
+        import httpx
+    except ImportError:
+        httpx = None  # pragma: no cover - depends on the environment
+    if httpx is not None and isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
         return TransientError(f"vision request could not reach the API: {exc}")
     return PermanentError(f"vision request failed: {type(exc).__name__}: {exc}")

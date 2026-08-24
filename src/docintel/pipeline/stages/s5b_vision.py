@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
 from docintel.adapters.vision.hints import field_names_for_persona, hints_for_persona
 from docintel.core import coverage
 from docintel.core.confidence import MODIFIERS
-from docintel.core.coverage import DEFAULT_COLLAPSE_SHARE
 from docintel.core.models import JobContext
+from docintel.extract import convert
+from docintel.extract.plaintext import SOURCE_FORMATS as TEXT_NATIVE_SOURCE_FORMATS
 
 COLLAPSE_THRESHOLD = 0.50
 DEFAULT_FIELDS = ["vendor_name", "invoice_number", "invoice_date", "total_printed"]
@@ -28,7 +31,8 @@ def _collapsed(ctx: JobContext) -> bool:
     from the dict, not "weak". `core.coverage.assess` is the one place that
     already answers "how much of what was declared came back empty", and
     `s7_gate.ConfidenceGate` already routes on it for exactly this reason - this
-    reuses the same computation rather than inventing a second one.
+    reuses the same computation (and the same `Coverage.collapsed` verdict,
+    share AND absolute-count floor both) rather than inventing a second one.
 
     Calling `coverage.assess(ctx)` here is safe this early: by the time Stage 5b
     runs, `ctx.persona`, `ctx.pack` and `ctx.doc_type` are already set (Stage 3
@@ -46,7 +50,7 @@ def _collapsed(ctx: JobContext) -> bool:
     if len(weak) >= 2:
         return True
     cov = coverage.assess(ctx)
-    return cov.assessed and cov.miss_share >= DEFAULT_COLLAPSE_SHARE
+    return cov.collapsed
 
 
 class VisionOneShot:
@@ -64,17 +68,27 @@ class VisionOneShot:
     def run(self, ctx: JobContext) -> JobContext:
         if ctx.extraction_route == "5a_cached" and not _collapsed(ctx):
             return ctx
+        if ctx.source_format in TEXT_NATIVE_SOURCE_FORMATS:
+            # TXT/CSV/HTML carry no visual content a vision model could add
+            # anything by looking at - see `extract.plaintext.SOURCE_FORMATS`'s
+            # own docstring - and Gemini does not accept any of them as a
+            # document input at all. Rather than spend a request pretending
+            # vision might help (or, with the real adapter, raise a
+            # `PermanentError` because the format is neither a PDF nor a
+            # Gemini-native image), this stage is a deliberate no-op here: a
+            # persona-less document of one of these formats reaches Stage 6/7
+            # with whatever `extraction_route` it already had (`None`, if
+            # there was no persona at all), and Stage 7's "nothing was
+            # scored" branch already handles that honestly.
+            ctx.log("s5b: vision_one_shot skipped - no visual content in this format")
+            return ctx
         ctx.log("s5b: vision_one_shot")
         field_names, hints = self._field_names_and_hints(ctx)
         # The path is what makes this vision rather than a text call - see
         # `adapters.vision.port`. Passed by keyword so a stand-in may ignore it.
-        # `readable_path` wins when Stage 2 converted a non-PDF input to PDF
-        # (`core.models.JobContext.readable_path`) - the vision adapter needs
-        # a real PDF's bytes on disk, and `source_path` may point at the
-        # original image/Office file that produced them.
         result = self.vision.extract(  # type: ignore[attr-defined]
             ctx.pages, field_names,
-            source_path=ctx.readable_path or ctx.source_path, field_hints=hints,
+            source_path=self._vision_source_path(ctx), field_hints=hints,
         )
         for name, value in result.fields.items():
             ctx.extracted.set(name, value, result.confidence.get(name, 0.50))
@@ -120,3 +134,46 @@ class VisionOneShot:
             if names:
                 return names, hints_for_persona(ctx.persona)
         return DEFAULT_FIELDS, {}
+
+    def _vision_source_path(self, ctx: JobContext) -> str:
+        """The path to hand the vision adapter for its bytes-on-disk read.
+
+        `readable_path` wins whenever Stage 2 already produced a converted
+        PDF (`core.models.JobContext.readable_path`) - true for every DOCX/
+        XLSX document, always, and for a TIFF/BMP/GIF document that a PRIOR
+        call to this method already converted (see below). Otherwise falls
+        through to `source_path`, which is exactly right for a native PDF or
+        a Gemini-native image (`ctx.source_format == "image"` and the suffix
+        is in `extract.convert.VISION_NATIVE_IMAGE_SUFFIXES` - JPEG/PNG):
+        neither is ever converted, by design (Stage 2's docstring, and this
+        module's own source-format handling).
+
+        The one case this method acts on rather than merely reads: an image
+        document (`ctx.source_format == "image"`) whose suffix is NOT
+        Gemini-native (TIFF/BMP/GIF). Gemini does not understand these
+        formats natively (verified against live `ai.google.dev` docs - only
+        PNG/JPEG/WEBP/HEIC/HEIF are documented image MIME types), so unlike
+        JPEG/PNG they cannot go to vision as-is. Rather than Stage 2 eagerly
+        converting every TIFF/BMP/GIF up front - paying the conversion cost
+        even for documents whose persona's cached rules already succeed and
+        never reach this stage at all - the conversion happens HERE, lazily,
+        at most once per document, only when vision is actually reached.
+        Reuses the same `readable_path`/`temp_dirs` fields Stage 2 already
+        uses for DOCX/XLSX, so the `Runner`'s existing unconditional cleanup
+        (`pipeline/runner.py`) needs no change to pick this up too.
+        """
+        if ctx.readable_path is not None:
+            return ctx.readable_path
+        if ctx.source_format != "image":
+            return ctx.source_path
+        suffix = os.path.splitext(ctx.source_path)[1].lower()
+        if suffix in convert.VISION_NATIVE_IMAGE_SUFFIXES:
+            return ctx.source_path
+        # Cache-checked, same discipline as Stage 2's DOCX/XLSX conversion -
+        # a cache hit's path must never be registered on `ctx.temp_dirs` (see
+        # `extract.convert.convert_to_pdf_cached`'s own docstring for why).
+        path, temp_dir = convert.convert_to_pdf_cached(ctx.source_path, suffix)
+        ctx.readable_path = path
+        if temp_dir is not None:
+            ctx.temp_dirs.append(temp_dir)
+        return path

@@ -46,7 +46,9 @@ PERSONA_DIR = os.path.join(os.path.dirname(__file__), "personas")
 # it, so the roster cannot drift from the rule that uses it.
 with open(ladder.SPEC_PATH) as _fh:
     _SPEC = json.load(_fh)
-CLAIM_GUARD = claims.compile_claim(_SPEC["claim"], aliases=aliases.LITERAL_ALIASES)
+CLAIM_GUARD = claims.compile_claim(
+    _SPEC["claim"], aliases=aliases.LITERAL_ALIASES, pack_name="digitaldirection"
+)
 MANAGED_CLIENTS: tuple[str, ...] = tuple(
     v
     for r in _SPEC["claim"]["rules"]

@@ -27,11 +27,13 @@ genuinely different failure modes and genuinely different dependency shapes:
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 from docintel.core.errors import PermanentError, TransientError
+from docintel.extract import convert_cache
 
 # Formats Pillow reads natively. HEIC needs the `pillow-heif` plugin - a real
 # extra dependency for a format that's rare outside iPhone photos - so it is
@@ -43,12 +45,36 @@ IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".
 # change once they are.
 OFFICE_SUFFIXES = frozenset({".docx", ".xlsx"})
 
+# Already-text formats with no visual/layout signal worth rendering for -
+# neither the grammar system's page geometry nor a vision model gains
+# anything from converting these first (see `extract.plaintext`'s module
+# docstring, and the Gemini-capability research backing this decision: even
+# Google's own docs describe non-PDF document types as reduced to plain text
+# regardless). `.htm` is an alias for `.html`; both dispatch to the same
+# reader in `extract.plaintext.load_document`.
+TEXT_SUFFIXES = frozenset({".txt", ".csv", ".html", ".htm"})
+
 # Every suffix Stage 2 will accept, PDF included. The single source of truth
 # for both `s2_filter.ALLOWED_SUFFIXES` and `FilesystemIntake._walk`'s own
 # directory-scan filter - defined once, here, so the two cannot drift the way
-# they would if each independently unioned `IMAGE_SUFFIXES`/`OFFICE_SUFFIXES`
-# with ".pdf" itself.
-ACCEPTED_SUFFIXES = frozenset({".pdf"}) | IMAGE_SUFFIXES | OFFICE_SUFFIXES
+# they would if each independently unioned `IMAGE_SUFFIXES`/`OFFICE_SUFFIXES`/
+# `TEXT_SUFFIXES` with ".pdf" itself.
+ACCEPTED_SUFFIXES = frozenset({".pdf"}) | IMAGE_SUFFIXES | OFFICE_SUFFIXES | TEXT_SUFFIXES
+
+# Of IMAGE_SUFFIXES, the ones a vision model can be sent directly with no PDF
+# rendering step at all - officially documented Gemini-native image MIME
+# types (ai.google.dev/gemini-api/docs/image-understanding, verified live:
+# image/png, image/jpeg, image/webp, image/heic, image/heif). WEBP/HEIC/HEIF
+# aren't in IMAGE_SUFFIXES to begin with (see that set's own comment), so
+# only JPEG/PNG apply here. TIFF/BMP/GIF are genuinely Pillow-native for OCR
+# and annotation detection (`extract.ocr.ocr_image`, `extract.annotations.
+# detect_flattened_image` need no PDF either) but are absent from every
+# documented Gemini image-MIME list - so a document in one of those three
+# formats only gets rendered to PDF lazily, by Stage 5b, if and when vision
+# is actually reached, never eagerly at Stage 2. The single source of truth
+# for both `adapters.vision.gemini_adapter`'s MIME mapping and `s5b_vision`'s
+# lazy-conversion check, so the two cannot silently drift apart.
+VISION_NATIVE_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png"})
 
 # soffice can take a while to cold-start its own process, and a hung
 # conversion must not hang a whole pipeline run. Worth one retry
@@ -114,31 +140,37 @@ def convert_office_to_pdf(source_path: str) -> str:
     profile_uri = Path(profile_dir).as_uri()
 
     try:
-        result = subprocess.run(
-            [
-                "soffice", "--headless", "--norestore",
-                "--convert-to", "pdf", "--outdir", out_dir,
-                f"-env:UserInstallation={profile_uri}",
-                source_path,
-            ],
-            capture_output=True,
-            timeout=_CONVERT_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except FileNotFoundError as exc:
-        # Not a per-document failure - the host has no LibreOffice installed.
-        # Still a PermanentError, not a crash: every document of this format
-        # dead-letters with a clear, actionable reason until someone installs
-        # it, rather than taking the whole run down.
-        raise PermanentError(
-            "LibreOffice ('soffice') is not installed or not on PATH - required "
-            "to convert Office documents to PDF"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise TransientError(
-            f"converting {os.path.basename(source_path)!r} to PDF timed out after "
-            f"{_CONVERT_TIMEOUT_SECONDS}s"
-        ) from exc
+        try:
+            result = subprocess.run(
+                [
+                    "soffice", "--headless", "--norestore",
+                    "--convert-to", "pdf", "--outdir", out_dir,
+                    f"-env:UserInstallation={profile_uri}",
+                    source_path,
+                ],
+                capture_output=True,
+                timeout=_CONVERT_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            # Not a per-document failure - the host has no LibreOffice installed.
+            # Still a PermanentError, not a crash: every document of this format
+            # dead-letters with a clear, actionable reason until someone installs
+            # it, rather than taking the whole run down.
+            raise PermanentError(
+                "LibreOffice ('soffice') is not installed or not on PATH - required "
+                "to convert Office documents to PDF"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise TransientError(
+                f"converting {os.path.basename(source_path)!r} to PDF timed out after "
+                f"{_CONVERT_TIMEOUT_SECONDS}s"
+            ) from exc
+    finally:
+        # Fully consumed the instant `soffice` returns (or fails to start) -
+        # unlike `out_dir`, nothing downstream ever needs this again, so it is
+        # never worth leaking even for the life of one document's processing.
+        shutil.rmtree(profile_dir, ignore_errors=True)
 
     stem = Path(source_path).stem
     out_path = os.path.join(out_dir, f"{stem}.pdf")
@@ -149,3 +181,45 @@ def convert_office_to_pdf(source_path: str) -> str:
             f"(exit {result.returncode}): {stderr or '(no output produced)'}"
         )
     return out_path
+
+
+def convert_to_pdf_cached(source_path: str, suffix: str) -> tuple[str, str | None]:
+    """Cache-checked wrapper around `convert_image_to_pdf`/`convert_office_to_pdf`.
+
+    Returns `(path, temp_dir)`:
+
+    - On a cache MISS: a real conversion runs exactly as before, its output
+      is copied into `convert_cache`'s long-lived cache directory, and
+      `path` is that cache copy while `temp_dir` is the fresh `mkdtemp()`
+      directory the real conversion call created (now holding a redundant
+      copy of the same PDF) - the caller must register `temp_dir` on
+      `ctx.temp_dirs` for the `Runner` to clean up, exactly as it always did
+      for an uncached conversion.
+    - On a cache HIT: no conversion runs at all, `path` is the existing cache
+      entry, and `temp_dir` is `None` - there is nothing new for the caller
+      to register. This is the one detail a caller must get right: `path`
+      here lives under `convert_cache.CACHE_DIR`, a directory this function
+      never returns as `temp_dir` and the caller must never append to
+      `ctx.temp_dirs` itself, or the `Runner`'s unconditional per-document
+      cleanup would delete every cached conversion the first time it is
+      reused.
+
+    `suffix` decides which converter backs a miss: `IMAGE_SUFFIXES` (the
+    TIFF/BMP/GIF path Stage 5b converts lazily - JPEG/PNG never reach this
+    function at all, see `pipeline/stages/s2_filter.py`) or `OFFICE_SUFFIXES`
+    (DOCX/XLSX, converted eagerly at Stage 2).
+    """
+    converter_name = "image" if suffix in IMAGE_SUFFIXES else "office"
+    key = convert_cache.cache_key(source_path, converter_name)
+    cached = convert_cache.load(key)
+    if cached is not None:
+        return cached, None
+
+    real_path = (
+        convert_image_to_pdf(source_path)
+        if converter_name == "image"
+        else convert_office_to_pdf(source_path)
+    )
+    temp_dir = os.path.dirname(real_path)
+    cached_path = convert_cache.save(key, real_path)
+    return cached_path, temp_dir

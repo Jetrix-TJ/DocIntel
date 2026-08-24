@@ -18,14 +18,19 @@ from docintel.extract import convert
 # ---------------------------------------------------------------------------
 
 
-def test_accepted_suffixes_is_pdf_plus_image_plus_office():
+def test_accepted_suffixes_is_pdf_plus_image_plus_office_plus_text():
     assert convert.ACCEPTED_SUFFIXES == (
-        {".pdf"} | convert.IMAGE_SUFFIXES | convert.OFFICE_SUFFIXES
+        {".pdf"} | convert.IMAGE_SUFFIXES | convert.OFFICE_SUFFIXES | convert.TEXT_SUFFIXES
     )
 
 
 def test_image_and_office_suffixes_never_overlap():
     assert not (convert.IMAGE_SUFFIXES & convert.OFFICE_SUFFIXES)
+
+
+def test_text_suffixes_never_overlap_image_or_office():
+    assert not (convert.TEXT_SUFFIXES & convert.IMAGE_SUFFIXES)
+    assert not (convert.TEXT_SUFFIXES & convert.OFFICE_SUFFIXES)
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +217,86 @@ def test_each_call_gets_its_own_profile_directory(tmp_path, monkeypatch):
 
     assert len(seen_profiles) == 2
     assert seen_profiles[0] != seen_profiles[1]
+
+
+def test_the_throwaway_profile_directory_is_removed_after_a_successful_conversion(
+    tmp_path, monkeypatch
+):
+    """`profile_dir` is fully consumed the instant `soffice` returns - unlike
+    the output directory (which the caller still needs to read the converted
+    PDF from), nothing ever reads it again, so it must never linger on disk
+    for the life of the process."""
+    import os
+
+    src = tmp_path / "invoice.docx"
+    src.write_bytes(b"x")
+    seen_profile_dirs: list[str] = []
+
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+
+    def fake_run(args, capture_output, timeout, check):
+        profile_arg = next(a for a in args if a.startswith("-env:UserInstallation="))
+        seen_profile_dirs.append(url2pathname(urlparse(profile_arg.split("=", 1)[1]).path))
+        out_dir = args[args.index("--outdir") + 1]
+        with open(os.path.join(out_dir, "invoice.pdf"), "wb") as fh:
+            fh.write(b"%PDF-1.4 fake")
+        return _FakeCompleted(returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    convert.convert_office_to_pdf(str(src))
+
+    assert not os.path.isdir(seen_profile_dirs[0])
+
+
+def test_the_throwaway_profile_directory_is_removed_even_when_conversion_fails(
+    tmp_path, monkeypatch
+):
+    """The profile directory must not leak on the failure paths either - a
+    permanently-failing document must not accumulate one orphaned directory
+    per attempt."""
+    import os
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+
+    src = tmp_path / "invoice.docx"
+    src.write_bytes(b"x")
+    seen_profile_dirs: list[str] = []
+
+    def fake_run(args, capture_output, timeout, check):
+        profile_arg = next(a for a in args if a.startswith("-env:UserInstallation="))
+        seen_profile_dirs.append(url2pathname(urlparse(profile_arg.split("=", 1)[1]).path))
+        return _FakeCompleted(returncode=1, stderr=b"boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(PermanentError):
+        convert.convert_office_to_pdf(str(src))
+
+    assert not os.path.isdir(seen_profile_dirs[0])
+
+
+def test_the_output_directory_is_left_in_place_for_the_caller_to_read(tmp_path, monkeypatch):
+    """Unlike the throwaway profile directory, the converted PDF's own
+    directory must still exist when this function returns - the caller (and,
+    later, Stage 5b's vision call) still needs to read the file from it."""
+    import os
+
+    src = tmp_path / "invoice.docx"
+    src.write_bytes(b"x")
+
+    def fake_run(args, capture_output, timeout, check):
+        out_dir = args[args.index("--outdir") + 1]
+        with open(os.path.join(out_dir, "invoice.pdf"), "wb") as fh:
+            fh.write(b"%PDF-1.4 fake")
+        return _FakeCompleted(returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    out_path = convert.convert_office_to_pdf(str(src))
+
+    assert os.path.isfile(out_path)
 
 
 # ---------------------------------------------------------------------------

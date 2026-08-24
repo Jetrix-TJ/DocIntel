@@ -9,6 +9,7 @@ throwing - still produces a record.
 from __future__ import annotations
 
 import datetime as _dt
+import shutil
 from typing import Any, Protocol
 
 from docintel.core.contract import build_record, validate_record
@@ -76,17 +77,28 @@ class Runner:
             **kw,
         )
         try:
-            ctx = self._run_stages(ctx)
-        except Exception as exc:  # noqa: BLE001 - deliberate catch-all
-            ctx.disposition = "dead_letter"
-            ctx.skip_reason = str(exc)
-            ctx.review_flag = True
-            ctx.log(f"dead_letter: {type(exc).__name__}: {exc}")
+            try:
+                ctx = self._run_stages(ctx)
+            except Exception as exc:  # noqa: BLE001 - deliberate catch-all
+                ctx.disposition = "dead_letter"
+                ctx.skip_reason = str(exc)
+                ctx.review_flag = True
+                ctx.log(f"dead_letter: {type(exc).__name__}: {exc}")
 
-        record = self._emit(ctx)
-        self._emitted += 1
-        ctx.emitted = True
-        return record
+            record = self._emit(ctx)
+            self._emitted += 1
+            ctx.emitted = True
+            return record
+        finally:
+            # Whatever happened above - processed, dead-lettered, or emit
+            # itself degraded - a non-PDF input converted at Stage 2
+            # (`extract.convert`) leaves its `mkdtemp()` directory on
+            # `ctx.temp_dirs`, and nothing downstream of this method ever
+            # reads it again. Removing it here, unconditionally, is the one
+            # place that is guaranteed to run for every document this Runner
+            # ever processes.
+            for directory in ctx.temp_dirs:
+                shutil.rmtree(directory, ignore_errors=True)
 
     def _emit(self, ctx: JobContext) -> dict[str, Any]:
         """Build and validate the record, degrading rather than raising.

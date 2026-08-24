@@ -240,29 +240,51 @@ def test_account_number_rejects_a_bare_short_run() -> None:
 
 
 def test_phones_parse() -> None:
-    assert NAMED["phone"]("416-675-3700") is not None
-    assert NAMED["phone"]("918-653-3103") is not None
+    """The pattern only validates shape - it returns the raw string, stripped,
+    never reformatted."""
+    assert NAMED["phone"]("416-675-3700") == "416-675-3700"
+    assert NAMED["phone"]("918-653-3103") == "918-653-3103"
 
 
-@pytest.mark.parametrize("raw", ["(416) 675-3700", "416.675.3700", "1-416-675-3700"])
+@pytest.mark.parametrize(
+    "raw",
+    ["(416) 675-3700", "416.675.3700", "1-416-675-3700"],
+)
 def test_phone_accepts_common_alternate_notations(raw: str) -> None:
-    """Synthetic: the corpus only shows one notation; real vendors use several."""
-    assert NAMED["phone"](raw) is not None
+    """Synthetic: the corpus only shows one notation; real vendors use
+    several. Returned exactly as printed - `phone` never reformats a number
+    into a canonical shape, only validates it looks like one."""
+    assert NAMED["phone"](raw) == raw
 
 
-def test_canadian_postal_codes_parse() -> None:
-    assert NAMED["postal_code"]("N1G 4N4") is not None
-    assert NAMED["postal_code"]("M9W 7E9") is not None
+def test_phone_rejects_a_number_with_too_few_digits() -> None:
+    assert NAMED["phone"]("416-675") is None
 
 
-def test_us_zip_codes_parse() -> None:
-    assert NAMED["postal_code"]("45887") is not None
-    assert NAMED["postal_code"]("01028-2744") is not None
+def test_canadian_postal_codes_parse_and_normalize_to_upper_with_one_space() -> None:
+    assert NAMED["postal_code"]("N1G 4N4") == "N1G 4N4"
+    assert NAMED["postal_code"]("M9W 7E9") == "M9W 7E9"
+    # Lowercase, no internal space - the same code, printed differently.
+    assert NAMED["postal_code"]("n1g4n4") == "N1G 4N4"
+
+
+def test_us_zip_codes_parse_unmodified() -> None:
+    assert NAMED["postal_code"]("45887") == "45887"
+    assert NAMED["postal_code"]("01028-2744") == "01028-2744"
 
 
 def test_postal_code_rejects_a_seven_digit_run() -> None:
     """F11: an unscoped digit run must not read as a zip code."""
     assert NAMED["postal_code"]("4378107") is None
+
+
+def test_tax_id_normalizes_case_and_reassembles_the_three_groups() -> None:
+    """H.S.T. # 123142812RT0001 - the anchor hazard from F14. Proven with a
+    lowercase middle group so a passing assertion cannot be satisfied by a
+    pattern that merely echoes its input back unchanged."""
+    assert NAMED["tax_id"]("123142812RT0001") == "123142812RT0001"
+    assert NAMED["tax_id"]("123142812rt0001") == "123142812RT0001"
+    assert NAMED["tax_id"]("123142812 RT 0001") == "123142812RT0001"
 
 
 def test_tax_id_rejects_a_plain_account_number() -> None:
@@ -272,7 +294,7 @@ def test_tax_id_rejects_a_plain_account_number() -> None:
 
 def test_digits_run_needs_at_least_ten_digits() -> None:
     """F7: the scanline. Ten is the floor that keeps invoice numbers out."""
-    assert NAMED["digits_run"]("25600770871000367962") is not None
+    assert NAMED["digits_run"]("25600770871000367962") == "25600770871000367962"
     assert NAMED["digits_run"]("4378107") is None
 
 

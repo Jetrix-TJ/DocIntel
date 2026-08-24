@@ -443,3 +443,45 @@ def test_an_empty_invoice_number_falls_through_to_the_account_rung():
     ctx.extracted.set("bill_date", "2026-01-01", 1.0)
     ctx = derive_document_identity(ctx)
     assert ctx.derived.get("identity_basis") == "account_period"
+
+
+def test_soft_fingerprint_is_the_last_resort_identity():
+    """A hard-miss/collapsed document with no invoice number and no account+
+    period must still be checkable against duplicates - Stage 1's
+    `soft_fingerprint` (sender + filename + byte size) is a strictly weaker
+    signal than the other two rungs, but a weak signal is not the same as no
+    signal at all. Before this rung existed, this exact case (the corpus's
+    own default-4-field vision output) could never be flagged as a possible
+    duplicate of itself, even byte-for-byte identical."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.derived.set("soft_fingerprint", "abc123def456")
+    ctx = derive_document_identity(ctx)
+    assert ctx.derived.get("document_identity") == "soft:abc123def456"
+    assert ctx.derived.get("identity_basis") == "soft_fingerprint"
+
+
+def test_soft_fingerprint_never_outranks_invoice_number_or_account_period():
+    """The weakest rung must never win when a stronger one is available."""
+    ctx = new_context("d", "/x.pdf")
+    ctx.derived.set("soft_fingerprint", "abc123def456")
+    ctx.extracted.set("invoice_number", "752233001", 1.0)
+    ctx = derive_document_identity(ctx)
+    assert ctx.derived.get("document_identity") == "752233001"
+    assert ctx.derived.get("identity_basis") == "invoice_number"
+
+    ctx2 = new_context("d2", "/x.pdf")
+    ctx2.derived.set("soft_fingerprint", "abc123def456")
+    ctx2.extracted.set("account_number", "0384043574", 1.0)
+    ctx2.extracted.set("bill_date", "2026-01-01", 1.0)
+    ctx2 = derive_document_identity(ctx2)
+    assert ctx2.derived.get("identity_basis") == "account_period"
+
+
+def test_no_soft_fingerprint_either_still_records_that_it_looked():
+    """Same guarantee `test_neither_rung_available_records_that_it_looked`
+    pins, extended to the new rung: absence of a fallback is still recorded
+    as looked-and-found-nothing, not silently skipped."""
+    ctx = new_context("d", "/x.pdf")
+    ctx = derive_document_identity(ctx)
+    assert ctx.derived.get("document_identity") is None
+    assert ctx.derived.get("identity_basis") is None

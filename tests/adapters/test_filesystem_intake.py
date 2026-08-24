@@ -42,7 +42,7 @@ def test_nested_pdfs_are_found_not_silently_ignored(tmp_path):
     deep = tmp_path / "a" / "b"
     deep.mkdir(parents=True)
     (deep / "buried.pdf").write_bytes(b"%PDF-1.4")
-    (tmp_path / "ignore.txt").write_text("not a pdf")
+    (tmp_path / "ignore.pptx").write_text("not a pdf")  # .pptx: still unaccepted
 
     found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
     assert found == {"top.pdf", "buried.pdf"}
@@ -59,7 +59,7 @@ def test_traversal_order_is_deterministic(tmp_path):
 def test_directory_expands_to_its_pdfs(tmp_path):
     for name in ("a.pdf", "b.pdf", "c.pdf"):
         (tmp_path / name).write_bytes(b"%PDF-1.4")
-    (tmp_path / "not-a-pdf.txt").write_text("ignore me")
+    (tmp_path / "not-a-pdf.pptx").write_text("ignore me")  # .pptx: still unaccepted
     items = list(FilesystemIntake([str(tmp_path)]).items())
     assert len(items) == 3
 
@@ -71,7 +71,19 @@ def test_a_directory_walk_now_also_finds_images_and_office_documents(tmp_path):
     down is no longer invisible before Stage 2 ever runs."""
     for name in ("a.pdf", "b.png", "c.docx", "d.xlsx", "e.jpg", "f.tiff"):
         (tmp_path / name).write_bytes(b"stub bytes")
-    (tmp_path / "ignore.txt").write_text("still not accepted")
+    (tmp_path / "ignore.pptx").write_text("still not accepted")  # .pptx: still unaccepted
 
     found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
     assert found == {"a.pdf", "b.png", "c.docx", "d.xlsx", "e.jpg", "f.tiff"}
+
+
+def test_a_directory_walk_now_also_finds_text_documents(tmp_path):
+    """Phase 4: TXT/CSV/HTML are also read straight from `ACCEPTED_SUFFIXES`,
+    with zero changes to this module - the same "defined once" seam that
+    already covered images/Office documents."""
+    for name in ("a.txt", "b.csv", "c.html", "d.htm"):
+        (tmp_path / name).write_text("stub content")
+    (tmp_path / "ignore.pptx").write_text("still not accepted")
+
+    found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
+    assert found == {"a.txt", "b.csv", "c.html", "d.htm"}

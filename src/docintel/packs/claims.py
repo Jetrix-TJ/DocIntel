@@ -94,22 +94,38 @@ def _corroborated_markers(spec: Mapping[str, Any], where: str) -> Any:
     return rule
 
 
-def _alias_table(spec: Mapping[str, Any], where: str, aliases: Mapping[str, str]) -> Any:
+def _alias_table(
+    spec: Mapping[str, Any],
+    where: str,
+    aliases: Mapping[str, str],
+    pack_name: str | None = None,
+) -> Any:
     """The pack's own alias table resolves a canonical sender.
 
     Digital Direction's primary guard. The alias table is short and stable
     (carriers), whereas the client roster grows every time the business signs
     one - which is why the carrier is the claim and the roster is secondary.
 
-    **The table is supplied at COMPILE time, never read from `ctx.pack`.** A
-    first version of this rule did read `ctx.pack.vendor_aliases`, which is
-    always `None` here: `resolve_pack` is the function that SETS `ctx.pack`, so
-    nothing is bound while a claim is being evaluated. The rule therefore always
-    returned False, and all seven real Digital Direction documents went
-    `unclaimed_document`. The gold corpus did not catch it - its four DD
-    documents also print a managed-client name on a short line, so the secondary
-    roster rule claimed them and `replay-gold` stayed byte-identical. The
-    111-document sweep caught it.
+    **The compile-time table is supplied at COMPILE time, never read from
+    `ctx.pack`.** A first version of this rule did read `ctx.pack.vendor_aliases`,
+    which is always `None` here: `resolve_pack` is the function that SETS
+    `ctx.pack`, so nothing is bound while a claim is being evaluated. The rule
+    therefore always returned False, and all seven real Digital Direction
+    documents went `unclaimed_document`. The gold corpus did not catch it - its
+    four DD documents also print a managed-client name on a short line, so the
+    secondary roster rule claimed them and `replay-gold` stayed byte-identical.
+    The 111-document sweep caught it.
+
+    **`pack_name`, when given, is read fresh on every call - not baked in at
+    compile time.** Without this, a carrier added only through
+    `DOCINTEL_EXTRA_PERSONAS_DIR/<pack_name>/aliases.local.json`
+    (`registry.load_extra_aliases`) could get a working persona lookup and
+    fingerprint (`DataPack._canonical_vendor` already merges that overlay) but
+    never actually reach THIS claim decision - a real, previously-unfixed
+    asymmetry, since the overlay directory is meant to onboard a carrier with
+    zero installed-package edits, and a carrier this rule never claims never
+    reaches persona lookup at all. Imported lazily to avoid a real import
+    cycle (`registry` imports `datapack`, which imports this module).
     """
     if not aliases:
         raise ClaimError(
@@ -117,11 +133,18 @@ def _alias_table(spec: Mapping[str, Any], where: str, aliases: Mapping[str, str]
             f"packs pass theirs to compile_claim(); a data pack declares one "
             f"under `aliases.literal` in its pack file."
         )
-    needles = [normalize_name(phrase) for phrase in aliases]
+    compile_time_needles = [normalize_name(phrase) for phrase in aliases]
     scope = spec.get("scope", "primary")
 
     def rule(ctx: JobContext) -> bool:
         haystack = _normalized_scope(ctx, scope)
+        needles = compile_time_needles
+        if pack_name is not None:
+            from docintel.packs.registry import load_extra_aliases
+
+            extra = load_extra_aliases(pack_name)
+            if extra:
+                needles = compile_time_needles + [normalize_name(phrase) for phrase in extra]
         return any(n in haystack for n in needles)
 
     return rule
@@ -227,7 +250,10 @@ class ClaimGuard:
 
 
 def compile_claim(
-    spec: Mapping[str, Any], *, aliases: Mapping[str, str] | None = None
+    spec: Mapping[str, Any],
+    *,
+    aliases: Mapping[str, str] | None = None,
+    pack_name: str | None = None,
 ) -> ClaimGuard:
     """Compile a pack's `claim` block. Raises `ClaimError` at load on any problem.
 
@@ -235,6 +261,13 @@ def compile_claim(
     `alias_table` rule kind. It is passed in rather than read from the context
     because `ctx.pack` is not bound while a claim is being evaluated -
     `resolve_pack` is the function that sets it.
+
+    `pack_name`, when given, lets an `alias_table` rule also recognise a
+    carrier added only through `DOCINTEL_EXTRA_PERSONAS_DIR/<pack_name>/
+    aliases.local.json` - see `_alias_table`'s own docstring for the
+    asymmetry this closes. Every real caller should pass its own pack name;
+    omitting it (the default) preserves the exact old behavior for any code
+    that has a reason not to.
 
     Fail-loud for the same reason the ladder compiler is: a claim rule that
     silently evaluates false is a pack that silently stops recognising its own
@@ -261,7 +294,7 @@ def compile_claim(
         if scope not in signals.SCOPES:
             raise ClaimError(f"{where}.scope: unknown scope {scope!r}")
         if kind in _NEEDS_ALIASES:
-            rules.append(factory(rule_spec, where, aliases or {}))
+            rules.append(factory(rule_spec, where, aliases or {}, pack_name))
         else:
             rules.append(factory(rule_spec, where))
         # Vetoes operate on the marker text the rules matched on, so collect it.

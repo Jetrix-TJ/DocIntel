@@ -28,6 +28,23 @@ class Assertion:
     kind: str = "exact"       # "exact" | "money"
 
 
+def _money_decimal(value: Any) -> Decimal:
+    """Parse a money value gold or a record might hold, currency-formatted or not.
+
+    Gold and the rules-route record both hold clean numeric strings (the
+    `strip_currency`/`money` adjust ops already ran) - but the vision-only
+    route (`s5b_vision.py`, a hard-miss document with no persona to run
+    adjust ops at all) can legitimately emit "$6,500.00" straight from the
+    model's own transcription. `Decimal("$6,500.00")` raises `InvalidOperation`
+    on the symbol and the thousands separator; without stripping them first,
+    a genuinely correct vision extraction reads as a wrong one.
+    """
+    text = str(value).strip()
+    for char in ("$", ",", "€", "£", "¥"):
+        text = text.replace(char, "")
+    return Decimal(text)
+
+
 def matches(expected: Any, actual: Any, kind: str) -> bool:
     """Compare a gold expectation against a record value.
 
@@ -51,7 +68,7 @@ def matches(expected: Any, actual: Any, kind: str) -> bool:
         if expected is None or actual is None:
             return expected == actual
         try:
-            return Decimal(str(expected)) == Decimal(str(actual))
+            return _money_decimal(expected) == _money_decimal(actual)
         except (InvalidOperation, ValueError):
             return False
     if kind == "text":

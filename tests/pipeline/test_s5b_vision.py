@@ -60,6 +60,27 @@ def test_no_persona_at_all_routes_to_vision():
     assert ctx.extracted.get("total_printed") == "9.99"
 
 
+@pytest.mark.parametrize("source_format", ["txt", "csv", "html"])
+def test_text_native_formats_never_reach_vision_even_with_no_persona(source_format):
+    """Real bug this test pins: before this fix, a persona-less TXT/CSV/HTML
+    document reached `vision.extract(...)` exactly like an unknown-vendor PDF
+    would - harmless with `FakeVision`, but the REAL Gemini adapter's
+    `_read_document` raises `PermanentError` for any suffix that is neither
+    `.pdf` nor a Gemini-native image MIME type, so this would have dead-
+    lettered every unrecognized TXT/CSV/HTML document in production. None of
+    these formats carries visual content vision could add anything by
+    looking at, and Gemini does not accept them as document input at all -
+    so this stage must be a no-op for them, not merely lucky with a fake."""
+    ctx = _ctx(source_format=source_format)
+    fake = FakeVision({"total_printed": "9.99"})
+
+    result = VisionOneShot(vision=fake).run(ctx)
+
+    assert fake.calls == []
+    assert result.extraction_route is None
+    assert result.extracted.get("total_printed") is None
+
+
 def test_two_weak_fields_count_as_collapse():
     ctx = _ctx(extraction_route="5a_cached")
     ctx.extracted.set("total_printed", "1.00", 0.20)

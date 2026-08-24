@@ -49,7 +49,6 @@ import random
 from decimal import Decimal
 from typing import Any
 
-from docintel.core.coverage import DEFAULT_COLLAPSE_SHARE
 from docintel.core.models import JobContext
 
 # Fields worth showing a reviewer alongside a prior_balance_basis job: the
@@ -81,8 +80,14 @@ VERY_LOW_FLOOR = 0.50
 # `bill_to_mismatch` joins it for the same reason: the printed bill-to disagrees
 # with the pack's roster, which means the pack's claim may be wrong - and a
 # confidence score computed under a wrong claim is not evidence of anything.
+#
+# `xlsx_hidden_content_present` (`extract.xlsx_hidden`) joins for the same
+# structural reason `has_flattened_annotations` does: a hidden sheet/row/
+# column's content is - by definition - excluded from any render, so no
+# amount of confidence in the extracted fields says anything about whether
+# something a human should see is sitting unread in the source workbook.
 DEFAULT_FORCED_REVIEW_TAGS: frozenset[str] = frozenset(
-    {"has_flattened_annotations", "bill_to_mismatch"}
+    {"has_flattened_annotations", "bill_to_mismatch", "xlsx_hidden_content_present"}
 )
 
 # Modifiers that section 5 says raise review on their own:
@@ -102,19 +107,15 @@ FORCING_MODIFIERS: frozenset[str] = frozenset({
     "flattened_annotations", "arith_balance_mismatch",
 })
 
-# Share of a persona's declared selectors that must produce nothing before this is
-# a rules problem rather than a document problem.
-#
-# Deliberately the same 0.60 as VERY_LOW_SHARE, and for the same reason: `low`
-# triggers a rule rewrite, so it has to mean "this persona no longer describes this
-# template", not "one field moved". Below the share, a missing required field still
-# forces `review` - the difference is whether someone re-keys one value or
-# regenerates the rule set.
-#
-# The constant itself now lives in `core.coverage` (`DEFAULT_COLLAPSE_SHARE`),
-# since `s5b_vision`'s escalation check compares against the identical number -
-# see that module's own `_collapsed()`.
-INCOMPLETE_COLLAPSE_SHARE = DEFAULT_COLLAPSE_SHARE
+# Whether a persona's declared selectors collapsed - deliberately the same
+# verdict `s5b_vision`'s escalation check reaches, since `low` triggers a rule
+# rewrite, so it has to mean "this persona no longer describes this template",
+# not "one field moved". Below the collapse floors, a missing required field
+# still forces `review` - the difference is whether someone re-keys one value
+# or regenerates the rule set. See `core.coverage.Coverage.collapsed` (share
+# AND absolute-count floor) - the single source of truth `_collapsed` below
+# and `s5b_vision._collapsed` both consult, so the two decisions cannot drift
+# apart.
 
 LANES = ("high", "medium", "review", "low")
 
@@ -168,12 +169,17 @@ class ConfidenceGate:
         return [f"missing:{name}" for name in ctx.coverage.missing_required]
 
     def _collapsed(self, ctx: JobContext) -> bool:
-        """Most of what the persona declared came back empty."""
-        return (
-            ctx.coverage is not None
-            and ctx.coverage.assessed
-            and ctx.coverage.miss_share >= INCOMPLETE_COLLAPSE_SHARE
-        )
+        """Most of what the persona declared came back empty.
+
+        Delegates to `Coverage.collapsed` - the single source of truth also
+        consulted by `s5b_vision._collapsed` - rather than comparing
+        `miss_share` against `INCOMPLETE_COLLAPSE_SHARE` directly, so the
+        absolute-count floor (`core.coverage.MIN_COLLAPSE_ABSOLUTE_MISSING`)
+        applies here too: a persona with very few declared selectors must not
+        route to the `low` lane and set `regen_flag` from losing just one or
+        two individual optional values.
+        """
+        return ctx.coverage is not None and ctx.coverage.collapsed
 
     # -- confidence --------------------------------------------------------
 

@@ -4,7 +4,7 @@ import pdfplumber
 from PIL import Image, ImageDraw
 
 from docintel.extract import annotations as annotations_module
-from docintel.extract.annotations import RESOLUTION, detect_flattened
+from docintel.extract.annotations import RESOLUTION, detect_flattened, detect_flattened_image
 from docintel.extract.normalize import load_document
 
 FEDERAL = "docs/CONTRA ONLY Everything already on AR Federal Recycling 1330123.pdf"
@@ -104,3 +104,60 @@ def test_zebra_striped_delivery_table_is_not_flagged_as_annotated() -> None:
     draw.rectangle([64, 85, 170, 994], fill=band_colour)  # shaded ID column, full table height
 
     assert annotations_module._image_is_annotated(img) is False  # noqa: SLF001
+
+
+# -- detect_flattened_image: the raw-image counterpart, no PDF involved -----
+
+
+def _scattered_highlight_image(tmp_path, name: str = "annotated.png"):
+    """A synthetic raster reproducing Federal Recycling's real shape: several
+    small, separate pastel-band blobs scattered down the page, not one
+    contiguous printed band - see the module docstring's Federal Recycling
+    vs. DTSS contrast."""
+    band_colour = (176, 192, 216)  # same measured HSV band as the tests above
+    background = (248, 248, 248)
+    img = Image.new("RGB", (850, 1100), background)
+    draw = ImageDraw.Draw(img)
+    # Six small, widely separated blocks, mirroring "six independent
+    # highlighter strokes and comment boxes scattered down the page".
+    for top in (60, 220, 380, 540, 700, 860):
+        draw.rectangle([80, top, 260, top + 40], fill=band_colour)
+    path = tmp_path / name
+    img.save(path)
+    return path
+
+
+def test_detect_flattened_image_catches_scattered_annotations_on_a_raw_raster(tmp_path):
+    path = _scattered_highlight_image(tmp_path)
+    assert detect_flattened_image(str(path)) is True
+
+
+def test_detect_flattened_image_does_not_flag_a_clean_raster(tmp_path):
+    img = Image.new("RGB", (850, 1100), (248, 248, 248))
+    path = tmp_path / "clean.png"
+    img.save(path)
+    assert detect_flattened_image(str(path)) is False
+
+
+def test_detect_flattened_image_examines_every_frame_of_a_multi_frame_tiff(tmp_path):
+    """A multi-frame TIFF (a multi-page scan) must be flagged if ANY frame
+    carries flattened annotations, not only the first - mirroring
+    `convert.convert_image_to_pdf`'s own "every frame, in order" handling."""
+    clean = Image.new("RGB", (850, 1100), (248, 248, 248))
+    band_colour = (176, 192, 216)
+    annotated = Image.new("RGB", (850, 1100), (248, 248, 248))
+    draw = ImageDraw.Draw(annotated)
+    for top in (60, 220, 380, 540, 700, 860):
+        draw.rectangle([80, top, 260, top + 40], fill=band_colour)
+
+    path = tmp_path / "multi.tiff"
+    clean.save(path, save_all=True, append_images=[clean, annotated])
+
+    assert detect_flattened_image(str(path)) is True
+
+
+def test_detect_flattened_image_is_memoized_and_does_not_mutate_shared_state(tmp_path):
+    path = _scattered_highlight_image(tmp_path)
+    first = detect_flattened_image(str(path))
+    second = detect_flattened_image(str(path))
+    assert first is second is True

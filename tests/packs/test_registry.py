@@ -341,6 +341,47 @@ def test_extra_personas_only_returns_the_named_packs_own_subdirectory(tmp_path, 
     assert load_extra_personas("northstar") == [{"sender_fingerprint": "northstar|acme"}]
 
 
+def test_a_malformed_persona_overlay_file_is_skipped_not_a_crash(tmp_path, monkeypatch) -> None:
+    """Same discipline as `load_extra_aliases`/`load_basis_overlay`: a typo in
+    a caller's own persona.json - a file this project's source never touches -
+    must skip only that one file, not crash `process()` for every document of
+    every vendor across every pack."""
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "broken.json").write_text("{not valid json")
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    assert load_extra_personas("digitaldirection") == []
+
+
+def test_a_malformed_persona_overlay_file_does_not_block_its_well_formed_siblings(
+    tmp_path, monkeypatch
+) -> None:
+    """One bad file in the directory must not take down the good ones sitting
+    right next to it."""
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "broken.json").write_text("{not valid json")
+    (directory / "spectrum.json").write_text('{"sender_fingerprint": "digitaldirection|spectrum"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    out = load_extra_personas("digitaldirection")
+
+    assert out == [{"sender_fingerprint": "digitaldirection|spectrum"}]
+
+
+def test_a_persona_overlay_file_that_is_not_a_json_object_is_skipped(tmp_path, monkeypatch) -> None:
+    """Valid JSON that isn't an object (e.g. a bare list or string) is just as
+    unusable as a persona as malformed JSON is - same skip-only-this-file
+    behavior, not a crash."""
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "not_an_object.json").write_text("[1, 2, 3]")
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    assert load_extra_personas("digitaldirection") == []
+
+
 def test_extra_aliases_is_empty_when_the_env_var_is_unset(monkeypatch) -> None:
     monkeypatch.delenv("DOCINTEL_EXTRA_PERSONAS_DIR", raising=False)
     assert load_extra_aliases("digitaldirection") == {}
@@ -398,6 +439,58 @@ def test_digitaldirection_personas_include_the_overlay_ones(tmp_path, monkeypatc
 
     fingerprints = {p["sender_fingerprint"] for p in dd_pack.personas()}
     assert "digitaldirection|spectrum" in fingerprints
+
+
+def test_digitaldirection_claims_a_carrier_only_known_through_the_overlay(
+    tmp_path, monkeypatch
+) -> None:
+    """The bug this closes: the overlay reached persona lookup
+    (`test_digitaldirection_personas_include_the_overlay_ones` above) and
+    fingerprint resolution (`test_digitaldirection_resolves_a_carrier_only_
+    known_through_the_overlay` above) but never the CLAIM decision itself -
+    `alias_table`'s compiled rule baked its needle list in once at import
+    time, from `aliases.LITERAL_ALIASES` alone. A carrier this rule never
+    claims never reaches persona lookup at all, so proving the other two
+    were not enough."""
+    from docintel.packs.digitaldirection import PACK as dd_pack
+
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text('{"brandnew carrier communications": "brandnew"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    ctx = _ctx("Brandnew", "Carrier", "Communications", "Account", "Summary")
+    assert dd_pack.claims(ctx) is True
+
+
+def test_digitaldirection_overlay_does_not_widen_the_claim_to_everything(
+    tmp_path, monkeypatch
+) -> None:
+    """The overlay must widen what the pack recognizes, not make it claim
+    everything - an unrelated document with the overlay set must still go
+    unclaimed."""
+    from docintel.packs.digitaldirection import PACK as dd_pack
+
+    directory = tmp_path / "digitaldirection"
+    directory.mkdir()
+    (directory / "aliases.local.json").write_text('{"brandnew carrier communications": "brandnew"}')
+    monkeypatch.setenv("DOCINTEL_EXTRA_PERSONAS_DIR", str(tmp_path))
+
+    ctx = _ctx("Some", "Unrelated", "Vendor", "Incorporated")
+    assert dd_pack.claims(ctx) is False
+
+
+def test_digitaldirection_still_claims_a_shipped_carrier_with_the_overlay_env_var_unset(
+    monkeypatch,
+) -> None:
+    """The common case - no overlay directory at all - must keep claiming
+    every already-shipped carrier exactly as before this fix."""
+    from docintel.packs.digitaldirection import PACK as dd_pack
+
+    monkeypatch.delenv("DOCINTEL_EXTRA_PERSONAS_DIR", raising=False)
+
+    ctx = _ctx("Spectrum", "Business", "Account", "Summary")
+    assert dd_pack.claims(ctx) is True
 
 
 def test_northstar_resolves_a_vendor_only_known_through_the_overlay(tmp_path, monkeypatch) -> None:

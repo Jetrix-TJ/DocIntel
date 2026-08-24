@@ -61,23 +61,28 @@ def test_a_hard_miss_with_weak_confidence_escalates():
     assert out.review_flag is True
 
 
-def test_a_hard_miss_with_confidence_exactly_at_the_weak_floor_does_not_escalate():
+def test_a_hard_miss_with_confidence_exactly_at_the_weak_floor_does_not_queue_a_job():
     """`>= WEAK` is the boundary - documents this exact edge rather than leaving
-    it to whichever way a future refactor happens to round."""
+    it to whichever way a future refactor happens to round. The job queue entry
+    is skipped at this boundary, but review_flag is never conditional on
+    confidence - see test_a_hard_miss_with_good_confidence_still_sets_review_flag."""
     jobs = _SpyJobs()
     out = AgentEscalation(jobs=jobs).run(_ctx("hard_miss", total_printed=WEAK))
     assert jobs.calls == []
-    assert out.review_flag is False
+    assert out.review_flag is True
 
 
-def test_a_hard_miss_with_good_confidence_does_not_escalate():
-    """A hard miss whose one-shot result is trustworthy anyway needs no queue
-    entry - see the docstring on WEAK for why 'no persona' and 'no confidence'
-    are not the same fact."""
+def test_a_hard_miss_with_good_confidence_still_sets_review_flag():
+    """A hard miss whose one-shot result is trustworthy needs no NEW PERSONA
+    (see the docstring on WEAK for why 'no persona' and 'no confidence' are
+    not the same fact) - but it still has no persona at all, and vision's
+    self-reported confidence is a transcription-certainty signal, not a
+    correctness one. review_flag must never be conditional on it: a
+    confidently wrong one-shot result must still reach a human."""
     jobs = _SpyJobs()
     out = AgentEscalation(jobs=jobs).run(_ctx("hard_miss", total_printed=0.95))
-    assert jobs.calls == []
-    assert out.review_flag is False
+    assert jobs.calls == [], "a trustworthy one-shot result needs no new persona authored"
+    assert out.review_flag is True
 
 
 def test_the_weakest_of_several_fields_governs_the_decision():

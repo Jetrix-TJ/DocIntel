@@ -60,21 +60,30 @@ class AgentEscalation:
         if ctx.persona_status != "hard_miss":
             return ctx
         confidences = list(ctx.extracted.match_quality.values())
-        if confidences and min(confidences) >= WEAK:
-            return ctx
-        ctx.log("s5c: agent_escalation (job queued, authoring deferred)")
-        if self.jobs is not None:
-            self.jobs.enqueue_once(  # type: ignore[attr-defined]
-                ctx.sender_fingerprint,
-                ctx.doc_type,
-                kind="persona_authoring",
-                context={"record_snapshot": _record_snapshot(ctx)},
-            )
-        # A review flag, NOT a regen flag. Spec Part 3 "First-time": a hard miss
-        # "emits anyway with the one-shot result and a review flag". regen_flag
-        # means "the rules are wrong" (Stage 7, Very Low lane) — but a first-time
-        # sender has no rules yet, so a regen flag here would send a downstream
-        # consumer looking for a regeneration that cannot exist. Stage 7 is the
-        # sole writer of regen_flag, so the two never disagree.
+        confident = bool(confidences) and min(confidences) >= WEAK
+        # WEAK gates the QUEUE ENTRY only, never the review flag below: it
+        # answers "does a human need to author a new persona", not "does a
+        # human need to see this document". A confident one-shot result still
+        # needs no new rules, but self-reported vision confidence is a
+        # transcription-certainty signal, not a correctness one - it must
+        # never be read as "this document has been reviewed".
+        if not confident:
+            ctx.log("s5c: agent_escalation (job queued, authoring deferred)")
+            if self.jobs is not None:
+                self.jobs.enqueue_once(  # type: ignore[attr-defined]
+                    ctx.sender_fingerprint,
+                    ctx.doc_type,
+                    kind="persona_authoring",
+                    context={"record_snapshot": _record_snapshot(ctx)},
+                )
+        else:
+            ctx.log("s5c: agent_escalation (confident one-shot result, no rule-authoring job queued)")
+        # A review flag, NOT a regen flag, and unconditional on confidence.
+        # Spec Part 3 "First-time": a hard miss "emits anyway with the
+        # one-shot result and a review flag". regen_flag means "the rules are
+        # wrong" (Stage 7, Very Low lane) — but a first-time sender has no
+        # rules yet, so a regen flag here would send a downstream consumer
+        # looking for a regeneration that cannot exist. Stage 7 is the sole
+        # writer of regen_flag, so the two never disagree.
         ctx.review_flag = True
         return ctx

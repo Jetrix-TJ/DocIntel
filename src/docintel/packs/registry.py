@@ -275,6 +275,14 @@ def load_extra_personas(pack_name: str) -> list[dict[str, Any]]:
     Same shape and the same "read from disk every call" discipline as
     `DataPack.personas()` - a caller's own persona is data, not code, and a
     cache would mean they had to restart their process to see their own edit.
+
+    Same per-file failure discipline as `load_extra_aliases`/
+    `load_basis_overlay` below, too: one malformed file in this directory
+    must skip only that file, not crash `process()` for every document of
+    every vendor across every pack. Without this, a typo in a brand-new
+    vendor's own persona.json - a file this project's own source never
+    touches - would take down the whole running process rather than dead-
+    lettering the one document that needed it.
     """
     base = os.environ.get(_EXTRA_PERSONAS_ENV_VAR)
     if not base:
@@ -286,9 +294,16 @@ def load_extra_personas(pack_name: str) -> list[dict[str, Any]]:
     for filename in sorted(os.listdir(directory)):
         if filename == _ALIASES_OVERLAY_FILENAME:
             continue
-        if filename.endswith(".json"):
-            with open(os.path.join(directory, filename)) as fh:
-                out.append(json.load(fh))
+        if not filename.endswith(".json"):
+            continue
+        path = os.path.join(directory, filename)
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            out.append(data)
     return out
 
 

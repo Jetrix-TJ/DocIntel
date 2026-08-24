@@ -124,10 +124,14 @@ def test_an_image_upload_is_accepted_not_rejected_at_the_extension_gate(tmp_path
 
 
 def test_a_genuinely_unsupported_extension_is_still_rejected_with_a_clear_message():
+    # .pptx, not .txt: TXT became a genuinely accepted format in Phase 4, so
+    # it no longer proves anything about rejection - .pptx still isn't in
+    # `ACCEPTED_SUFFIXES` (see `extract.convert`'s own "nobody has asked for
+    # PPTX yet" comment).
     app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     resp = app.test_client().post(
         "/process",
-        data={"pdf": (io.BytesIO(b"hello"), "notes.txt")},
+        data={"pdf": (io.BytesIO(b"hello"), "notes.pptx")},
         content_type="multipart/form-data",
     )
     assert resp.status_code == 400
@@ -155,16 +159,30 @@ def test_a_clean_document_shows_per_field_confidence():
     assert "<td>0.99</td>" in body  # DTSS's total_printed/balance_due land at 0.99
 
 
-def test_a_non_pdf_is_rejected_before_the_pipeline_runs():
+def test_an_unsupported_extension_is_rejected_before_the_pipeline_runs():
+    # Renamed from "a_non_pdf_is_rejected": non-PDF formats (images, Office
+    # documents, and now TXT/CSV/HTML) are legitimately accepted today - only
+    # a genuinely unsupported extension like .pptx is rejected at all.
     app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
     client = app.test_client()
     resp = client.post(
         "/process",
-        data={"pdf": (io.BytesIO(b"not a pdf"), "notes.txt")},
+        data={"pdf": (io.BytesIO(b"not a pdf"), "notes.pptx")},
         content_type="multipart/form-data",
     )
     assert resp.status_code == 400
     assert b"pdf" in resp.data.lower()
+
+
+def test_a_txt_upload_is_accepted_and_reaches_the_pipeline(tmp_path):
+    txt = tmp_path / "invoice.txt"
+    txt.write_text("Invoice Number: INV-88001\nTotal Due: 300.00\n", encoding="utf-8")
+
+    app = create_app(runner_factory=_real_runner_factory(), jobs=_TEST_JOBS)
+    resp = _upload(app.test_client(), str(txt))
+
+    assert resp.status_code == 200
+    assert b"not accepted" not in resp.data
 
 
 def test_no_file_is_rejected_before_the_pipeline_runs():

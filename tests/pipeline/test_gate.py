@@ -120,6 +120,20 @@ def test_flattened_annotations_are_forced_by_default_not_by_configuration():
     assert "has_flattened_annotations" in DEFAULT_FORCED_REVIEW_TAGS
 
 
+def test_xlsx_hidden_content_is_forced_by_default_not_by_configuration():
+    """`extract.xlsx_hidden.has_hidden_content` detects, never extracts - a
+    hidden sheet/row/column's content is structurally invisible to any
+    render, so it forces review the same unconditional way
+    `has_flattened_annotations` does, not something a pack opts into."""
+    assert "xlsx_hidden_content_present" in DEFAULT_FORCED_REVIEW_TAGS
+    ctx = new_context("d", "/x.xlsx")
+    ctx.confidence = {"total_printed": 0.99}
+    ctx.add_tag("xlsx_hidden_content_present")
+    out = _gate(thresholds={}).run(ctx)
+    assert out.lane == "review"
+    assert out.review_flag is True
+
+
 def test_the_forcing_modifier_alone_also_forces_review():
     """Section 5 attaches the forcing to the MODIFIER, so a document carrying it
     without the tag must still be forced."""

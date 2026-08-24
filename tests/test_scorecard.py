@@ -64,6 +64,19 @@ def test_money_assertions_compare_by_value_not_by_string():
     assert matches(33876.4, "33876.40", kind="exact") is False
 
 
+def test_money_assertions_tolerate_currency_formatted_vision_output():
+    """The vision-only route (no persona, so no adjust ops ever run) can
+    legitimately emit a raw transcription like "$6,500.00" - a correct
+    reading must not score as wrong just because it still carries the
+    symbol and thousands separator the rules route would have stripped."""
+    from docintel.scorecard import matches
+    assert matches(6500.0, "$6,500.00", kind="money") is True
+    assert matches(6500.0, "6,500.00", kind="money") is True
+    assert matches(6500.0, "$6500.00", kind="money") is True
+    assert matches(33876.4, "$33,876.40", kind="money") is True
+    assert matches(6500.0, "$6,500.01", kind="money") is False
+
+
 def test_the_centracom_trap_is_caught_not_silently_dropped():
     """The trap this used to assert as deferred, now caught for real.
 

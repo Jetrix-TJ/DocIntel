@@ -288,3 +288,47 @@ def _ocr_and_check_complete(path: str, page_numbers: list[int]) -> dict[int, Pag
             "refusing to fall back to a page with no text layer"
         )
     return ocred
+
+
+def load_image_document(path: str) -> tuple[tuple[PageText, ...], tuple[PageMeta, ...], str]:
+    """The image-native counterpart to `load_document`, for the six raster
+    suffixes `extract.convert.IMAGE_SUFFIXES` names.
+
+    A raster image never carries a text layer, so there is no native-vs-OCR
+    decision to make the way there is for a PDF: `NATIVE_CHAR_THRESHOLD`
+    never applies here, every page is definitionally starved, and every page
+    always goes through OCR (`ocr.ocr_image`). `PageMeta` is built directly
+    rather than read via `pdf.read_meta`, since there is no real PDF to
+    introspect — a wrapped copy of this same image would have read back
+    `char_count=0, image_count=1, annot_count=0` on every page regardless
+    (an image wrapper carries no text layer, is itself the one embedded
+    image, and has no PDF annotation object), so this states that directly
+    instead of paying for a conversion + `pdfplumber` round trip just to
+    learn a fact the format already determines.
+
+    Memoized the same way as `load_document` — `(abspath, st_size,
+    st_mtime_ns, content_hash)` — honouring the same `DOCINTEL_OCR_CACHE=0`
+    escape hatch.
+    """
+    if not ocr_cache.enabled():
+        return _load_image_document_uncached(path)
+    key = _memo_key(path)
+    if key is None:
+        return _load_image_document_uncached(path)
+    return _load_image_document_cached(key)
+
+
+@functools.lru_cache(maxsize=_MEMO_CACHE_SIZE)
+def _load_image_document_cached(
+    key: _MemoKey,
+) -> tuple[tuple[PageText, ...], tuple[PageMeta, ...], str]:
+    return _load_image_document_uncached(key[0])
+
+
+def _load_image_document_uncached(path: str) -> tuple[tuple[PageText, ...], tuple[PageMeta, ...], str]:
+    pages = ocr.ocr_image(path)
+    meta = tuple(
+        PageMeta(page_number=p.page_number, char_count=0, image_count=1, annot_count=0)
+        for p in pages
+    )
+    return pages, meta, "ocr"

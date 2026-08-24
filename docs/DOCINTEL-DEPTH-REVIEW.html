@@ -1,0 +1,518 @@
+<meta charset="UTF-8">
+<title>docintel — Architecture & Maturity Review</title>
+<style>
+  :root{
+    --bg:#12151c; --panel:#171b24; --panel2:#1c212c; --raised:#20263300;
+    --ink:#e7e9ee; --mut:#9aa3b2; --dim:#616b7d; --line:#2a3040;
+    --gold:#c9a15a; --gold-soft:#2b2416; --copper:#c97a4a;
+    --good:#4fae7a; --good-soft:#16261e; --bad:#d97066; --bad-soft:#2c1a18;
+    --info:#6f9bd1; --info-soft:#182233;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f7f5f0; --panel:#ffffff; --panel2:#f1ede3;
+      --ink:#1c1a16; --mut:#5c584d; --dim:#8b8676; --line:#e2ddd0;
+      --gold:#9a7328; --gold-soft:#f2e9d3; --copper:#a85a2e;
+      --good:#2e7d51; --good-soft:#e4f2e9; --bad:#af3f34; --bad-soft:#f7e6e3;
+      --info:#2d5f96; --info-soft:#e6eefa;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f5f0; --panel:#ffffff; --panel2:#f1ede3;
+    --ink:#1c1a16; --mut:#5c584d; --dim:#8b8676; --line:#e2ddd0;
+    --gold:#9a7328; --gold-soft:#f2e9d3; --copper:#a85a2e;
+    --good:#2e7d51; --good-soft:#e4f2e9; --bad:#af3f34; --bad-soft:#f7e6e3;
+    --info:#2d5f96; --info-soft:#e6eefa;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.62; font-size:16px}
+  a{color:var(--info)}
+  code{font-family:var(--mono); font-size:.88em; background:var(--panel2); padding:.1em .4em; border-radius:4px; color:var(--gold)}
+  pre{font-family:var(--mono); font-size:.84em; line-height:1.6; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto}
+  pre code{background:none; padding:0; color:var(--ink)}
+
+  .shell{display:grid; grid-template-columns:260px minmax(0,780px); gap:56px; max-width:1180px; margin:0 auto; padding:44px 26px 110px; justify-content:center}
+  @media (max-width:920px){ .shell{grid-template-columns:1fr} aside{position:static!important} }
+
+  aside{position:sticky; top:32px; align-self:start; font-size:13px}
+  .brand{font-family:var(--serif); font-size:1.5em; font-weight:600; letter-spacing:-.01em}
+  .brand-sub{color:var(--dim); font-size:.82em; margin:2px 0 24px; line-height:1.4}
+  nav a{display:block; text-decoration:none; color:var(--mut); padding:4px 0 4px 12px; border-left:2px solid transparent; margin-left:-13px}
+  nav a:hover{color:var(--gold)}
+  nav a.part{font-weight:700; color:var(--ink); margin-top:14px; border-left-color:transparent; padding-left:0}
+  nav a.part:first-child{margin-top:0}
+
+  main{min-width:0}
+  .eyebrow{text-transform:uppercase; letter-spacing:.12em; font-size:.72em; color:var(--gold); font-weight:700; margin-bottom:12px}
+  h1{font-family:var(--serif); font-size:2.5em; line-height:1.14; margin:0 0 16px; font-weight:600; text-wrap:balance}
+  .intro{font-size:1.1em; color:var(--mut); max-width:64ch}
+  .meta{font-family:var(--mono); font-size:.78em; color:var(--dim); margin-top:16px; display:flex; gap:18px; flex-wrap:wrap}
+  .meta b{color:var(--mut); font-weight:500}
+
+  .rule{height:1px; background:linear-gradient(90deg,transparent,var(--line) 8%,var(--line) 92%,transparent); margin:36px 0}
+
+  h2.part{font-family:var(--mono); font-weight:600; margin:64px 0 6px; color:var(--gold); text-transform:uppercase; letter-spacing:.14em; font-size:.72em}
+  h3{font-family:var(--serif); font-weight:600; font-size:1.7em; margin:10px 0 12px; scroll-margin-top:20px; text-wrap:balance}
+  h4{font-family:var(--mono); font-size:.76em; letter-spacing:.08em; text-transform:uppercase; color:var(--copper); margin:22px 0 8px}
+  p{margin:12px 0; max-width:70ch}
+  section{margin-bottom:10px}
+  ul,ol{margin:12px 0; padding-left:22px; max-width:70ch} li{margin:7px 0}
+  strong{color:var(--ink)}
+
+  .lede{font-size:1.08em; color:var(--mut); max-width:68ch}
+
+  .verdict{border:1px solid var(--line); border-radius:14px; background:var(--panel); padding:22px 26px; margin:22px 0; box-shadow:0 20px 50px -30px rgba(0,0,0,.4)}
+  .verdict .vh{font-family:var(--mono); font-size:.72em; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin-bottom:8px}
+  .verdict .vv{font-family:var(--serif); font-size:1.5em; font-weight:600}
+
+  .callout{border-radius:12px; padding:15px 20px; margin:20px 0; font-size:.95em; border:1px solid}
+  .callout .h{font-family:var(--mono); font-size:.7em; letter-spacing:.09em; text-transform:uppercase; margin-bottom:6px; font-weight:700}
+  .callout.good{border-color:color-mix(in srgb, var(--good) 45%, transparent); background:var(--good-soft)} .callout.good .h{color:var(--good)}
+  .callout.bad{border-color:color-mix(in srgb, var(--bad) 45%, transparent); background:var(--bad-soft)} .callout.bad .h{color:var(--bad)}
+  .callout.info{border-color:color-mix(in srgb, var(--info) 40%, transparent); background:var(--info-soft)} .callout.info .h{color:var(--info)}
+  .callout p{margin:6px 0}
+
+  .card-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:18px 0}
+  .card{border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:16px 18px}
+  .card h4{margin-top:0}
+  .card p{font-size:.92em; color:var(--mut); margin:6px 0 0}
+
+  table{border-collapse:collapse; width:100%; margin:16px 0; font-size:.9em}
+  th,td{border-bottom:1px solid var(--line); padding:9px 12px; text-align:left; vertical-align:top}
+  th{font-family:var(--mono); font-size:.7em; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); font-weight:600}
+  .twrap{overflow-x:auto}
+
+  figure{margin:22px 0; padding:0}
+  figure svg{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; max-width:100%; height:auto; display:block}
+  figcaption{font-size:.86em; color:var(--mut); margin-top:10px; max-width:68ch}
+
+  .tree{font-family:var(--mono); font-size:.84em; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:16px 18px; white-space:pre; overflow-x:auto; line-height:1.55}
+
+  .steps{counter-reset:st; margin:18px 0}
+  .step{position:relative; padding:2px 0 18px 44px; margin-left:2px; border-left:1px dashed var(--line)}
+  .step:last-child{border-left-color:transparent}
+  .step::before{counter-increment:st; content:counter(st); position:absolute; left:-15px; top:0; width:28px; height:28px; border-radius:50%; background:var(--panel2); border:1px solid var(--line); color:var(--gold); font-family:var(--mono); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .step .sh{font-weight:700; color:var(--ink)}
+  .step .sb{color:var(--mut); font-size:.94em; margin-top:2px}
+
+  .evline{margin:12px 0; font-size:.9em; max-width:70ch}
+  .evline .tag{font-family:var(--mono); font-size:.7em; padding:2px 8px; border-radius:5px; display:inline-block; margin-right:8px; vertical-align:2px}
+  .evline .tag.bug{background:var(--bad-soft); color:var(--bad)}
+  .evline .tag.ok{background:var(--good-soft); color:var(--good)}
+  .evline .tag.gap{background:var(--info-soft); color:var(--info)}
+
+  footer{margin-top:60px; padding-top:22px; border-top:1px solid var(--line); color:var(--dim); font-size:.82em}
+  footer a{color:var(--mut)}
+</style>
+
+<div class="shell">
+  <aside>
+    <div class="brand">docintel</div>
+    <div class="brand-sub">Architecture & maturity review — for engineering leadership</div>
+    <nav>
+      <a class="part" href="#summary">Executive summary</a>
+      <a class="part" href="#philosophy">Design philosophy</a>
+      <a href="#pipeline">The pipeline, and why 11 stages</a>
+      <a href="#classification">Classification as data</a>
+      <a href="#extraction">Extraction as a closed grammar</a>
+      <a href="#business-logic">Derivation: the F1 problem</a>
+      <a href="#vision">The AI boundary</a>
+      <a class="part" href="#extension">The extension architecture</a>
+      <a href="#folders">Folder structure, A to Z</a>
+      <a class="part" href="#evidence">Real-world evidence</a>
+      <a href="#eclipse">The Eclipse scorecard (bugs found)</a>
+      <a href="#rfq">The RFQ onboarding (success)</a>
+      <a class="part" href="#gaps">Known gaps, named honestly</a>
+      <a class="part" href="#verdict">Maturity verdict</a>
+    </nav>
+  </aside>
+
+  <main>
+    <p class="eyebrow">Internal review · not a user guide</p>
+    <h1>Why docintel is built the way it is, and how well that's holding up</h1>
+    <p class="intro">
+      This is not the onboarding guide — that's <code>DOCINTEL-FEATURE-EXPLORER.html</code>, built
+      for anyone who needs to install and configure it. This document is the other thing a
+      decision-maker needs: <strong>the reasoning behind the architecture</strong>, and an honest
+      accounting of what independent testing has actually found, good and bad.
+    </p>
+    <div class="meta">
+      <span><b>version</b> 0.1.0</span>
+      <span><b>branch</b> classification-correctness-v2</span>
+      <span><b>evidence base</b> 2 independent real-world test reports, this session's own live testing</span>
+    </div>
+
+    <div class="rule"></div>
+
+    <section id="summary">
+      <h2 class="part">Executive summary</h2>
+      <h3>A rules engine with a narrow, supervised escape hatch</h3>
+      <p class="lede">
+        docintel turns a vendor invoice into a structured, confidence-scored record. The core bet
+        is that <strong>classification and extraction should be data, not code</strong> — a
+        closed, validated grammar a non-engineer can review, with AI used only as a fallback for
+        the specific values a rule-based read couldn't get, never for deciding what a document
+        <em>is</em>. That bet has now been tested by two people neither of us directed, on real
+        invoices, and it holds up — with two real bugs found and fixed-worthy, and one genuinely
+        open limitation worth your attention below.
+      </p>
+      <div class="verdict">
+        <div class="vh">Bottom line</div>
+        <div class="vv">Production-viable for a configured vendor. Two confirmed bugs on the unconfigured/vision-only path need fixing before that path is trusted the same way.</div>
+      </div>
+    </section>
+
+    <section id="philosophy">
+      <h2 class="part">Design philosophy</h2>
+      <h3>Two ideas that explain everything downstream</h3>
+      <p><strong>Idea 1 — a document's identity is decided by rules a human can read, never by a model's judgment.</strong>
+      Every classification decision (which company, what document type) is compiled from a
+      pack's <code>pack.json</code> — a closed set of rule kinds and signal names, validated at
+      load time. There is no code path where an LLM decides "this is an invoice from Acme." That
+      is a deliberate, load-bearing constraint, not a missing feature: a rules engine is
+      auditable and reproducible in a way a model's classification never fully is, and for an AP
+      workflow, reproducibility is the product.</p>
+      <p><strong>Idea 2 — a value the page doesn't answer directly gets derived, never guessed.</strong>
+      "Total Amount Due" is the headline number on an invoice; it is routinely <em>not</em> what's
+      actually owed once a prior balance or a credit is folded in. The pipeline's own worked
+      example is a real document where trusting the printed total overpays by $20,123.80. Every
+      derived value either closes its own arithmetic or explicitly refuses and routes to a human
+      — it never averages, never estimates, never picks the more plausible of two numbers.</p>
+      <div class="card-grid">
+        <div class="card"><h4>closed grammar</h4><p>A persona can only reference a fixed vocabulary of regions, patterns, and ops — never arbitrary code. This is the actual security boundary: "there is no sandbox because there is nothing to sandbox."</p></div>
+        <div class="card"><h4>fail-loud validation</h4><p>14 numbered rules reject a malformed persona write outright, all-or-nothing — never a partial, half-migrated rule set.</p></div>
+        <div class="card"><h4>emit-always</h4><p>Every document produces exactly one record, success or failure. <code>count(intaken) == count(emitted)</code> is a machine-checked invariant, not a convention.</p></div>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h3>The pipeline, and why 11 stages instead of 3</h3>
+      <p>The stage count looks like a lot for "read a PDF, get some fields." It's split this
+      finely because each boundary is where a specific, previously-real failure mode gets caught.
+      The branching below is the part prose alone tends to flatten — three separate escalation
+      exits, each reachable only when the stage before it genuinely failed, never as a default path:</p>
+
+      <figure>
+        <svg viewBox="0 0 720 520" role="img" aria-label="Pipeline flow: Classify branches to unclaimed_document or Persona lookup; Persona lookup branches to 5a Cached rules on a hit or straight to 5b Vision on a hard miss; 5a branches to 5b if collapsed or to Capture fields if strong; 5b branches to 5c Escalate if still empty or to Capture fields if it got values; 5c always continues to Capture fields; Capture feeds Gate then Emit.">
+          <defs>
+            <marker id="pf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="20" y="20" width="150" height="46" rx="8"/>
+            <rect x="520" y="20" width="180" height="46" rx="8"/>
+            <rect x="20" y="112" width="150" height="46" rx="8"/>
+            <rect x="20" y="212" width="150" height="56" rx="8"/>
+            <rect x="300" y="212" width="180" height="56" rx="8"/>
+            <rect x="300" y="322" width="180" height="46" rx="8"/>
+            <rect x="110" y="430" width="340" height="56" rx="8"/>
+          </g>
+          <g font-family="ui-monospace,Consolas,monospace" font-size="12" fill="currentColor" text-anchor="middle">
+            <text x="95" y="39">3 · Classify</text>
+            <text x="95" y="55" font-size="10">claim rules + ladder</text>
+            <text x="610" y="39">unclaimed_document</text>
+            <text x="610" y="55" font-size="10">review lane</text>
+            <text x="95" y="131">4 · Persona lookup</text>
+            <text x="95" y="147" font-size="10">fingerprint + doc_type</text>
+            <text x="95" y="235">5a · Cached rules</text>
+            <text x="95" y="251" font-size="10">persona selectors</text>
+            <text x="95" y="264" font-size="10">zero AI</text>
+            <text x="390" y="235">5b · Vision fallback</text>
+            <text x="390" y="251" font-size="10">Gemini — hinted or</text>
+            <text x="390" y="264" font-size="10">4 default fields</text>
+            <text x="390" y="341">5c · Escalate</text>
+            <text x="390" y="357" font-size="10">review-queue job</text>
+            <text x="280" y="453">6–8 · Capture → Gate → Emit</text>
+            <text x="280" y="469" font-size="10">adjust ops, thresholds, exactly one record</text>
+          </g>
+          <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#pf-arrow)">
+            <path d="M170,43 L520,43"/>
+            <path d="M95,66 L95,112"/>
+            <path d="M95,158 L95,212"/>
+            <path d="M170,133 L230,133 L230,240 L300,240"/>
+            <path d="M170,240 L300,240"/>
+            <path d="M95,268 L95,404 L155,404 L155,430"/>
+            <path d="M390,268 L390,322"/>
+            <path d="M470,240 L495,240 L495,404 L410,404 L410,430"/>
+            <path d="M390,368 L390,430"/>
+          </g>
+          <g font-family="ui-monospace,Consolas,monospace" font-size="10.5" fill="currentColor" text-anchor="middle">
+            <text x="345" y="33">no pack claims it</text>
+            <text x="118" y="90">claimed</text>
+            <text x="118" y="185">hit</text>
+            <text x="240" y="120">hard miss</text>
+            <text x="235" y="230">collapsed</text>
+            <text x="60" y="340">strong match</text>
+            <text x="415" y="295">still empty</text>
+            <text x="500" y="300">got values</text>
+          </g>
+        </svg>
+        <figcaption>Three distinct exits — unclaimed, hard-miss, and the collapsed-then-still-empty
+        chain — each only reachable when the stage before it actually failed, not as a fallback
+        default.</figcaption>
+      </figure>
+
+      <h4>Configuring each stage</h4>
+      <div class="twrap"><table>
+        <thead><tr><th>Stage</th><th>Configured via</th><th>What you control</th></tr></thead>
+        <tbody>
+          <tr><td>1–2 · Intake, filter</td><td>Nothing pack-specific — a fixed format allowlist</td><td>Which files reach the pipeline at all (<code>FilesystemIntake</code>/<code>EmailIntake</code> — a directory or a list of paths)</td></tr>
+          <tr><td>3 · Classify</td><td><code>pack.json</code>'s <code>claim</code> and <code>ladder</code> blocks</td><td>Which company owns a document, and what <code>doc_type</code> it is</td></tr>
+          <tr><td>4 · Persona lookup</td><td>Which <code>personas/*.json</code> files exist (or <code>DOCINTEL_EXTRA_PERSONAS_DIR</code>)</td><td>Whether this specific vendor has a configured read at all</td></tr>
+          <tr><td>4b · Processing profile</td><td>The persona's own <code>processing_profile</code> key</td><td>Which export layout applies, whether reconciliation runs automatically</td></tr>
+          <tr><td>5a · Cached rules</td><td>The persona's <code>field_selectors</code></td><td>Every value read directly off the page, and any <code>adjust</code> op run on it</td></tr>
+          <tr><td>5b · Vision</td><td>The <code>vision=</code> argument to <code>build_pipeline()</code>, plus a persona's <code>field_hints</code></td><td>Which model/mode answers a collapsed extraction, and what it's told about each field</td></tr>
+          <tr><td>5c · Escalate</td><td>The <code>jobs=</code> argument (a <code>SQLiteJobQueue</code>)</td><td>Where a hard-miss review job actually gets written, if anywhere</td></tr>
+          <tr><td>7 · Gate</td><td><code>pack.json</code>'s <code>thresholds</code> block</td><td>The per-field confidence floor for the <code>high</code> lane</td></tr>
+          <tr><td>8 · Emit</td><td>The <code>hooks=</code> argument (a <code>HookRegistry</code>)</td><td>A <code>beforeEmit</code> callback — real-time notification, not what gets emitted</td></tr>
+        </tbody>
+      </table></div>
+      <p class="lede">The granularity is the point: each boundary is a place a bug can be isolated to one stage instead of "somewhere in extraction."</p>
+    </section>
+
+    <section id="classification">
+      <h3>Classification as data — and its one real asymmetry</h3>
+      <p>A pack claims a document via a small, closed set of rule kinds (<code>markers</code>,
+      <code>corroborated_markers</code>, <code>alias_table</code>, <code>roster_on_short_line</code>),
+      then an ordered ladder of signal-based rungs decides the specific document type. Both are
+      plain JSON, validated at load time, extending the exact discipline the project's own
+      selector grammar already established for extraction.</p>
+
+      <figure>
+        <svg viewBox="0 0 760 320" role="img" aria-label="Document text enters Pack A's claim test; if it fires, the document proceeds to the doc_type ladder; if not, it falls to Pack B's same test; if that fires, it also proceeds to the ladder; if neither fires, the document is unclaimed. The ladder then assigns a doc_type.">
+          <defs>
+            <marker id="cd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="20" y="126" width="120" height="44" rx="22"/>
+            <rect x="200" y="20" width="190" height="56" rx="8"/>
+            <rect x="200" y="136" width="190" height="56" rx="8"/>
+            <rect x="200" y="246" width="250" height="56" rx="8"/>
+            <rect x="520" y="100" width="210" height="64" rx="8"/>
+            <rect x="520" y="210" width="210" height="44" rx="22"/>
+          </g>
+          <g font-family="ui-monospace,Consolas,monospace" font-size="12" fill="currentColor" text-anchor="middle">
+            <text x="80" y="152">Document text</text>
+            <text x="295" y="43">Pack A: claim rule fires,</text>
+            <text x="295" y="59">no veto fires?</text>
+            <text x="295" y="159">Pack B: same test</text>
+            <text x="325" y="270">no pack claims it →</text>
+            <text x="325" y="286">unclaimed_document</text>
+            <text x="625" y="126">doc_type ladder:</text>
+            <text x="625" y="142">first rung whose condition</text>
+            <text x="625" y="158">holds, wins</text>
+            <text x="625" y="236">doc_type assigned</text>
+          </g>
+          <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#cd-arrow)">
+            <path d="M140,148 L170,148 L170,48 L200,48"/>
+            <path d="M390,48 L460,48 L460,120 L520,120"/>
+            <path d="M295,76 L295,136"/>
+            <path d="M390,164 L460,164 L460,144 L520,144"/>
+            <path d="M295,192 L295,215 L325,215 L325,246"/>
+            <path d="M625,164 L625,210"/>
+          </g>
+          <g font-family="ui-monospace,Consolas,monospace" font-size="10.5" fill="currentColor" text-anchor="middle">
+            <text x="440" y="40">yes</text>
+            <text x="305" y="103">no</text>
+            <text x="440" y="178">yes</text>
+            <text x="305" y="207">no</text>
+          </g>
+        </svg>
+        <figcaption>Packs are tried in a fixed order; the first to claim wins. Claiming and
+        typing are two separate decisions — a pack can claim a document and still need its ladder
+        to work out which of several doc_types it is.</figcaption>
+      </figure>
+
+      <div class="callout bad">
+        <span class="h">A real, confirmed asymmetry between claim rule kinds</span>
+        <p><code>markers</code>-kind packs (northstar) claim on their <em>own</em> fixed identity
+        (the bill-to), so adding a new vendor never touches the claim decision at all — verified
+        live this session. <code>alias_table</code>-kind packs (digitaldirection) claim on the
+        <em>sender's</em> name, read from a table compiled once at import — so a genuinely new
+        carrier added only through the external-onboarding overlay is never claimed at all, even
+        with a perfectly correct persona sitting there, unless it happens to bill an already-known
+        client. This is not a bug so much as an incomplete extension point: the override reaches
+        persona lookup and fingerprinting but not this one claim path.</p>
+      </div>
+    </section>
+
+    <section id="extraction">
+      <h3>Extraction as a closed grammar, not a prompt</h3>
+      <p>A persona's <code>field_selectors</code> describe <em>where</em> a value sits (an anchor
+      + a region) and <em>what shape</em> it has (a named pattern or a restricted regex) — never
+      "read the total." The restriction is deliberate: a raw regex is capped at 200 characters,
+      one capture group, a 50ms budget, no backreferences, no unbounded quantifiers — a linear-time
+      guarantee that makes the timeout budget honest rather than theoretical.</p>
+      <p>14 validation rules (V1–V14) reject a bad write before it ever reaches a real document.
+      The most important of them, V10, makes it structurally impossible for a selector to target
+      <code>amount_payable</code> directly — closing off the single easiest way to reintroduce
+      the $20,123.80-class bug, because on 7 of the original 10 corpus documents such a selector
+      would look perfectly correct.</p>
+    </section>
+
+    <section id="business-logic">
+      <h3>Derivation: the discipline that makes "confident" mean something</h3>
+      <p>Confidence in this system is not a vibe — it's a multiplicative product of named,
+      enumerable modifiers (16 of them), each with a specific, documented trigger. A field can only
+      ever end up <em>less</em> confident for a stated reason on the record; the one exception —
+      a cross-check agreeing — is capped at a 1.10 multiplier and can never push a field above 0.99,
+      because agreement between checks is corroboration, not proof.</p>
+      <div class="callout good">
+        <span class="h">The one rule worth internalizing</span>
+        <p><code>derive_amount_payable</code> never guesses. If the arithmetic doesn't close within
+        a cent, it sets the value to <code>null</code>, applies a mismatch modifier, and forces a
+        review flag — regardless of how confident every individual field looked. This is the
+        difference between a system that's honest about uncertainty and one that just hides it.</p>
+      </div>
+    </section>
+
+    <section id="vision">
+      <h3>The AI boundary — where it's allowed to help, and where it never is</h3>
+      <p>Gemini is called only in Stage 5b, and only after cached rules have already run and
+      "collapsed" — no match quality at all, two or more fields scoring below 0.50, or most of
+      what a persona declared came back empty. By the time that could even happen, classification
+      and persona lookup are <strong>already finished</strong>. The model never sees "which
+      company is this" as a question — only "what does this specific field say."</p>
+      <p>A persona-less, fully-unclaimed document still gets one shot at vision — but only for four
+      default fields (<code>vendor_name</code>, <code>invoice_number</code>, <code>invoice_date</code>,
+      <code>total_printed</code>), never the richer field set a real persona would define. This is
+      the honest tradeoff of the "no persona yet" path: some data beats none, but it is
+      structurally less than what a configured vendor gets.</p>
+      <div class="callout bad">
+        <span class="h">A real gap this session's independent testing surfaced, not yet fixed</span>
+        <p>The escalation stage's own guarantee — "a hard miss always gets a review flag, so a
+        human sees it" — is silently conditional: if every field's self-reported vision confidence
+        is ≥0.60 (which a model with no calibrated uncertainty essentially always reports), the
+        review flag is never set and no job is queued. A brand-new, entirely unconfigured vendor
+        can process with a <code>high</code> lane and zero human visibility. This was found by an
+        independent test run against 20 real invoices, not by us — worth fixing before this
+        guarantee is relied on for a genuinely new sender.</p>
+      </div>
+    </section>
+
+    <section id="extension">
+      <h2 class="part">The extension architecture</h2>
+      <h3>Why <code>extra_packs=</code> and the personas overlay exist at all</h3>
+      <p>A team that only <code>pip install</code>s this library had no way to add a vendor without
+      either editing installed <code>site-packages</code> (silently wiped by the next upgrade) or
+      monkey-patching module internals this project never promised to keep stable. The fix
+      generalizes a pattern the project already trusted for one specific case — a per-pack,
+      gitignored <code>*.local.json</code> overlay for billing conventions — to personas and
+      aliases broadly, rather than inventing a second mechanism.</p>
+      <p>Both extension points are now independently validated: this session's own Spectrum/Jeeva
+      Enterprises/Acme Widgets work, plus — separately — another engineer's real onboarding of four
+      new companies for RFQ intake, entirely as pure-data packs, zero Python (see <a href="#rfq">below</a>).</p>
+
+      <h3 id="folders">What a user actually needs on disk — the complete picture</h3>
+      <p>Everything above is configuration, not code. Concretely, this is every folder and file
+      involved in running a fully custom setup — a new company, a vendor added to an existing pack,
+      and a regression corpus to catch the next accidental break — all living in the user's own
+      project, none of it inside the installed package:</p>
+      <div class="tree">my_project\
+  venv\                              ← pip install docintel — untouched by anything below
+  invoices\                          ← real source PDFs (and .eml/.msg/.docx/.xlsx)
+    acme_widgets_invoice.pdf
+  my_packs\                          ← Part A: a WHOLLY NEW company (extra_packs=)
+    acme_widgets\
+      pack.json                      ← claim rules + doc_type ladder + field sets + thresholds
+      personas\
+        acme.json                    ← field_selectors for one vendor under this new pack
+  docintel_overlays\                 ← Part B: a NEW VENDOR under an EXISTING shipped pack
+    northstar\                       ←   (DOCINTEL_EXTRA_PERSONAS_DIR points here)
+      aliases.local.json             ← {"printed name": "canonical_key"}
+      widget_vendor.json             ← a persona, same shape as any shipped one
+  docs\
+    corpus\
+      gold\                         ← Part C: the regression corpus
+        acme-widgets-inv-0001.json   ← one hand-confirmed fixture per real document
+  var\
+    jobs.sqlite3                     ← Part D: the review queue (if jobs= is passed)
+  run_pipeline.py                    ← ties Parts A/B together via build_pipeline(...)</div>
+      <div class="twrap"><table>
+        <thead><tr><th>Folder</th><th>Read by</th><th>Required for</th></tr></thead>
+        <tbody>
+          <tr><td><code>my_packs/&lt;company&gt;/</code></td><td><code>load_pack_file()</code>, passed to <code>extra_packs=[...]</code></td><td>A wholly new company no shipped pack claims</td></tr>
+          <tr><td><code>&lt;DOCINTEL_EXTRA_PERSONAS_DIR&gt;/&lt;pack_name&gt;/</code></td><td><code>registry.load_extra_personas</code>/<code>load_extra_aliases</code>, via one env var</td><td>A new vendor under a pack that already ships — picked up by the CLI automatically, no script needed</td></tr>
+          <tr><td><code>docs/corpus/gold/</code></td><td><code>scorecard.replay_gold</code> — a plain relative path from wherever the process runs</td><td>An automated "did this change break anything" regression check</td></tr>
+          <tr><td><code>var/jobs.sqlite3</code></td><td><code>SQLiteJobQueue</code>, passed as <code>jobs=</code></td><td>A durable place a hard-miss or low-confidence document actually lands for a human</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout info">
+        <span class="h">The two extension folders answer different questions</span>
+        <p><code>my_packs/</code> answers "no pack claims this at all" — you supply the whole
+        <code>Pack</code> object. <code>DOCINTEL_EXTRA_PERSONAS_DIR</code> answers "a pack already
+        claims this, it just doesn't know this specific vendor yet" — you supply only the missing
+        persona and alias entry. Reaching for the wrong one is the most common early mistake: a
+        brand-new company needs the former; a new customer of an existing carrier needs the
+        latter — and, per the asymmetry above, only if that pack claims by fixed identity rather
+        than by <code>alias_table</code>.</p>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <h2 class="part">Real-world evidence, not just this session's own testing</h2>
+
+      <h3 id="eclipse">The Eclipse Invoice Scorecard — a stress test that found real bugs</h3>
+      <p>An independent run of 20 real AP invoices through the full pipeline, scored with the
+      library's own assertion engine against ground truth it never saw. Verified against source,
+      not taken at face value:</p>
+      <div class="evline"><span class="tag bug">bug</span> <code>matches(kind="money")</code> crashes on the vision route's own raw output (<code>Decimal("$6,500.00")</code> → <code>InvalidOperation</code>) — confirmed, zero currency stripping in that comparison path.</div>
+      <div class="evline"><span class="tag bug">bug</span> The "a hard miss always gets a review flag" guarantee is confidence-gated and silently skipped — confirmed, see the callout above.</div>
+      <div class="evline"><span class="tag gap">gap</span> A scanned document dead-letters on a missing local OCR binary even though the vision route it would otherwise reach sends raw PDF bytes and never needed OCR at all — confirmed ordering problem, not this test's environment.</div>
+      <div class="evline"><span class="tag ok">not a bug</span> "Vendor identity resolved on only 1 of 12" — correctly, 11 of these 12 real-world senders simply have no persona configured yet. The report's own framing gets this right: it's a coverage gap, not a fingerprinting defect.</div>
+
+      <h3 id="rfq">The RFQ Intake Run — a real onboarding, independently repeated</h3>
+      <p>A second engineer, working from the Feature Explorer guide alone, onboarded four brand-new
+      companies for a completely different document family (RFQs and purchase requisitions, not AP
+      invoices) as pure-data packs. Result: 6/6 documents claimed, 66/66 gold assertions, correct
+      byte-identical duplicate detection. Three of the "gotchas" they hit and fixed were the exact
+      same ones already in this project's own troubleshooting docs — real evidence those docs
+      transfer knowledge, not just describe it. They also surfaced one genuinely new one: an anchor
+      silently never matches when a label and its value are printed with no whitespace between
+      them (<code>Status:Approved</code>), because anchor matching only considers already-tokenized
+      words — confirmed by tracing <code>executor.py::_runs</code> directly.</p>
+    </section>
+
+    <section id="gaps">
+      <h2 class="part">Known gaps, named honestly</h2>
+      <div class="twrap"><table>
+        <thead><tr><th>Gap</th><th>Status</th><th>Real cost</th></tr></thead>
+        <tbody>
+          <tr><td>Confidence-gated escalation defeats the hard-miss review guarantee</td><td>Confirmed, unfixed</td><td>A new vendor can silently auto-approve at high confidence with zero human visibility</td></tr>
+          <tr><td>Money-comparison scorer crashes on unnormalized vision output</td><td>Confirmed, unfixed</td><td>Understates persona-less extraction accuracy by the full width of every money field</td></tr>
+          <tr><td><code>alias_table</code> claim rule doesn't see the external overlay</td><td>Confirmed, documented</td><td>A carrier-style pack can't onboard a genuinely new vendor without a real code change</td></tr>
+          <tr><td>Selector geometry authoring is entirely manual</td><td>By design, still a real cost</td><td>No tool suggests region/anchor/pattern; every new vendor needs a human reading raw PDF word coordinates</td></tr>
+          <tr><td>OCR dependency gates a vision path that doesn't need it</td><td>Confirmed</td><td>A missing local Tesseract install blocks scanned documents even under <code>--vision live</code></td></tr>
+          <tr><td>Anchor matching fails silently on glued label+value text</td><td>Newly confirmed</td><td>A field returns empty with no error when a PDF prints no space after a label</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="verdict">
+      <h2 class="part">Maturity verdict</h2>
+      <div class="verdict">
+        <div class="vh">For a properly configured vendor</div>
+        <div class="vv">Solid. Two independent teams, neither of them us, ran real documents through real configurations and got correct, reproducible results — including derivation math, duplicate detection, and gold-corpus regression scoring.</div>
+      </div>
+      <div class="verdict">
+        <div class="vh">For an unconfigured / vision-only vendor</div>
+        <div class="vv">Not yet trustworthy unattended. The confidence-gated escalation gap means exactly the case this path exists for — a brand-new sender — is the one case where the safety net can silently not catch it.</div>
+      </div>
+      <p class="lede">Recommended next action: fix the two confirmed bugs (money comparison, confidence-gated escalation) before leaning on the vision-only path for any vendor that hasn't been onboarded a persona.</p>
+    </section>
+
+    <footer>
+      Compiled from this session's own verified source-reading (file/line citations throughout) plus
+      two independent test reports supplied by other engineers using this library. Every claim above
+      traces to a specific code path or a specific reproduced test result — nothing here is
+      speculative.
+    </footer>
+  </main>
+</div>

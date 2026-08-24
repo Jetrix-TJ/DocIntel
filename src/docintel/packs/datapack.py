@@ -106,7 +106,9 @@ class DataPack:
         claim_spec = spec.get("claim")
         if not isinstance(claim_spec, dict):
             raise PackSpecError(f"{name}: a pack must declare how it claims a document")
-        self.claim_guard = claims.compile_claim(claim_spec, aliases=self._aliases)
+        self.claim_guard = claims.compile_claim(
+            claim_spec, aliases=self._aliases, pack_name=name
+        )
 
         unknown = set(self._fields) - set(self.doc_types)
         if unknown:
