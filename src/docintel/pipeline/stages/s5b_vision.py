@@ -208,14 +208,19 @@ class VisionOneShot:
         """The path to hand the vision adapter for its bytes-on-disk read.
 
         `readable_path` wins whenever Stage 2 already produced a converted
-        PDF (`core.models.JobContext.readable_path`) - true for every DOCX/
-        XLSX document, always, and for a TIFF/BMP/GIF document that a PRIOR
-        call to this method already converted (see below). Otherwise falls
-        through to `source_path`, which is exactly right for a native PDF or
-        a Gemini-native image (`ctx.source_format == "image"` and the suffix
-        is in `extract.convert.VISION_NATIVE_IMAGE_SUFFIXES` - JPEG/PNG):
-        neither is ever converted, by design (Stage 2's docstring, and this
-        module's own source-format handling).
+        PDF (`core.models.JobContext.readable_path`) - true for every DOCX
+        document, always, for an XLSX document that went through real
+        LibreOffice conversion, and for a TIFF/BMP/GIF document that a PRIOR
+        call to this method already converted (see below). An XLSX document
+        that instead went through the LibreOffice-free fallback tier
+        (`pipeline.stages.s2_filter`'s `office_fallback.xlsx_to_html` path)
+        reaches this method with `readable_path` unset - handled by the branch
+        immediately below. Otherwise falls through to `source_path`, which is
+        exactly right for a native PDF or a Gemini-native image
+        (`ctx.source_format == "image"` and the suffix is in
+        `extract.convert.VISION_NATIVE_IMAGE_SUFFIXES` - JPEG/PNG): neither
+        is ever converted, by design (Stage 2's docstring, and this module's
+        own source-format handling).
 
         The one case this method acts on rather than merely reads: an image
         document (`ctx.source_format == "image"`) whose suffix is NOT
