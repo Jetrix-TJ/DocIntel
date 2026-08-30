@@ -24,6 +24,7 @@ proven separately and exhaustively in `tests/extract/test_convert.py`.
 from __future__ import annotations
 
 import csv as csv_module
+import json
 import os
 
 import pytest
@@ -182,6 +183,7 @@ def test_docx_reaches_the_end_of_the_pipeline(tmp_path, monkeypatch):
 
 def test_xlsx_reaches_the_end_of_the_pipeline(tmp_path, monkeypatch):
     _mock_office_conversion(monkeypatch, tmp_path)
+    monkeypatch.setattr(convert, "soffice_available", lambda: True)
     openpyxl = pytest.importorskip("openpyxl")
     xlsx = tmp_path / "invoice.xlsx"
     wb = openpyxl.Workbook()
@@ -197,6 +199,7 @@ def test_xlsx_reaches_the_end_of_the_pipeline(tmp_path, monkeypatch):
 
 def test_xlsx_with_hidden_content_is_flagged_for_review(tmp_path, monkeypatch):
     _mock_office_conversion(monkeypatch, tmp_path)
+    monkeypatch.setattr(convert, "soffice_available", lambda: True)
     openpyxl = pytest.importorskip("openpyxl")
     xlsx = tmp_path / "invoice-hidden.xlsx"
     wb = openpyxl.Workbook()
@@ -213,6 +216,77 @@ def test_xlsx_with_hidden_content_is_flagged_for_review(tmp_path, monkeypatch):
     assert "xlsx_hidden_content_present" in record["tags"]
     assert record["lane"] == "review"
     assert record["review_flag"] is True
+
+
+def test_xlsx_without_libreoffice_extracts_via_html_fallback_with_zero_vision_calls(tmp_path, monkeypatch):
+    """No LibreOffice on this host - tier 1 (`extract.office_fallback.xlsx_to_html`)
+    must extract a strong-match document alone, at zero vision cost."""
+    monkeypatch.setattr(convert, "soffice_available", lambda: False)
+    openpyxl = pytest.importorskip("openpyxl")
+
+    pack_dir = tmp_path / "pack"
+    (pack_dir / "personas").mkdir(parents=True)
+    (pack_dir / "pack.json").write_text(json.dumps({
+        "name": "xlsxfallback",
+        "default_currency": "USD",
+        "doc_types": ["invoice"],
+        "fields": {
+            "invoice": {
+                "all": ["vendor_name", "invoice_number", "total_printed"],
+                "required": ["vendor_name"],
+                "any_of": [],
+                "derived_only": [],
+            }
+        },
+        "claim": {
+            "rules": [{"kind": "markers", "scope": "primary", "values": ["XLSXFALLBACK CORP"]}],
+            "vetoes": [],
+        },
+        "ladder": {
+            "default": "invoice",
+            "rungs": [{
+                "name": "invoice_confirmed",
+                "doc_type": "invoice",
+                "when": {
+                    "signal": "pattern_in_scope",
+                    "params": {"pattern": "XLSXFALLBACK CORP", "scope": "primary"},
+                },
+            }],
+        },
+    }), encoding="utf-8")
+    (pack_dir / "personas" / "xlsxfallback.json").write_text(json.dumps({
+        "rule_version": "v1",
+        "status": "active",
+        "doc_type": "invoice",
+        "sender_fingerprint": "xlsxfallback|xlsxfallback",
+        "field_selectors": [
+            {"field": "vendor_name", "anchor": "Vendor Name:", "region": "near-anchor", "pattern": "text"},
+            {"field": "invoice_number", "anchor": "Invoice Number:", "region": "near-anchor", "pattern": "text"},
+            {"field": "total_printed", "anchor": "Total Due:", "region": "near-anchor", "pattern": "currency"},
+        ],
+    }), encoding="utf-8")
+
+    from docintel.packs.datapack import load_pack_file
+    pack = load_pack_file(str(pack_dir / "pack.json"))
+
+    xlsx = tmp_path / "invoice.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.cell(row=1, column=1, value="Vendor Name: XLSXFALLBACK CORP")
+    ws.cell(row=2, column=1, value="Invoice Number: INV-9001")
+    ws.cell(row=3, column=1, value="Total Due: $500.00")
+    wb.save(xlsx)
+
+    vision = FakeVision()
+    pipeline = build_pipeline(vision=vision, extra_packs=[pack])
+    record = pipeline.process(document_id="xlsx-fallback-tier1", source_path=str(xlsx))
+
+    validate_record(record)
+    assert record["disposition"] == "processed"
+    assert record["extraction_route"] == "5a_cached"
+    assert vision.calls == [], "tier 1 alone must reach a confident cached-rule extraction"
+    assert record["fields"]["vendor_name"] == "XLSXFALLBACK CORP"
+    assert record["fields"]["invoice_number"] == "INV-9001"
 
 
 def test_txt_reaches_the_end_of_the_pipeline_with_zero_vision_calls(tmp_path):
@@ -334,6 +408,7 @@ def test_a_corrupted_xlsx_dead_letters_cleanly(tmp_path, monkeypatch):
         raise PermanentError(f"soffice could not convert {path!r}: corrupt file")
 
     monkeypatch.setattr(convert, "convert_office_to_pdf", fake_convert)
+    monkeypatch.setattr(convert, "soffice_available", lambda: True)
     path = tmp_path / "corrupt.xlsx"
     path.write_bytes(b"not a real xlsx at all")
 
@@ -405,6 +480,7 @@ def test_a_mixed_format_batch_processes_correctly_with_no_cross_document_leakage
     per worker, reused across many documents" guidance), with no shared-
     state leakage between documents of different formats."""
     _mock_office_conversion(monkeypatch, tmp_path)
+    monkeypatch.setattr(convert, "soffice_available", lambda: True)
 
     import tempfile
 

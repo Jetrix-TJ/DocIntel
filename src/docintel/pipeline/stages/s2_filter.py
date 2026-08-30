@@ -54,7 +54,14 @@ from __future__ import annotations
 import os
 
 from docintel.core.models import JobContext
-from docintel.extract import annotations, convert, pageroles, plaintext, xlsx_hidden
+from docintel.extract import (
+    annotations,
+    convert,
+    office_fallback,
+    pageroles,
+    plaintext,
+    xlsx_hidden,
+)
 from docintel.extract.normalize import load_document, load_image_document
 
 ALLOWED_SUFFIXES = convert.ACCEPTED_SUFFIXES
@@ -96,6 +103,28 @@ class AttachmentFilter:
             ctx.source_format = "html" if suffix in (".html", ".htm") else suffix.lstrip(".")
             pages, page_meta, text_source = plaintext.load_document(ctx.source_path, suffix)
             has_flattened = False  # no raster/annotation layer possible in these formats
+        elif suffix == ".xlsx" and not convert.soffice_available():
+            # LibreOffice isn't installed - fall through to the LibreOffice-
+            # free tier-1 fallback (`extract.office_fallback.xlsx_to_html`):
+            # walk the workbook directly and emit a real `.html` table, read
+            # by the SAME unmodified `extract.plaintext.load_document` a real
+            # `.html` file already uses. `ctx.readable_path` stays unset on
+            # purpose - `pipeline.stages.s5b_vision._vision_source_path`
+            # reads that absence together with `ctx.source_format == "xlsx"`
+            # as the signal that Stage 2 took this fallback tier, and lazily
+            # renders a real image from the original workbook if vision is
+            # ever reached.
+            ctx.source_format = "xlsx"
+            html_path = office_fallback.xlsx_to_html(ctx.source_path)
+            ctx.temp_dirs.append(os.path.dirname(html_path))
+            pages, page_meta, text_source = plaintext.load_document(html_path, ".html")
+            has_flattened = False
+            if xlsx_hidden.has_hidden_content(ctx.source_path):
+                # Same hidden-content signal as the LibreOffice path below -
+                # detected against the ORIGINAL workbook either way, since
+                # hidden content is exactly what neither render carries
+                # forward.
+                ctx.add_tag("xlsx_hidden_content_present")
         else:
             path = ctx.source_path
             if suffix in convert.OFFICE_SUFFIXES:
