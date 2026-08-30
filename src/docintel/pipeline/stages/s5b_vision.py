@@ -14,7 +14,7 @@ from docintel.adapters.vision.hints import (
 from docintel.core import coverage
 from docintel.core.confidence import MODIFIERS
 from docintel.core.models import JobContext
-from docintel.extract import convert
+from docintel.extract import convert, office_render
 from docintel.extract.plaintext import SOURCE_FORMATS as TEXT_NATIVE_SOURCE_FORMATS
 
 COLLAPSE_THRESHOLD = 0.50
@@ -233,6 +233,18 @@ class VisionOneShot:
         """
         if ctx.readable_path is not None:
             return ctx.readable_path
+        if ctx.source_format == "xlsx":
+            # Reaching here with `readable_path` unset and `source_format ==
+            # "xlsx"` can only mean Stage 2 used the LibreOffice-free tier-1
+            # HTML fallback (`pipeline.stages.s2_filter`) - the LibreOffice
+            # path always sets `readable_path` to a real converted PDF.
+            # Tier 1's cached-rule read collapsed (`_collapsed`, above), so
+            # render a real image from the ORIGINAL workbook and hand it to
+            # vision exactly like any other image.
+            path = office_render.xlsx_to_image(ctx.source_path)
+            ctx.readable_path = path
+            ctx.temp_dirs.append(os.path.dirname(path))
+            return path
         if ctx.source_format != "image":
             return ctx.source_path
         suffix = os.path.splitext(ctx.source_path)[1].lower()

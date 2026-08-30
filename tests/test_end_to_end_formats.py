@@ -289,6 +289,78 @@ def test_xlsx_without_libreoffice_extracts_via_html_fallback_with_zero_vision_ca
     assert record["fields"]["invoice_number"] == "INV-9001"
 
 
+def test_xlsx_without_libreoffice_escalates_to_a_rendered_image_when_cached_rules_collapse(tmp_path, monkeypatch):
+    """Same fallback tier 1 as above, but the workbook doesn't carry any of
+    the persona's declared fields - cached rules collapse, and Stage 5b must
+    escalate to a REAL rendered `.png`, never the raw `.xlsx` path."""
+    monkeypatch.setattr(convert, "soffice_available", lambda: False)
+    openpyxl = pytest.importorskip("openpyxl")
+
+    pack_dir = tmp_path / "pack"
+    (pack_dir / "personas").mkdir(parents=True)
+    (pack_dir / "pack.json").write_text(json.dumps({
+        "name": "xlsxfallback",
+        "default_currency": "USD",
+        "doc_types": ["invoice"],
+        "fields": {
+            "invoice": {
+                "all": ["vendor_name", "invoice_number", "total_printed"],
+                "required": ["vendor_name"],
+                "any_of": [],
+                "derived_only": [],
+            }
+        },
+        "claim": {
+            "rules": [{"kind": "markers", "scope": "primary", "values": ["XLSXFALLBACK CORP"]}],
+            "vetoes": [],
+        },
+        "ladder": {
+            "default": "invoice",
+            "rungs": [{
+                "name": "invoice_confirmed",
+                "doc_type": "invoice",
+                "when": {
+                    "signal": "pattern_in_scope",
+                    "params": {"pattern": "XLSXFALLBACK CORP", "scope": "primary"},
+                },
+            }],
+        },
+    }), encoding="utf-8")
+    (pack_dir / "personas" / "xlsxfallback.json").write_text(json.dumps({
+        "rule_version": "v1",
+        "status": "active",
+        "doc_type": "invoice",
+        "sender_fingerprint": "xlsxfallback|xlsxfallback",
+        "field_selectors": [
+            {"field": "vendor_name", "anchor": "Vendor Name:", "region": "near-anchor", "pattern": "text"},
+            {"field": "invoice_number", "anchor": "Invoice Number:", "region": "near-anchor", "pattern": "text"},
+            {"field": "total_printed", "anchor": "Total Due:", "region": "near-anchor", "pattern": "currency"},
+        ],
+    }), encoding="utf-8")
+
+    from docintel.packs.datapack import load_pack_file
+    pack = load_pack_file(str(pack_dir / "pack.json"))
+
+    # Claims the pack (carries the marker) but declares none of the
+    # persona's anchors - a genuine cached-rule collapse, not a bad fixture.
+    xlsx = tmp_path / "invoice.xlsx"
+    wb = openpyxl.Workbook()
+    wb.active.cell(row=1, column=1, value="XLSXFALLBACK CORP - see attached statement")
+    wb.save(xlsx)
+
+    vision = FakeVision()
+    pipeline = build_pipeline(vision=vision, extra_packs=[pack])
+    record = pipeline.process(document_id="xlsx-fallback-tier2", source_path=str(xlsx))
+
+    validate_record(record)
+    assert record["disposition"] == "processed"
+    assert vision.calls, "a cached-rule collapse must escalate to vision"
+    assert vision.sources[0] is not None
+    assert vision.sources[0].endswith(".png"), (
+        f"vision must receive a rendered image, not the raw xlsx path - got {vision.sources[0]!r}"
+    )
+
+
 def test_txt_reaches_the_end_of_the_pipeline_with_zero_vision_calls(tmp_path):
     vision = FakeVision()
     txt = tmp_path / "invoice.txt"
