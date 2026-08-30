@@ -23,7 +23,6 @@ from docintel.core.errors import PermanentError
 
 _FONT: ImageFont.ImageFont | None = None
 _ROW_HEIGHT = 26
-_CHAR_WIDTH = 9
 _MIN_COL_WIDTH = 80
 _PADDING = 10
 
@@ -99,7 +98,16 @@ def xlsx_to_image(source_path: str) -> str:
     col_widths = [_MIN_COL_WIDTH] * col_count
     for row in rows:
         for i, value in enumerate(row):
-            col_widths[i] = max(col_widths[i], _CHAR_WIDTH * len(value) + _PADDING * 2)
+            # Measured against the REAL font, not an estimate - a per-
+            # character-count heuristic (e.g. a fixed px-per-char guess)
+            # underestimates real glyph widths for a long string, and since
+            # the canvas width below is derived from this same number, an
+            # underestimate silently clips the tail of the widest cell's
+            # text off the right edge of the image (found live: "TESTCORP
+            # GLOBAL SOLUTIONS" rendered and read back by Gemini as
+            # "TESTCORP GLOBAL SOLUT" - the missing "IONS" was clipped, not
+            # misread).
+            col_widths[i] = max(col_widths[i], int(font.getlength(value)) + _PADDING * 2)
 
     width = sum(col_widths) + 1
     height = _ROW_HEIGHT * len(rows) + 1
