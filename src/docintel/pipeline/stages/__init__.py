@@ -73,6 +73,7 @@ def build_pipeline(
     hooks: object | None = None,
     extra_packs: list[object] | None = None,
     max_retries: int = 2,
+    telemetry: bool | str = False,
 ) -> object:
     """A Runner with every pack loaded, its hooks registered and its personas indexed.
 
@@ -117,6 +118,14 @@ def build_pipeline(
     `webui/app.py::create_app`) goes through - `Runner`'s own default of `0`
     exists only for direct, low-level `Runner(...)` construction in tests that
     want to see a `TransientError` fail on the first try.
+
+    `telemetry` (default `False`, matching `Runner`'s own default) is forwarded straight to
+    `Runner` and governs whether every processed document is also logged as one JSON line via
+    `docintel.telemetry.log_record` - `True` for the default path
+    (`$DOCINTEL_TELEMETRY_LOG`/`var/logs/docintel.jsonl`), or a string for an explicit one. Off by
+    default so a library caller never gets a surprise disk-write side effect from calling this
+    function; `cli.py::_build_runner` passes `telemetry=True` explicitly to preserve its own
+    already-existing always-on behavior.
     """
     from docintel.export import layout_names
     from docintel.packs.registry import load_packs, register_all
@@ -138,4 +147,5 @@ def build_pipeline(
         ),
         hooks=hooks,
         max_retries=max_retries,
+        telemetry=telemetry,
     )

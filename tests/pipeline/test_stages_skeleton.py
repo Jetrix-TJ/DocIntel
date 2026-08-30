@@ -525,6 +525,28 @@ def test_build_pipeline_max_retries_is_still_overridable():
     assert runner.max_retries == 5
 
 
+def test_build_pipeline_forwards_telemetry(tmp_path, monkeypatch):
+    """build_pipeline() is the one function every real caller goes through
+    (cli.py, a library user) - if it silently dropped `telemetry`, opting in
+    at this level would look like it worked but write nothing."""
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(tmp_path / "docintel.jsonl"))
+
+    runner = build_pipeline(vision=FakeVision(), telemetry=True)
+    runner.process("d1", CORPUS)
+
+    lines = (tmp_path / "docintel.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+
+
+def test_build_pipeline_telemetry_defaults_to_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(tmp_path / "should_not_exist.jsonl"))
+
+    runner = build_pipeline(vision=FakeVision())
+    runner.process("d1", CORPUS)
+
+    assert not (tmp_path / "should_not_exist.jsonl").exists()
+
+
 def test_build_pipeline_preserves_a_caller_supplied_hooks_registry():
     """A real-time integrator registers a `beforeEmit` hook BEFORE calling
     `build_pipeline` to get notified the instant a document needs a human
