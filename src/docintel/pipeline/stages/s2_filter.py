@@ -25,13 +25,24 @@ allowed to do with a page:
   as a stripped PDF annotation layer. That tag forces review unconditionally
   further down the pipeline (s7); this stage's only job is to raise it.
 
-**Non-PDF formats — three different treatments, not one.** An Office document
-(DOCX/XLSX) is converted to a real PDF right here, before either of the two
-facts above is computed, exactly as before: `grammar/regions.py`'s selectors
-need measured page geometry a flow-layout format doesn't have until it is
-rendered, so `extract.convert.convert_office_to_pdf` is a genuine
-requirement, not a convenience (see `extract.convert`'s own docstring). A
-raster image (`extract.convert.IMAGE_SUFFIXES`) is **never** converted here —
+**Non-PDF formats — four different treatments, not one.** An Office document
+is converted to a real PDF right here, before either of the two facts above
+is computed: `grammar/regions.py`'s selectors need measured page geometry a
+flow-layout format doesn't have until it is rendered, so
+`extract.convert.convert_office_to_pdf` is a genuine requirement, not a
+convenience (see `extract.convert`'s own docstring) — for DOCX, always, and
+for XLSX, whenever `convert.soffice_available()` says LibreOffice is present.
+When it isn't, an XLSX takes a fourth, LibreOffice-free path instead:
+`extract.office_fallback.xlsx_to_html` walks the workbook directly and emits
+a real `.html` table, read by the SAME unmodified
+`extract.plaintext.load_document` a real `.html` file already uses;
+`convert_office_to_pdf` is never called for that document at all.
+`ctx.readable_path` stays unset on purpose in that branch —
+`pipeline.stages.s5b_vision._vision_source_path` reads that absence together
+with `ctx.source_format == "xlsx"` as the signal that this fallback tier was
+taken, and lazily renders a real image from the original workbook
+(`extract.office_render.xlsx_to_image`) if vision is ever reached. A raster
+image (`extract.convert.IMAGE_SUFFIXES`) is **never** converted here —
 `normalize.load_image_document`/`annotations.detect_flattened_image` read the
 source bytes directly, because OCR and annotation detection are format-
 agnostic (they only ever needed a rasterizable page, and an image already is

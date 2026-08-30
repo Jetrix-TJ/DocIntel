@@ -21,11 +21,19 @@ from PIL import Image, ImageDraw, ImageFont
 
 from docintel.core.errors import PermanentError
 
-_FONT = ImageFont.load_default(size=18)
+_FONT: ImageFont.ImageFont | None = None
 _ROW_HEIGHT = 26
 _CHAR_WIDTH = 9
 _MIN_COL_WIDTH = 80
 _PADDING = 10
+
+# A workbook this large would try to allocate a multi-gigabyte `PIL.Image`
+# before any downstream size guard (e.g. `adapters.vision.gemini_adapter`'s
+# `MAX_IMAGE_BYTES`) ever gets a chance to reject it - the LibreOffice-render
+# path has an analogous cap already (`gemini_adapter.MAX_PAGES`); this
+# pure-Python fallback needs its own equivalent since it never goes near
+# that adapter code.
+_MAX_ROWS = 500
 
 
 def _require_openpyxl():
@@ -37,6 +45,23 @@ def _require_openpyxl():
             "'openpyxl' package - pip install 'docintel[export]'"
         ) from exc
     return openpyxl
+
+
+def _get_font() -> ImageFont.ImageFont:
+    """Loads the fallback-rendering font on first use, not at import time -
+    `office_render` is imported unconditionally by `pipeline.stages.s5b_vision`,
+    which is on `build_pipeline`'s import path, so a module-level
+    `ImageFont.load_default(size=...)` call would run for every `docintel`
+    user, even ones who never touch an XLSX. Any failure becomes a
+    `PermanentError`, mirroring `_require_openpyxl`'s discipline in this same
+    file, rather than killing the whole pipeline at import time."""
+    global _FONT
+    if _FONT is None:
+        try:
+            _FONT = ImageFont.load_default(size=18)
+        except Exception as exc:
+            raise PermanentError(f"could not load a font to render an XLSX fallback image: {exc}") from exc
+    return _FONT
 
 
 def xlsx_to_image(source_path: str) -> str:
@@ -60,9 +85,16 @@ def xlsx_to_image(source_path: str) -> str:
     finally:
         wb.close()
 
+    if len(rows) > _MAX_ROWS:
+        raise PermanentError(
+            f"{os.path.basename(source_path)!r} has {len(rows)} visible populated rows, over the "
+            f"{_MAX_ROWS}-row guard for the LibreOffice-free XLSX fallback render"
+        )
+
     if not rows:
         rows = [[""]]
 
+    font = _get_font()
     col_count = max(len(row) for row in rows)
     col_widths = [_MIN_COL_WIDTH] * col_count
     for row in rows:
@@ -80,7 +112,7 @@ def xlsx_to_image(source_path: str) -> str:
         for i in range(col_count):
             value = row[i] if i < len(row) else ""
             draw.rectangle([x, y, x + col_widths[i], y + _ROW_HEIGHT], outline="black")
-            draw.text((x + _PADDING, y + 4), value, fill="black", font=_FONT)
+            draw.text((x + _PADDING, y + 4), value, fill="black", font=font)
             x += col_widths[i]
         y += _ROW_HEIGHT
 

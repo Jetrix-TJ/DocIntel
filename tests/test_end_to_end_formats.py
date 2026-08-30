@@ -218,6 +218,33 @@ def test_xlsx_with_hidden_content_is_flagged_for_review(tmp_path, monkeypatch):
     assert record["review_flag"] is True
 
 
+def test_xlsx_without_libreoffice_with_hidden_content_is_flagged_for_review(tmp_path, monkeypatch):
+    """Same hidden-content signal as `test_xlsx_with_hidden_content_is_flagged_for_review`
+    above, but for the LibreOffice-free fallback branch (`s2_filter.py`'s
+    `elif suffix == ".xlsx" and not convert.soffice_available():`) - that
+    branch detects hidden content against the ORIGINAL workbook exactly like
+    the LibreOffice path does, and this proves it's actually wired, not just
+    documented."""
+    monkeypatch.setattr(convert, "soffice_available", lambda: False)
+    openpyxl = pytest.importorskip("openpyxl")
+
+    xlsx = tmp_path / "invoice-hidden.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws["A1"] = "Invoice Total 900.00"
+    ws["C1"] = "internal reconciled total"
+    ws.column_dimensions["C"].hidden = True
+    wb.save(xlsx)
+
+    record = _pipeline().process(document_id="fmt-xlsx-hidden-fallback", source_path=str(xlsx))
+
+    validate_record(record)
+    assert record["disposition"] == "processed"
+    assert "xlsx_hidden_content_present" in record["tags"]
+    assert record["lane"] == "review"
+    assert record["review_flag"] is True
+
+
 def test_xlsx_without_libreoffice_extracts_via_html_fallback_with_zero_vision_calls(tmp_path, monkeypatch):
     """No LibreOffice on this host - tier 1 (`extract.office_fallback.xlsx_to_html`)
     must extract a strong-match document alone, at zero vision cost."""

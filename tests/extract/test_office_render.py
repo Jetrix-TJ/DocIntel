@@ -79,3 +79,14 @@ def test_missing_openpyxl_raises_permanent_error(tmp_path, monkeypatch):
     ))
     with pytest.raises(PermanentError):
         office_render.xlsx_to_image(str(tmp_path / "does-not-matter.xlsx"))
+
+
+def test_xlsx_to_image_raises_permanent_error_over_the_row_cap(tmp_path, monkeypatch):
+    from docintel.core.errors import PermanentError
+
+    monkeypatch.setattr(office_render, "_MAX_ROWS", 2)
+    xlsx = tmp_path / "too-many-rows.xlsx"
+    _workbook(xlsx, [["Row 1"], ["Row 2"], ["Row 3"]])
+
+    with pytest.raises(PermanentError, match="3 visible populated rows"):
+        office_render.xlsx_to_image(str(xlsx))
