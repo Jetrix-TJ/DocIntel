@@ -36,10 +36,26 @@ instant a document needs a human, register a `beforeEmit` hook and pass it to
     hooks = HookRegistry()
     hooks.register("beforeEmit", notify_if_needs_review, pack="my_integration")
     pipeline = build_pipeline(vision=FakeVision(), hooks=hooks)
+
+For a caller that wants an automatic, structured record of what happened - which
+documents dead-lettered, which came back low-confidence, not just an aggregate
+rate - opt into telemetry logging at build time. Off by default, on this facade
+exactly as everywhere else: nothing is written to disk unless you ask.
+
+    pipeline = build_pipeline(vision=FakeVision(), telemetry=True)
+    # or telemetry="my_app/logs/docintel.jsonl" for an explicit path;
+    # omitted, or telemetry=False (the default), writes nothing, ever.
+    record = pipeline.process(document_id="d1", source_path="invoice.pdf")
+
+    from docintel import telemetry
+    telemetry.problem_records()   # every dead-lettered or review/low-lane
+                                   # document logged so far - not just the rate
+                                   # telemetry.aggregate() reports
 """
 
 from __future__ import annotations
 
+from docintel import telemetry
 from docintel.packs.registry import load_packs
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
@@ -47,4 +63,6 @@ from docintel.pipeline.stages import build_default_stages, build_pipeline
 
 __version__ = "0.1.0"
 
-__all__ = ["HookRegistry", "Runner", "build_default_stages", "build_pipeline", "load_packs"]
+__all__ = [
+    "HookRegistry", "Runner", "build_default_stages", "build_pipeline", "load_packs", "telemetry",
+]

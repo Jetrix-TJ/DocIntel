@@ -145,6 +145,19 @@ pack = load_pack_file("path/to/your/pack.json")
 pipeline = build_pipeline(vision=your_vision_adapter, extra_packs=[pack])
 ```
 
+Want an automatic, structured record of what happened — which documents dead-lettered, which came back low-confidence — without wiring your own logging around every `.process()` call? Opt in at build time; off by default, so nothing changes for you if you don't ask:
+
+```python
+pipeline = build_pipeline(vision=your_vision_adapter, extra_packs=[pack], telemetry=True)
+# or telemetry="my_app/logs/docintel.jsonl" for an explicit path
+
+record = pipeline.process(document_id="d1", source_path="invoice.pdf")
+
+from docintel import telemetry
+telemetry.problem_records()   # every dead-lettered or review/low-lane document
+                               # logged so far — not just the rate telemetry.aggregate() reports
+```
+
 Gold-corpus scoring works the same way too — `docintel.scorecard.replay_gold` and `docintel.evals.draft_gold.draft_gold_fixture` both take a plain `runner_factory`/`record`, so the exact same eval machinery this repo uses works from your own project's `docs/corpus/gold/`.
 
 Full detail and a worked example (three real invoices, three different clients, onboarded with zero repo edits): `docs/DOCINTEL-ARCHITECTURE-GUIDE.html`.
@@ -164,5 +177,7 @@ Full detail and a worked example (three real invoices, three different clients, 
 | Real, hand-reviewed personas | `src/docintel/packs/<company>/personas/*.json` |
 | No-repo-access vendor overlay | `DOCINTEL_EXTRA_PERSONAS_DIR` — `src/docintel/packs/registry.py` |
 | No-repo-access new company | `build_pipeline(extra_packs=[...])` — `src/docintel/pipeline/stages/__init__.py` |
+| Opt-in library telemetry log | `build_pipeline(telemetry=True)` — `src/docintel/pipeline/runner.py` |
+| Retrieve dead-letter/low-lane records | `docintel.telemetry.problem_records()` — `src/docintel/telemetry.py` |
 | One-page deep reference | `docs/DOCINTEL-FEATURE-EXPLORER.html` |
 | Architecture walkthrough for reviewers | `docs/DOCINTEL-TECHNICAL-OVERVIEW.html` |
