@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import sys
-import time
 from collections import Counter
 from collections.abc import Callable
 
@@ -65,7 +64,12 @@ def _build_runner(args: argparse.Namespace | None = None) -> Runner:
     # a hard-miss sender or an unknown prior_balance_basis should land
     # somewhere a reviewer can act on it (see `docintel.jobs.store`,
     # `docintel.webui.app`'s /review routes), not just log a line no one reads.
-    return build_pipeline(vision=_build_vision(mode, cassette), jobs=SQLiteJobQueue())
+    # `telemetry=True` for the same reason: a real production entry point
+    # should always leave a trace of what happened, not just this run's own
+    # stdout - see `Runner.process()`/`docintel.telemetry`.
+    return build_pipeline(
+        vision=_build_vision(mode, cassette), jobs=SQLiteJobQueue(), telemetry=True,
+    )
 
 
 def _intake_items(paths: list[str]) -> list[object]:
@@ -96,21 +100,16 @@ def _intake_items(paths: list[str]) -> list[object]:
 
 
 def _cmd_process(args: argparse.Namespace) -> int:
-    from docintel import telemetry
-
     runner = _build_runner(args)
     dispositions: Counter[str] = Counter()
 
     for item in _intake_items(args.paths):
-        started = time.perf_counter()
         record = runner.process(
             document_id=item.document_id,
             source_path=item.source_path,
             sender_email=item.sender_email,
             email_id=item.email_id,
         )
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        telemetry.log_record(record, elapsed_ms=elapsed_ms)
         dispositions[record["disposition"]] += 1
         if args.json:
             print(json.dumps(record, separators=(",", ":")))

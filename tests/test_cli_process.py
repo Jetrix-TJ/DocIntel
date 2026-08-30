@@ -24,6 +24,23 @@ def _isolated_jobs_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(tmp_path / "telemetry.jsonl"))
 
 
+def test_process_still_writes_one_telemetry_line_per_document(tmp_path, monkeypatch):
+    """Regression guard for the cli.py unification in this task: CLI-visible
+    telemetry behavior must be provably unchanged after the manual
+    telemetry.log_record() call in _cmd_process is deleted and replaced by
+    build_pipeline(..., telemetry=True)."""
+    log_path = tmp_path / "telemetry.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    assert main(["process", CORPUS, "--json"]) == 0
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert entry["disposition"] in {"processed", "skipped", "dead_letter"}
+    assert "elapsed_ms" in entry
+
+
 def test_process_prints_a_valid_record(capsys):
     assert main(["process", CORPUS, "--json"]) == 0
     rec = json.loads(capsys.readouterr().out)
