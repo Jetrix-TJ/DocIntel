@@ -86,7 +86,7 @@ class Runner:
 
     def process(self, document_id: str, source_path: str, **kw: Any) -> dict[str, Any]:
         self._intaken += 1
-        started = time.perf_counter() if self._telemetry is not None else None
+        started = time.perf_counter()
         ctx = new_context(
             document_id=document_id,
             source_path=source_path,

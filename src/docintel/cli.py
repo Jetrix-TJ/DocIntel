@@ -55,7 +55,7 @@ def _build_vision(mode: str, cassette: str) -> object:
     return CassetteVision(inner=live, path=cassette, mode="record", model=MODEL)
 
 
-def _build_runner(args: argparse.Namespace | None = None) -> Runner:
+def _build_runner(args: argparse.Namespace | None = None, *, telemetry: bool = False) -> Runner:
     from docintel.jobs.store import SQLiteJobQueue
 
     mode = getattr(args, "vision", None) or "cassette"
@@ -64,11 +64,13 @@ def _build_runner(args: argparse.Namespace | None = None) -> Runner:
     # a hard-miss sender or an unknown prior_balance_basis should land
     # somewhere a reviewer can act on it (see `docintel.jobs.store`,
     # `docintel.webui.app`'s /review routes), not just log a line no one reads.
-    # `telemetry=True` for the same reason: a real production entry point
-    # should always leave a trace of what happened, not just this run's own
-    # stdout - see `Runner.process()`/`docintel.telemetry`.
+    # `telemetry` defaults to False here because this same factory backs
+    # replay-gold/accuracy-report/eval-gate/eval-vision/draft-gold too, and
+    # those must NEVER write to the telemetry log - only `_cmd_process`, a
+    # genuine production entry point, opts in by passing `telemetry=True` at
+    # its own call site (see `Runner.process()`/`docintel.telemetry`).
     return build_pipeline(
-        vision=_build_vision(mode, cassette), jobs=SQLiteJobQueue(), telemetry=True,
+        vision=_build_vision(mode, cassette), jobs=SQLiteJobQueue(), telemetry=telemetry,
     )
 
 
@@ -100,7 +102,7 @@ def _intake_items(paths: list[str]) -> list[object]:
 
 
 def _cmd_process(args: argparse.Namespace) -> int:
-    runner = _build_runner(args)
+    runner = _build_runner(args, telemetry=True)
     dispositions: Counter[str] = Counter()
 
     for item in _intake_items(args.paths):
