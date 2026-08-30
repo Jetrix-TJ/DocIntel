@@ -33,6 +33,14 @@ def test_text_suffixes_never_overlap_image_or_office():
     assert not (convert.TEXT_SUFFIXES & convert.OFFICE_SUFFIXES)
 
 
+def test_soffice_available_reflects_shutil_which(monkeypatch):
+    monkeypatch.setattr(convert.shutil, "which", lambda name: None)
+    assert convert.soffice_available() is False
+
+    monkeypatch.setattr(convert.shutil, "which", lambda name: "/usr/bin/soffice")
+    assert convert.soffice_available() is True
+
+
 # ---------------------------------------------------------------------------
 # convert_image_to_pdf
 # ---------------------------------------------------------------------------
@@ -305,9 +313,7 @@ def test_the_output_directory_is_left_in_place_for_the_caller_to_read(tmp_path, 
 
 
 def _soffice_available() -> bool:
-    import shutil
-
-    return shutil.which("soffice") is not None
+    return convert.soffice_available()
 
 
 def _minimal_docx(path, body_text: str) -> None:

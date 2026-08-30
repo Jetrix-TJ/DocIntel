@@ -84,6 +84,15 @@ VISION_NATIVE_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png"})
 _CONVERT_TIMEOUT_SECONDS = 60
 
 
+def soffice_available() -> bool:
+    """Whether the `soffice` binary is on PATH - the single source of truth
+    for both `pipeline.stages.s2_filter`'s LibreOffice-free XLSX fallback
+    gate and `tests/extract/test_convert.py`'s real-conversion skip
+    condition, so the two checks cannot silently drift apart.
+    """
+    return shutil.which("soffice") is not None
+
+
 def convert_image_to_pdf(source_path: str) -> str:
     """Wrap one raster image (or every frame of a multi-frame TIFF/GIF, in
     order) as a PDF, and return the new file's path.
