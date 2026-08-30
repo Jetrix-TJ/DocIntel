@@ -9,7 +9,9 @@ throwing - still produces a record.
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 import shutil
+import time
 from typing import Any, Protocol
 
 from docintel.core.contract import build_record, validate_record
@@ -54,6 +56,7 @@ class Runner:
         stages: list[Stage],
         hooks: HookRegistry,
         max_retries: int = 0,
+        telemetry: bool | str = False,
     ) -> None:
         self.stages = stages
         self.hooks = hooks
@@ -63,6 +66,19 @@ class Runner:
         # One index per Runner: duplicate detection is scoped to a single run
         # (see core.duplicates for why cross-run is out of scope).
         self._identity_index = IdentityIndex()
+        # Opt-in only: stays fully inert (no directory/file/handler created)
+        # unless a caller explicitly asks. `True` uses telemetry.configure()'s
+        # own default-path resolution ($DOCINTEL_TELEMETRY_LOG, then
+        # DEFAULT_LOG_PATH); a string is an explicit override. A bad path
+        # raises HERE, at construction - the caller opted in and should know
+        # immediately, not silently on the first document processed.
+        self._telemetry: Any = None
+        self._telemetry_warned = False
+        if telemetry:
+            from docintel import telemetry as telemetry_module
+
+            telemetry_module.configure(None if telemetry is True else telemetry)
+            self._telemetry = telemetry_module
 
     @property
     def stats(self) -> dict[str, int]:
@@ -70,6 +86,7 @@ class Runner:
 
     def process(self, document_id: str, source_path: str, **kw: Any) -> dict[str, Any]:
         self._intaken += 1
+        started = time.perf_counter() if self._telemetry is not None else None
         ctx = new_context(
             document_id=document_id,
             source_path=source_path,
@@ -88,6 +105,16 @@ class Runner:
             record = self._emit(ctx)
             self._emitted += 1
             ctx.emitted = True
+            if self._telemetry is not None:
+                elapsed_ms = (time.perf_counter() - started) * 1000
+                try:
+                    self._telemetry.log_record(record, elapsed_ms=elapsed_ms)
+                except Exception:  # noqa: BLE001 - diagnostics must never break a document
+                    if not self._telemetry_warned:
+                        logging.getLogger("docintel.telemetry").warning(
+                            "telemetry write failed; continuing without it", exc_info=True,
+                        )
+                        self._telemetry_warned = True
             return record
         finally:
             # Whatever happened above - processed, dead-lettered, or emit

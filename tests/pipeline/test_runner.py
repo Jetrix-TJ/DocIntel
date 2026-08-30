@@ -1,4 +1,8 @@
+import json
+import logging
+
 import pytest
+from docintel import telemetry
 from docintel.core.contract import validate_record
 from docintel.core.errors import PackError, PermanentError, TransientError
 from docintel.core.models import JobContext
@@ -370,3 +374,128 @@ def test_a_stage_that_returns_none_is_a_programming_error_not_silent_data_loss()
     rec = _runner([Bad()]).process("d1", "/tmp/a.pdf")
     assert rec["disposition"] == "dead_letter"
     assert "must return a JobContext" in rec["reason"]
+
+
+def test_telemetry_defaults_to_no_file_and_no_handler(tmp_path, monkeypatch):
+    """The core regression guarantee: omitting `telemetry` (or passing
+    `telemetry=False` explicitly) must leave zero trace on disk and attach no
+    handler to the telemetry logger."""
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(tmp_path / "should_not_exist.jsonl"))
+    logging.getLogger("docintel.telemetry").handlers.clear()
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=False)
+    r.process("d1", "/tmp/a.pdf")
+
+    assert not (tmp_path / "should_not_exist.jsonl").exists()
+    assert logging.getLogger("docintel.telemetry").handlers == []
+
+
+def test_telemetry_true_writes_to_the_default_path(tmp_path, monkeypatch):
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=True)
+    rec = r.process("d1", "/tmp/a.pdf")
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert entry["document_id"] == "d1"
+    assert entry["disposition"] == rec["disposition"]
+    assert entry["elapsed_ms"] > 0
+
+
+def test_telemetry_string_path_writes_there_instead(tmp_path, monkeypatch):
+    monkeypatch.delenv("DOCINTEL_TELEMETRY_LOG", raising=False)
+    custom = tmp_path / "custom" / "log.jsonl"
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=str(custom))
+    r.process("d1", "/tmp/a.pdf")
+
+    assert custom.exists()
+    assert len(custom.read_text().strip().splitlines()) == 1
+
+
+def test_telemetry_captures_a_dead_letter(tmp_path, monkeypatch):
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    r = Runner(stages=[Boom(RuntimeError("boom"))], hooks=HookRegistry(), telemetry=True)
+    r.process("d1", "/tmp/a.pdf")
+
+    entry = json.loads(log_path.read_text().strip())
+    assert entry["disposition"] == "dead_letter"
+
+
+def test_telemetry_two_calls_append_two_lines(tmp_path, monkeypatch):
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=True)
+    r.process("d1", "/tmp/a.pdf")
+    r.process("d2", "/tmp/b.pdf")
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0])["document_id"] == "d1"
+    assert json.loads(lines[1])["document_id"] == "d2"
+
+
+def test_telemetry_bad_path_raises_at_construction(tmp_path):
+    """A file where a directory needs to go, so os.makedirs is guaranteed to
+    fail regardless of platform-specific error subclassing (NotADirectoryError
+    on POSIX, a different OSError subclass on Windows) - OSError is the
+    common ancestor of both."""
+    blocking_file = tmp_path / "not_a_directory"
+    blocking_file.write_text("x")
+    bad_path = blocking_file / "log.jsonl"
+
+    import pytest
+    with pytest.raises(OSError):
+        Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=str(bad_path))
+
+
+def test_telemetry_write_failure_does_not_break_processing(tmp_path, monkeypatch, caplog):
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=True)
+    # telemetry.configure() (unchanged, out of scope for this task) sets
+    # propagate=False on this logger so its own file handler is the sole
+    # sink. caplog's capturing handler is attached only at the root logger,
+    # so without restoring propagation here the warning below would fire
+    # correctly but never reach caplog.text - this is a test-harness
+    # necessity, not a change to the warning behavior under test.
+    logging.getLogger("docintel.telemetry").propagate = True
+    monkeypatch.setattr(
+        telemetry, "log_record",
+        lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="docintel.telemetry"):
+        rec = r.process("d1", "/tmp/a.pdf")
+
+    assert rec["disposition"] == "processed"
+    assert "telemetry" in caplog.text.lower()
+
+
+def test_telemetry_write_failure_warns_once_not_every_call(tmp_path, monkeypatch, caplog):
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    r = Runner(stages=[Ok()], hooks=HookRegistry(), telemetry=True)
+    # See comment in test_telemetry_write_failure_does_not_break_processing:
+    # restoring propagation is required for caplog to observe this logger's
+    # records, independent of the warning-once behavior under test.
+    logging.getLogger("docintel.telemetry").propagate = True
+    monkeypatch.setattr(
+        telemetry, "log_record",
+        lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="docintel.telemetry"):
+        r.process("d1", "/tmp/a.pdf")
+        r.process("d2", "/tmp/a.pdf")
+
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert len(warnings) == 1
