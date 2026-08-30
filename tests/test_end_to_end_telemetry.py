@@ -13,6 +13,8 @@ less.
 
 from __future__ import annotations
 
+import json
+
 from digitaldirection import PACK as DIGITALDIRECTION_PACK
 
 from docintel import build_pipeline, telemetry
@@ -80,3 +82,52 @@ def test_the_same_adopter_never_writing_telemetry_by_default(tmp_path, monkeypat
     pipeline.process(document_id="e2e-tel-default", source_path=CENTRACOM_PDF)
 
     assert not log_path.exists()
+
+
+def test_a_mixed_format_batch_with_a_duplicate_composes_correctly_with_telemetry_on(
+    tmp_path, monkeypatch,
+):
+    """The other real adopter scenario this feature has to survive: a batch
+    isn't always one clean PDF - it's several formats, sometimes with the
+    same document handed in twice. Format handling and duplicate detection
+    are already exhaustively proven on their own in
+    tests/test_end_to_end_formats.py; this only confirms turning telemetry
+    on doesn't disturb either guarantee, and that every document - whatever
+    its format, duplicate or not - still gets exactly one telemetry line."""
+    log_path = tmp_path / "docintel.jsonl"
+    monkeypatch.setenv("DOCINTEL_TELEMETRY_LOG", str(log_path))
+
+    pipeline = build_pipeline(
+        vision=FakeVision(), extra_packs=_WITH_DIGITALDIRECTION, telemetry=True,
+    )
+
+    txt_path = tmp_path / "note.txt"
+    txt_path.write_text("Invoice Number: INV-90001\nTotal Due: 42.00\n", encoding="utf-8")
+
+    csv_path = tmp_path / "note.csv"
+    csv_path.write_text("field,value\ninvoice_number,INV-90002\ntotal_due,84.00\n", encoding="utf-8")
+
+    records = {
+        "batch-pdf": pipeline.process(document_id="batch-pdf", source_path=CENTRACOM_PDF),
+        "batch-txt-first": pipeline.process(document_id="batch-txt-first", source_path=str(txt_path)),
+        "batch-txt-duplicate": pipeline.process(
+            document_id="batch-txt-duplicate", source_path=str(txt_path),
+        ),
+        "batch-csv": pipeline.process(document_id="batch-csv", source_path=str(csv_path)),
+    }
+
+    for record in records.values():
+        validate_record(record)
+        assert record["disposition"] != "dead_letter"
+
+    # -- duplicate detection still works with telemetry on -------------------
+    assert records["batch-pdf"]["possible_duplicate_of"] is None
+    assert records["batch-txt-first"]["possible_duplicate_of"] is None
+    assert records["batch-txt-duplicate"]["possible_duplicate_of"] == "batch-txt-first"
+
+    # -- every document got exactly one telemetry line, whatever its format,
+    #    in processing order, duplicate or not ------------------------------
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 4
+    logged_ids = [json.loads(line)["document_id"] for line in lines]
+    assert logged_ids == ["batch-pdf", "batch-txt-first", "batch-txt-duplicate", "batch-csv"]

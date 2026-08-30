@@ -402,7 +402,11 @@ def test_telemetry_true_writes_to_the_default_path(tmp_path, monkeypatch):
     entry = json.loads(lines[0])
     assert entry["document_id"] == "d1"
     assert entry["disposition"] == rec["disposition"]
-    assert entry["elapsed_ms"] > 0
+    # >= 0, not > 0: the property that actually matters is "elapsed_ms was
+    # computed and is non-negative" - time.perf_counter()'s resolution on
+    # some platforms (observed on Windows) can yield an exact 0.0 delta for
+    # a trivial stage's near-instant run(), which isn't a real bug.
+    assert entry["elapsed_ms"] >= 0
 
 
 def test_telemetry_string_path_writes_there_instead(tmp_path, monkeypatch):
