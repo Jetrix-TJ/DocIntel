@@ -158,3 +158,23 @@ def aggregate(path: str | None = None, since_days: float | None = None) -> dict[
             round(sum(confidences) / len(confidences), 4) if confidences else None
         ),
     }
+
+
+def problem_records(path: str | None = None, since_days: float | None = None) -> list[dict[str, Any]]:
+    """The actual documents a human should look at - every logged entry that
+    dead-lettered, or landed in the review/low lane - not just the rate
+    `aggregate()` reports. Same file, same age-filtering convention as
+    `aggregate()`; reads only, never writes.
+    """
+    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or DEFAULT_LOG_PATH
+    entries = _read_lines(resolved)
+    if since_days is not None:
+        cutoff = datetime.now(UTC) - timedelta(days=since_days)
+        entries = [
+            e for e in entries
+            if e.get("logged_at") and datetime.fromisoformat(e["logged_at"]) >= cutoff
+        ]
+    return [
+        e for e in entries
+        if e.get("disposition") == "dead_letter" or e.get("lane") in ("review", "low")
+    ]

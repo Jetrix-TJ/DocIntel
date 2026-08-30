@@ -160,3 +160,53 @@ def test_aggregate_skips_a_blank_and_whitespace_only_line(tmp_path):
     result = telemetry.aggregate(path)
 
     assert result["total"] == 1
+
+
+def test_problem_records_returns_only_dead_letter_review_and_low(tmp_path):
+    path = str(tmp_path / "log.jsonl")
+    telemetry.configure(path)
+    telemetry.log_record(_record(document_id="d1", disposition="processed", lane="high"))
+    telemetry.log_record(_record(document_id="d2", disposition="processed", lane="medium"))
+    telemetry.log_record(_record(document_id="d3", disposition="processed", lane="review"))
+    telemetry.log_record(_record(document_id="d4", disposition="processed", lane="low"))
+    telemetry.log_record(_record(document_id="d5", disposition="dead_letter", lane=None))
+
+    result = telemetry.problem_records(path)
+
+    ids = {entry["document_id"] for entry in result}
+    assert ids == {"d3", "d4", "d5"}
+
+
+def test_problem_records_on_a_missing_file_is_an_empty_list(tmp_path):
+    result = telemetry.problem_records(str(tmp_path / "nope.jsonl"))
+    assert result == []
+
+
+def test_problem_records_since_days_excludes_older_entries(tmp_path):
+    path = str(tmp_path / "log.jsonl")
+    telemetry.configure(path)
+    telemetry.log_record(_record(document_id="recent", disposition="dead_letter"))
+
+    with open(path, "a", encoding="utf-8") as fh:
+        stale = json.dumps({
+            "logged_at": "2020-01-01T00:00:00+00:00", "document_id": "ancient",
+            "disposition": "dead_letter", "lane": None,
+        })
+        fh.write(stale + "\n")
+
+    result = telemetry.problem_records(path, since_days=1)
+
+    assert [entry["document_id"] for entry in result] == ["recent"]
+
+
+def test_problem_records_skips_a_malformed_trailing_line(tmp_path):
+    path = str(tmp_path / "log.jsonl")
+    telemetry.configure(path)
+    telemetry.log_record(_record(document_id="d1", disposition="dead_letter"))
+
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write('{"document_id": "d2", "disposition": "dead_letter"' + "\n")  # truncated
+
+    result = telemetry.problem_records(path)
+
+    assert [entry["document_id"] for entry in result] == ["d1"]
