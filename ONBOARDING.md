@@ -27,7 +27,7 @@ pip install -e ".[dev,ui]"
 | `email` | `.msg` (Outlook) attachment support — `.eml` needs nothing extra |
 | `generation` | AI-assisted persona drafting (`docintel generate-persona`, calls Claude) |
 
-**One non-pip dependency**: LibreOffice (`soffice`) must be on the host if you'll process `.docx`/`.xlsx` input. Its absence fails loudly, per-document, with a clear error — it's safe to notice at deploy time rather than a hard install-time requirement.
+**One non-pip dependency**: LibreOffice (`soffice`) must be on the host if you'll process `.docx` input. Its absence fails loudly, per-document, with a clear error — it's safe to notice at deploy time rather than a hard install-time requirement. `.xlsx` is the one exception: without `soffice`, it still extracts via a pure-Python HTML-then-image fallback instead of failing (LibreOffice is still the primary path when present).
 
 ---
 

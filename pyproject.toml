@@ -40,10 +40,15 @@ generation = ["anthropic>=0.121", "pydantic>=2.0"]
 # PDF, for documents that arrive as Office files instead of PDFs) shells out
 # to LibreOffice headless. Install `libreoffice` (or just
 # `libreoffice-writer`/`libreoffice-calc`) on any host that runs `docintel
-# process`/`docintel serve` and needs to accept those formats - a missing
-# `soffice` binary fails that document loudly and per-document (a clear
-# PermanentError), never silently, so its absence is safe to notice at
-# deploy time rather than a hard build-time requirement.
+# process`/`docintel serve` and needs to accept those formats at full
+# fidelity - a missing `soffice` binary fails a DOCX document loudly and
+# per-document (a clear PermanentError), never silently, so its absence is
+# safe to notice at deploy time rather than a hard build-time requirement.
+# XLSX is the one exception: when `soffice` is unavailable,
+# `extract.office_fallback`/`extract.office_render` degrade it gracefully
+# through a pure-Python HTML-then-image fallback instead of dead-lettering
+# (see `pipeline.stages.s2_filter`) - LibreOffice, when present, is still
+# the primary, highest-fidelity path for XLSX too.
 
 [project.scripts]
 docintel = "docintel.cli:main"

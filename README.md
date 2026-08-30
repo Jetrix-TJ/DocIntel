@@ -26,7 +26,8 @@ extracted (see `disposition` in the output: `processed`, `skipped`, or `dead_let
 
 Not just PDFs: an `.eml` or Outlook `.msg` is unwrapped and every attachment processed in its
 own right, and a `.docx`/`.xlsx` is converted to PDF first (needs LibreOffice installed —
-see `pyproject.toml` for details).
+see `pyproject.toml` for details). Without LibreOffice, `.xlsx` still extracts through a
+pure-Python fallback instead of failing; `.docx` still requires the LibreOffice install.
 
 ## As a library, in your own code
 
