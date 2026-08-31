@@ -121,27 +121,34 @@ def ocr_image(path: str) -> tuple[PageText, ...]:
     """OCR a raster image directly — every frame, in order — with no PDF
     wrapper ever created.
 
-    Word boxes come out in the image's own native pixel space (`scale=1.0`).
-    That is the same coordinate space `convert.convert_image_to_pdf` would
-    have declared for a wrapper PDF of this same image: Pillow's PDF writer
-    maps 1 pixel to 1 point when no `resolution=` kwarg is given (verified
-    empirically — a Pillow-saved PDF page's declared width/height in points
-    equals the source image's pixel dimensions exactly), so this produces
-    `PageText` in the identical coordinate space `_run_ocr` would have, for
-    the document a caller would have gotten via convert-then-OCR, just
-    without materializing the intermediate PDF or pdfplumber's own 200dpi
-    re-rasterization of it.
+    Word boxes are scaled by `_SCALE` (72/`RESOLUTION`) - the SAME assumed
+    baseline `_run_ocr` already rasterizes every PDF page at for OCR,
+    regardless of that PDF's own real resolution - rather than treating raw
+    pixels as already-72dpi points (this function's ORIGINAL behavior, and
+    it was wrong).
 
-    Not byte-identical to that old path's OCR *text*, though: today's route
-    incidentally upsamples every wrapped image by `RESOLUTION/72` (~2.78x)
-    before tesseract ever sees it, since `pdfplumber.to_image(resolution=
-    RESOLUTION)` rasterizes off the PDF's declared (1px=1pt) page size
-    regardless of the source's real resolution. Measured against a low-
-    resolution synthetic sample, running tesseract directly against native
-    pixels was not worse than the incidental-upsample path (one word came out
-    MORE accurate: "Invoice Number:" vs. the upsampled path's "Invoice
-    Number,") — but "not worse in one sample" is not "identical", so this is
-    stated as a real, deliberate behavior change, not silently assumed away.
+    That original 72dpi assumption inflated a realistically-captured image's
+    "page" to roughly 2-4x wider, in point-space, than a real printed page,
+    starving every fixed-point-distance region selector
+    (`grammar.regions.NEAR_ANCHOR_RIGHT` and its siblings) of the reach they
+    were calibrated for. Measured directly: a synthetic invoice's "Vendor
+    Name: TESTCORP GLOBAL SOLUTIONS" line, OCR'd the old way, only captured
+    "TESTCORP" through `near-anchor`'s 300pt floor - the exact same content
+    OCR'd via a properly-DPI-scaled scanned PDF captured the whole line,
+    because ITS point-space wasn't artificially inflated.
+
+    Deliberately NOT keyed off `img.info["dpi"]` even though Pillow sometimes
+    reports one: measured directly against this project's own real format
+    fixtures, Pillow's TIFF writer silently embeds a nonsensical `(1, 1)` DPI
+    placeholder and its BMP writer embeds a `~96` DPI placeholder, neither a
+    genuine capture-resolution measurement - PNG/JPEG/GIF report none at all
+    unless a caller explicitly asks for one. Trusting that field would have
+    reintroduced the same bug for exactly the formats least likely to carry
+    real metadata, one path at a time. A single assumed baseline, applied to
+    every raw image uniformly regardless of format, is honest about what is
+    and isn't actually known here - the resolution a raster image was
+    genuinely captured at is not knowable from Pillow's own image object in
+    general, so this does not pretend otherwise.
 
     Same transparent-cache-then-real-OCR contract as `ocr_pages`, keyed with
     `_NATIVE_RESOLUTION` (not `RESOLUTION`) so an image OCR'd this way can
@@ -170,13 +177,13 @@ def _run_ocr_image(path: str) -> tuple[PageText, ...]:
             # consistent avoids a P/RGBA frame behaving differently here than
             # it would have after being wrapped into a PDF.
             rgb_frame = frame.convert("RGB") if frame.mode not in ("RGB", "L") else frame
-            words_tuple = _words_from_image(rgb_frame, scale=1.0)
+            words_tuple = _words_from_image(rgb_frame, scale=_SCALE)
             pages.append(
                 PageText(
                     page_number=index + 1,
                     words=words_tuple,
-                    width=float(frame.width),
-                    height=float(frame.height),
+                    width=float(frame.width) * _SCALE,
+                    height=float(frame.height) * _SCALE,
                     source="ocr",
                     line_tolerance=line_tolerance(words_tuple),
                 )

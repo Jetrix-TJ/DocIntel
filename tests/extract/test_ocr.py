@@ -39,22 +39,50 @@ def test_ocr_image_reads_legible_text_from_a_single_frame(tmp_path):
     assert "450.00" in text
 
 
-def test_ocr_image_words_stay_in_the_images_native_pixel_space(tmp_path):
-    """No `72/RESOLUTION` scaling applies here (unlike `_run_ocr`'s PDF-page
-    path) - every word box must fall within the source image's own pixel
-    dimensions, confirming the `scale=1.0` path, not some other factor."""
+def test_ocr_image_words_are_scaled_by_the_shared_pdf_rasterization_dpi(tmp_path):
+    """Every raw image is scaled by `_SCALE` (72/`RESOLUTION`) - NOT treated
+    as native-pixel-space (`scale=1.0`, this function's original behavior).
+    `scale=1.0` silently assumes the image is exactly 72 DPI, which inflates
+    a realistically-captured image's "page" to roughly 2-4x wider than a
+    real printed page in point-space and starves every fixed-point-distance
+    region (`grammar.regions.NEAR_ANCHOR_RIGHT` and friends) of its intended
+    reach - the exact, measured cause of a real vendor_name truncation bug
+    on raster images, fixed by scaling with `_SCALE` instead."""
     path = tmp_path / "bounds.png"
     _text_image(path, ["BOUNDS CHECK"])
 
     pages = ocr.ocr_image(str(path))
 
     page = pages[0]
-    assert page.width == _IMG_W
-    assert page.height == _IMG_H
+    assert page.width == _IMG_W * ocr._SCALE
+    assert page.height == _IMG_H * ocr._SCALE
     assert page.words, "expected at least one recognized word"
     for word in page.words:
-        assert 0 <= word.x0 <= word.x1 <= _IMG_W + 1
-        assert 0 <= word.y0 <= word.y1 <= _IMG_H + 1
+        assert 0 <= word.x0 <= word.x1 <= _IMG_W * ocr._SCALE + 1
+        assert 0 <= word.y0 <= word.y1 <= _IMG_H * ocr._SCALE + 1
+
+
+def test_ocr_image_ignores_a_formats_own_embedded_dpi_placeholder(tmp_path):
+    """Pillow silently embeds a placeholder DPI on SOME formats even when the
+    caller never asked for one - measured directly: its TIFF writer defaults
+    to a nonsensical `(1, 1)`, its BMP writer to `~96` - neither a genuine
+    capture-resolution measurement. Reading `img.info["dpi"]` to drive the
+    scale (an earlier version of this fix) reintroduced the exact same
+    truncation bug for these two formats: TIFF's `(1, 1)` computed a 72x
+    scale-UP (72/1), inflating the coordinate space far worse than the
+    original bug ever did. The fix must use the SAME `_SCALE` regardless of
+    what a format's own writer happened to embed."""
+    tiff_path = tmp_path / "bounds.tiff"
+    _text_image(tiff_path, ["BOUNDS CHECK"])
+    assert Image.open(tiff_path).info.get("dpi") == (1, 1), (
+        "fixture assumption changed - Pillow's TIFF writer no longer defaults to (1, 1) DPI"
+    )
+
+    pages = ocr.ocr_image(str(tiff_path))
+
+    page = pages[0]
+    assert page.width == _IMG_W * ocr._SCALE
+    assert page.height == _IMG_H * ocr._SCALE
 
 
 def test_ocr_image_reads_every_frame_of_a_multi_frame_tiff_in_order(tmp_path):
