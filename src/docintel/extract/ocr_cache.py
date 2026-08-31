@@ -43,6 +43,25 @@ CACHE_DIR = Path("var") / "ocr-cache"
 ENV_DISABLE = "DOCINTEL_OCR_CACHE"
 MAX_ENTRIES = 512  # eviction cap: oldest-by-mtime entries are pruned past this
 
+# Bumped whenever a change to `ocr.py`'s extraction/scaling logic - or to
+# this module's own JSON entry shape - would make an existing cache entry's
+# CONTENT wrong to reuse, even though the file/resolution/tesseract-version
+# inputs to `cache_key` below haven't changed. Folded into the key itself
+# (not a separate check at load time) so a version bump makes every prior
+# key unreachable outright - a stale entry is never even looked up, let
+# alone served. Existing files under old keys are not actively deleted; they
+# just become permanently unreachable and are eventually swept up by
+# `_evict_oldest_past_cap` like any other cold entry.
+#
+# History:
+#   1 - initial cache key shape (path/size/mtime/content-hash/resolution/
+#       tesseract-version/page-numbers), no schema version at all.
+#   2 - `ocr.ocr_image`'s raw-image pixel-to-point scale changed from 1.0
+#       (pixels treated as already-72dpi points) to `_SCALE` (72/RESOLUTION)
+#       - a v1 image-OCR cache entry's word coordinates are in the WRONG
+#       coordinate space for every downstream region selector.
+CACHE_SCHEMA_VERSION = 2
+
 
 def enabled() -> bool:
     """DOCINTEL_OCR_CACHE=0 bypasses the cache entirely; default is on."""
@@ -70,10 +89,12 @@ def cache_key(
     """Hash the inputs that make a cached OCR result valid to reuse.
 
     Includes path, size, mtime, a content hash, resolution, tesseract
-    version, and the requested page range — see the module docstring for
-    why the content hash is the load-bearing part, and why `page_numbers`
-    is folded in beyond the brief's original five components (so a cache
-    entry can never be served for a page range it does not actually cover).
+    version, the requested page range, and `CACHE_SCHEMA_VERSION` — see the
+    module docstring for why the content hash is the load-bearing part, why
+    `page_numbers` is folded in beyond the brief's original five components
+    (so a cache entry can never be served for a page range it does not
+    actually cover), and `CACHE_SCHEMA_VERSION`'s own comment for why a
+    logic change needs a key component none of the other six can provide.
     """
     abs_path = os.path.abspath(path)
     stat = os.stat(abs_path)
@@ -87,6 +108,7 @@ def cache_key(
             str(resolution),
             tesseract_version,
             ",".join(str(n) for n in sorted(page_numbers)),
+            str(CACHE_SCHEMA_VERSION),
         ]
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
