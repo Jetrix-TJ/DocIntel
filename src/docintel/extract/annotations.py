@@ -108,6 +108,7 @@ from __future__ import annotations
 
 import functools
 import os
+import threading
 
 import pdfplumber
 from pdfplumber.page import Page
@@ -117,6 +118,17 @@ from docintel.core.models import PageMeta, PageText
 from docintel.extract import ocr_cache
 
 RESOLUTION = 100  # dpi used to rasterize each page for colour analysis
+
+# pypdfium2 (reached via pdfplumber's page.to_image()) holds process-global
+# native state and is not thread-safe - confirmed: 2 threads sharing a Runner
+# -> SIGABRT, 8 threads -> SIGSEGV, even one Runner per thread (this repo's
+# own documented "one Runner per worker" pattern) still crashes, because
+# Runner-per-thread only isolates Python-level state, not pdfium's native
+# state. This lock serializes every call that reaches page.to_image() -
+# cheap, since annotation detection is already a small fraction of total
+# per-document time, and correct, since the alternative measured clean only
+# under full process isolation (multiprocessing.Pool).
+_PDFIUM_RENDER_LOCK = threading.Lock()
 
 # HSV saturation band (0-255) for a translucent highlighter wash / comment-box
 # fill: bright but not fully saturated the way printed brand-colour ink is.
@@ -196,7 +208,8 @@ def _detect_uncached(path: str, page_numbers: frozenset[int]) -> bool:
 
 
 def _page_is_annotated(page: Page) -> bool:
-    img = page.to_image(resolution=RESOLUTION).original.convert("RGB")
+    with _PDFIUM_RENDER_LOCK:
+        img = page.to_image(resolution=RESOLUTION).original.convert("RGB")
     return _image_is_annotated(img)
 
 

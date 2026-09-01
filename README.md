@@ -39,7 +39,8 @@ pipeline = build_pipeline(vision=FakeVision())
 record = pipeline.process(document_id="d1", source_path="invoice.pdf")
 ```
 
-**One `Runner` per concurrent worker, not one shared across threads.** A `Runner`
+**One `Runner` per concurrent worker, not one shared across threads — and PDF
+rendering itself is also not thread-safe, independent of `Runner` count.** A `Runner`
 keeps small mutable state for the documents it processes (an in-run duplicate-detection
 index, a processed-document counter) — safe for one worker calling `.process()`
 repeatedly, not safe for two threads calling `.process()` on the *same* `Runner` at
@@ -47,6 +48,15 @@ once. `build_pipeline()` is cheap to call again per worker (the packs and person
 loads are cached process-wide), so the right pattern for a concurrent service is one
 `Runner` per worker/thread, built once and reused for that worker's whole lifetime —
 never a single `Runner` shared across concurrent callers.
+
+A `Runner` per worker fixes the Python-level state; it does NOT make concurrent PDF
+rendering safe, because pypdfium2 (reached during annotation detection) holds
+process-global native state — even one `Runner` per thread still crashes if two
+threads render PDFs at the same time. `docintel` serializes its own internal calls
+into pypdfium2 with a lock, but if your own code also renders PDFs directly
+alongside `docintel` in the same process, use process-based concurrency
+(`multiprocessing`, or a WSGI server's process workers rather than threads) for true
+isolation.
 
 ## Real-time notification
 
