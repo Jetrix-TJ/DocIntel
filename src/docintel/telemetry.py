@@ -31,6 +31,12 @@ DEFAULT_LOG_PATH = "var/logs/docintel.jsonl"
 
 _LOGGER_NAME = "docintel.telemetry"
 
+# Attribute stamped onto every handler this module attaches itself, so a
+# later configure() call can tell "a handler I previously created" apart
+# from "a handler an adopter (or some other caller) attached to this same
+# logger name" - see configure()'s docstring.
+_OWNED_MARKER = "_docintel_telemetry_owned"
+
 
 class _RawLineFormatter(logging.Formatter):
     """The log record's message IS the JSON line - no timestamp/level prefix
@@ -44,17 +50,21 @@ class _RawLineFormatter(logging.Formatter):
 def configure(path: str | None = None) -> logging.Logger:
     """Attach a fresh rotating-file handler, replacing any previous one.
 
-    Safe to call more than once - each call fully replaces prior handlers
-    rather than accumulating duplicates, which matters for tests that
-    reconfigure against a different tmp path per test. `path` defaults to
+    Safe to call more than once - each call replaces only the handler
+    *this module itself previously attached*, never a handler an adopter or
+    a different caller added to this logger name. `path` defaults to
     `DOCINTEL_TELEMETRY_LOG` if set, then `DEFAULT_LOG_PATH` - the same
     override convention `jobs.store`/`evals.history` already use.
     """
     resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or DEFAULT_LOG_PATH
     logger = logging.getLogger(_LOGGER_NAME)
     for handler in list(logger.handlers):
-        logger.removeHandler(handler)
-        handler.close()
+        if getattr(handler, _OWNED_MARKER, False):
+            logger.removeHandler(handler)
+            handler.close()
+        # A handler this module didn't attach itself - an adopter's own, or
+        # one from a prior differently-configured run this process didn't
+        # create - is left alone.
 
     directory = os.path.dirname(resolved)
     if directory:
@@ -62,6 +72,7 @@ def configure(path: str | None = None) -> logging.Logger:
     handler = logging.handlers.RotatingFileHandler(
         resolved, maxBytes=10 * 1024 * 1024, backupCount=5,
     )
+    setattr(handler, _OWNED_MARKER, True)
     handler.setFormatter(_RawLineFormatter())
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
