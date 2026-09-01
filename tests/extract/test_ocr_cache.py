@@ -67,7 +67,7 @@ def test_cache_key_changes_when_the_schema_version_changes(monkeypatch):
 
 
 def test_an_entry_written_under_an_old_schema_version_is_not_served_after_a_bump(tmp_path, monkeypatch):
-    monkeypatch.setattr(ocr_cache, "CACHE_DIR", tmp_path)
+    monkeypatch.setenv(ocr_cache.ENV_CACHE_DIR, str(tmp_path))
     copy_path = tmp_path / "federal.pdf"
     shutil.copyfile(DOC, copy_path)
 
@@ -79,3 +79,16 @@ def test_an_entry_written_under_an_old_schema_version_is_not_served_after_a_bump
     new_key = ocr_cache.cache_key(str(copy_path), ocr.RESOLUTION, ocr.tesseract_version(), [1])
 
     assert ocr_cache.load(new_key) is None, "a post-bump key must never resolve to a pre-bump entry"
+
+
+def test_cache_dir_falls_back_to_the_shared_state_root_when_no_specific_override_is_set(
+    monkeypatch, tmp_path
+):
+    """Task 15: `extract/ocr_cache.py` used to have no override at all -
+    `_cache_dir()` now falls back to `docintel.paths.state_root()` (honoring
+    `DOCINTEL_STATE_DIR`) whenever its own specific `DOCINTEL_OCR_CACHE_DIR`
+    isn't set."""
+    monkeypatch.delenv(ocr_cache.ENV_CACHE_DIR, raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    assert ocr_cache._cache_dir() == tmp_path / "ocr-cache"

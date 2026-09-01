@@ -36,7 +36,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DB_PATH = "var/jobs.sqlite3"
+from docintel.paths import state_root
+
+
+def _default_db_path() -> str:
+    """Final fallback when neither an explicit `path` nor `DOCINTEL_JOBS_DB`
+    is given: `state_root() / "jobs.sqlite3"` (`state_root()` itself honors
+    `DOCINTEL_STATE_DIR`, else `var`, matching the historical default)."""
+    return str(state_root() / "jobs.sqlite3")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -105,7 +112,7 @@ class SQLiteJobQueue:
     """
 
     def __init__(self, path: str | Path | None = None) -> None:
-        resolved = path or os.environ.get("DOCINTEL_JOBS_DB") or DEFAULT_DB_PATH
+        resolved = path or os.environ.get("DOCINTEL_JOBS_DB") or _default_db_path()
         self.path = Path(resolved)
         if str(self.path) != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)

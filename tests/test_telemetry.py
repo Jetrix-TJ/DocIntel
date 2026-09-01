@@ -237,3 +237,19 @@ def test_problem_records_skips_a_malformed_trailing_line(tmp_path):
     result = telemetry.problem_records(path)
 
     assert [entry["document_id"] for entry in result] == ["d1"]
+
+
+def test_configure_falls_back_to_the_shared_state_root_when_docintel_telemetry_log_is_unset(
+    tmp_path, monkeypatch
+):
+    """Task 15: with no explicit `path` and no `DOCINTEL_TELEMETRY_LOG`, the
+    log must land under `docintel.paths.state_root()` (honoring
+    `DOCINTEL_STATE_DIR`), not always `var/logs/docintel.jsonl` relative to
+    CWD."""
+    monkeypatch.delenv("DOCINTEL_TELEMETRY_LOG", raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    telemetry.configure()
+    telemetry.log_record(_record())
+
+    assert (tmp_path / "logs" / "docintel.jsonl").exists()

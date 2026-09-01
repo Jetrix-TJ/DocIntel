@@ -26,7 +26,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DB_PATH = "var/corrections.sqlite3"
+from docintel.paths import state_root
+
+
+def _default_db_path() -> str:
+    """Final fallback when neither an explicit `path` nor
+    `DOCINTEL_CORRECTIONS_DB` is given: `state_root() / "corrections.sqlite3"`
+    (`state_root()` itself honors `DOCINTEL_STATE_DIR`, else `var`, matching the
+    historical hardcoded default this replaced).
+
+    A function, not the `"var/corrections.sqlite3"` constant it replaced, so the
+    root is resolved per call rather than frozen at import time. Same shape as
+    `jobs.store._default_db_path`.
+    """
+    return str(state_root() / "corrections.sqlite3")
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS corrections (
@@ -79,7 +93,7 @@ class CorrectionStore:
     own docstring and `docintel.jobs.store` for why."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        resolved = path or os.environ.get("DOCINTEL_CORRECTIONS_DB") or DEFAULT_DB_PATH
+        resolved = path or os.environ.get("DOCINTEL_CORRECTIONS_DB") or _default_db_path()
         self.path = Path(resolved)
         if str(self.path) != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)

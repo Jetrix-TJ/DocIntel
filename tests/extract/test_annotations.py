@@ -55,12 +55,14 @@ def test_pdfium_render_lock_serializes_concurrent_calls():
     patches the REAL pdfplumber Page.to_image (not an invented fake page —
     this file has no such fixture) to detect re-entrancy while "rendering".
 
-    `detect_flattened` is memoized (`functools.lru_cache`, see
-    `annotations.py`), so a cache hit would skip `to_image` entirely and make
-    this test vacuous. Guard against that explicitly with a call counter,
-    not just the in-flight list, per the task brief's instruction — a
-    fixture already cached (e.g. because another test in this file ran
-    first, in the same process) must not silently turn this into a no-op.
+    `detect_flattened` is memoized (`functools.lru_cache` on
+    `annotations._detect_cached`), so a cache hit would skip `to_image`
+    entirely and make this test vacuous. That is not hypothetical: an
+    earlier test in this same file already renders CLEAN, so in a full-file
+    run the entry is warm and `to_image` is never reached. The cache is
+    therefore cleared below before the concurrent block, and the call
+    counter stays as a second guard so a future memoization change that
+    re-warms the entry fails loudly instead of silently no-op'ing.
 
     Note: a bare `threading.Thread` swallows an `AssertionError` raised
     inside its target — `Thread.join()` does not re-raise it, pytest only
@@ -96,6 +98,12 @@ def test_pdfium_render_lock_serializes_concurrent_calls():
         except BaseException as exc:  # noqa: BLE001 - propagate any thread failure to the main thread
             errors.append(exc)
 
+    # Drop any warm memo entry for CLEAN (an earlier test in this file renders
+    # it), so the threads below genuinely re-enter the pdfium region instead of
+    # returning a cached bool without ever calling `to_image`.
+    annotations_module._detect_cached.cache_clear()
+    annotations_module._detect_cached_image.cache_clear()
+
     with unittest.mock.patch.object(pdfplumber.page.Page, "to_image", tracking_to_image):
         pages, meta, _ = load_document(CLEAN)
         threads = [threading.Thread(target=run_detect_flattened, args=(pages, meta)) for _ in range(8)]
@@ -106,10 +114,10 @@ def test_pdfium_render_lock_serializes_concurrent_calls():
 
     assert not errors, f"{len(errors)} thread(s) raised: {errors[0]!r}"
     assert call_count >= 1, (
-        "tracking_to_image was never called - detect_flattened(CLEAN, ...) must have hit the "
-        "memoization cache (populated by an earlier test in this process) rather than actually "
-        "rendering, so this run proves nothing about the lock; run in isolation "
-        "(pytest ... -k pdfium_render_lock) to get a real, uncached exercise of the lock."
+        "tracking_to_image was never called - detect_flattened(CLEAN, ...) returned without "
+        "rendering even though the memo cache was cleared immediately beforehand, so this run "
+        "proves nothing about the lock. Check whether annotations.py's memoization moved to a "
+        "different function than the _detect_cached / _detect_cached_image this test clears."
     )
 
 

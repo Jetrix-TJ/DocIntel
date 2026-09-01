@@ -393,17 +393,17 @@ def test_reprocessing_the_same_office_document_reuses_the_conversion_cache(
     long-lived cache directory a cache HIT is served from."""
     from docintel.extract import convert, convert_cache
 
-    monkeypatch.setattr(convert_cache, "CACHE_DIR", tmp_path / "convert-cache")
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(tmp_path / "convert-cache"))
 
     calls = []
 
     def fake_convert(path):
         # Mimics the real `convert_office_to_pdf`'s own `tempfile.mkdtemp()`
         # isolation: its output must live in a FRESH directory disjoint from
-        # `convert_cache.CACHE_DIR`, exactly as the real function's output
+        # `convert_cache._cache_dir()`, exactly as the real function's output
         # (under the OS temp root) is always disjoint from the project's
         # `var/convert-cache`. A fake that put its output inside the same
-        # tree `CACHE_DIR` lives under would make `os.path.dirname(real_path)`
+        # tree the cache dir lives under would make `os.path.dirname(real_path)`
         # an ANCESTOR of the cache directory - registering that in
         # `ctx.temp_dirs` would delete the cache itself, a bug in this test
         # fixture, not in the production code it's standing in for.

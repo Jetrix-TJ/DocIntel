@@ -137,3 +137,31 @@ def test_documents_survive_the_json_round_trip_intact(tmp_path):
 
     assert run.documents[0]["gold_id"] == "doc-a"
     assert run.documents[0]["assertions"][0]["name"] == "fields.x"
+
+
+def test_falls_back_to_the_shared_state_root_when_the_env_var_is_unset(tmp_path, monkeypatch):
+    """I3 (final-review fix wave): Task 15 wired `paths.state_root()` into
+    `jobs.store`/`telemetry`/`ocr_cache` but missed this module, which kept a
+    hardcoded `var/eval_history.sqlite3`. With no explicit `path` and no
+    `DOCINTEL_EVAL_HISTORY_DB`, the DB must land under `state_root()` (honoring
+    `DOCINTEL_STATE_DIR`), not relative to whatever CWD the process started in.
+    """
+    monkeypatch.delenv("DOCINTEL_EVAL_HISTORY_DB", raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    store = EvalHistoryStore()
+
+    assert store.path == tmp_path / "eval_history.sqlite3"
+    assert store.path.exists()
+
+
+def test_the_modules_own_env_var_still_wins_over_the_shared_state_root(tmp_path, monkeypatch):
+    """Precedence, same as every other module Task 15 touched: the specific
+    override outranks the shared root, and an explicit constructor arg outranks
+    both."""
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path / "shared"))
+    monkeypatch.setenv("DOCINTEL_EVAL_HISTORY_DB", str(tmp_path / "specific.sqlite3"))
+
+    assert EvalHistoryStore().path == tmp_path / "specific.sqlite3"
+    explicit = tmp_path / "explicit.sqlite3"
+    assert EvalHistoryStore(explicit).path == explicit

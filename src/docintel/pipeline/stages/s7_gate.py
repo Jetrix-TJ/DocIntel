@@ -196,35 +196,28 @@ class ConfidenceGate:
         return pack_thresholds if isinstance(pack_thresholds, dict) else {}
 
     def _confidence_lane(self, ctx: JobContext) -> str:
+        # Scores only what was actually scored. A field the pack's vocabulary
+        # names but no selector ever wrote to has no entry here on purpose -
+        # see `core.coverage`'s module docstring: scoring a missing field 0.0
+        # expresses completeness in the confidence vocabulary, which claims the
+        # pipeline read something badly when it read nothing at all. Missing
+        # fields are a second dimension, routed via `_incomplete_reasons` /
+        # `_collapsed` below, not folded in here.
         thresholds = self._thresholds_for(ctx)
-        declared = self._declared_fields(ctx)
         short = [
-            name for name in declared
-            if ctx.confidence.get(name, 0.0) < thresholds.get(name, DEFAULT_THRESHOLD)
+            name for name, score in ctx.confidence.items()
+            if score < thresholds.get(name, DEFAULT_THRESHOLD)
         ]
         if not short:
             return "high"
 
-        very_low = [name for name in declared if ctx.confidence.get(name, 0.0) < VERY_LOW_FLOOR]
-        if len(very_low) / len(declared) >= VERY_LOW_SHARE:
+        very_low = [
+            name for name, score in ctx.confidence.items()
+            if score < VERY_LOW_FLOOR
+        ]
+        if len(very_low) / len(ctx.confidence) >= VERY_LOW_SHARE:
             return "low"
         return "medium"
-
-    def _declared_fields(self, ctx: JobContext) -> frozenset[str]:
-        """Every field the pack declares for this doc_type, unioned with anything
-        that produced a confidence entry anyway.
-
-        Iterating `ctx.confidence` alone (the prior behavior) is blind to a field
-        that never produced a value at all - no selector wrote to it, so it has
-        no entry to be "short" against. A pack-declared field with no confidence
-        entry is treated as score 0.0 (worse than any real miss the gate already
-        catches), which is what makes it count as `short` below. The union with
-        `ctx.confidence.keys()` keeps this correct even when `ctx.pack` is None
-        (a caller-injected `thresholds` test seam with no real pack attached).
-        """
-        getter = getattr(ctx.pack, "fields_for", None)
-        declared = getter(ctx.doc_type) if getter is not None and ctx.doc_type else frozenset()
-        return declared | frozenset(ctx.confidence.keys())
 
     # -- run ---------------------------------------------------------------
 

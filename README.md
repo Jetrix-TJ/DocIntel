@@ -1,8 +1,117 @@
 # docintel
 
-Turn a vendor invoice or bill into a confidence-scored structured record — without a human in
-the middle, except for the cases where a human genuinely should be, which the system says so
-about rather than guessing.
+**Every vendor bill your AP team touches by hand today, docintel reads, checks, and routes —
+and only hands you the ones that genuinely need a person.**
+
+Right now, someone on your team opens each invoice, figures out who sent it and what it is,
+copies the numbers that matter into your system, checks whether what's *owed* actually matches
+what's *printed* (they're not always the same — a bill with a balance forward often prints a
+big total that isn't the amount due), and hopes nothing was missed. docintel does that first
+pass automatically, on every document, and tells you — per field, not just per document — how
+sure it is. The ones it's confident about go straight through. The ones it isn't land in a
+review queue with the reason attached, not just a red flag.
+
+## What it actually does
+
+1. **Reads the document** — a scanned image, a native PDF, a `.docx`/`.xlsx`, or an email with
+   attachments — the same way regardless of format.
+2. **Works out whose bill it is, and what kind** — an invoice, a credit memo, a statement —
+   before extracting a single field.
+3. **Pulls the fields that matter** for that vendor: totals, dates, account numbers, line
+   items — using rules you write once per vendor, not a generic guess.
+4. **Applies the business rules** that turn *what's printed* into *what's actually owed* — the
+   part every manual process gets right eventually but a naive script gets wrong on day one.
+5. **Flags anything a person should look at**, with the specific reason attached (a low-confidence
+   field, an arithmetic mismatch, a vendor it's never seen before) — never a silent guess.
+
+## What one result looks like
+
+This is a real output record — actually run through `docintel process` against a real invoice
+in this project's test corpus, not a mock-up (trimmed to the fields that tell the story; the
+full record also carries every line item, the confidence of every other field, and a full audit
+trail):
+
+```json
+{
+  "schema_version": "1",
+  "document_id": "northstar-edco-077087",
+  "doc_type": "standard_invoice",
+  "disposition": "processed",
+  "lane": "high",
+  "review_flag": false,
+  "fields": {
+    "vendor_name": "EDCO WASTE & RECYCLING SERVICE",
+    "prior_balance": "298.34",
+    "current_charges": "69.62",
+    "total_printed": "367.96"
+  },
+  "derived": {
+    "amount_payable": "69.62",
+    "payable_basis": "current_charges",
+    "carried_balance": "298.34"
+  },
+  "confidence": {
+    "total_printed": 0.90,
+    "current_charges": 0.99
+  }
+}
+```
+
+The printed total is **367.96** — the biggest number on the page, in the biggest box. The
+amount actually owed is **69.62**: a prior balance of 298.34 was already carried forward
+(`derived.carried_balance`), and only the current period's charges are due. A person reading
+this bill quickly would reasonably pay the wrong number — this exact invoice's filename is
+literally *"current charges can be misleading, paying \$69.62."* docintel's `derived.amount_payable`
+is never the raw printed total by default — it's computed from `prior_balance` and
+`current_charges`, the two fields actually printed on the bill. `fields` is always what's
+printed, verbatim; `derived` is always the answer to "what do we actually pay" — keeping the two
+separate is the one distinction this whole system exists to protect.
+
+`docintel serve` runs a local web UI over the same pipeline, where the queue above becomes a
+real page: every document that didn't clear the bar, waiting for a decision.
+
+![The review queue — one row per document waiting on a human, with the sender, document type, and when it was queued](docs/images/review-queue.png)
+
+## Supported file types
+
+| Format | Needs LibreOffice? | Without it |
+|---|---|---|
+| `.pdf` (native or scanned) | No | — |
+| `.png` `.jpg`/`.jpeg` `.tiff`/`.tif` `.bmp` `.gif` | No | — |
+| `.xlsx` | No | Extracts through a pure-Python fallback — a real HTML/image rendering built from the workbook itself, not a soffice conversion. Slightly lower fidelity than the LibreOffice path, never a dead letter for lack of it. |
+| `.docx` | **Yes** | Dead-letters with a clear, actionable error (`"LibreOffice ('soffice') is not installed or not on PATH"`) — there's no fallback for Word documents today. |
+| `.txt` `.csv` `.html`/`.htm` | No | — |
+| `.eml` / `.msg` | No (`.msg` needs the `email` extra) | Unwrapped automatically — every real attachment inside becomes its own document, processed on its own merits, through this same table. |
+
+One call (`docintel process`) handles every row above the same way — no format-specific flag,
+no branching in your own code.
+
+## Whose bill is it, and how do you add a new vendor?
+
+Before extracting anything, docintel decides two things: *whose* document this is (a **claim**
+rule — a printed name, address, or account number specific enough that no other business prints
+it) and *what kind* it is (a **ladder** of rules, checked in order, that picks the document
+type). Both are plain JSON, not code — a company you onboard is two small files:
+`pack.json` (the claim + ladder) and `persona.json` (where each field sits on that vendor's
+layout).
+
+Onboarding a new vendor needs no commit access to this repo — see
+**[Onboard your first vendor](#onboard-your-first-vendor)** below for the two-file walkthrough,
+or **[`docs/onboarding/COMPANY-CONFIG-TEMPLATE.md`](docs/onboarding/COMPANY-CONFIG-TEMPLATE.md)**
+for the non-engineer-facing version a vendor-review process can fill in directly.
+
+## Where this actually stands today
+
+docintel ships as a pure framework — a fresh install knows about **zero** companies; every
+vendor's rules are something you write. The extraction engine and the confidence-gating logic
+are the mature part of this project; packaging, defaults, and day-two operational surface
+(auth on the web UI, deployment tooling, a stability guarantee on the JSON schema) are earlier —
+this is **alpha**, and it says so plainly rather than papering over it.
+
+**[`docs/BUGS-FEATURES-PRODUCTION.md`](docs/BUGS-FEATURES-PRODUCTION.md)** is the running, honest
+list of what's broken, what's missing, and what production actually needs — read it before
+deciding whether a gap you hit is known or new. It's the single most trustworthy status doc in
+this repo; start there if you're deciding whether to adopt this now or wait.
 
 ## Install
 
@@ -23,11 +132,6 @@ That's the whole loop: read the page, figure out which company it belongs to and
 document it is, extract the fields that company cares about, apply any business rules that
 decide what's actually owed, and emit one JSON record — always one, even when nothing could be
 extracted (see `disposition` in the output: `processed`, `skipped`, or `dead_letter`).
-
-Not just PDFs: an `.eml` or Outlook `.msg` is unwrapped and every attachment processed in its
-own right, and a `.docx`/`.xlsx` is converted to PDF first (needs LibreOffice installed —
-see `pyproject.toml` for details). Without LibreOffice, `.xlsx` still extracts through a
-pure-Python fallback instead of failing; `.docx` still requires the LibreOffice install.
 
 ## As a library, in your own code
 
@@ -119,9 +223,8 @@ narrative companion for a reviewing engineer deciding whether to adopt this: the
 explain the whole design, a walkthrough of one document end to end, per-mechanism Q&A, and an
 honest table of what's deliberately not shipped yet.
 
-**[`docs/BUGS-FEATURES-PRODUCTION.md`](docs/BUGS-FEATURES-PRODUCTION.md)** — the running, honest list
-of what's broken, what's missing, and what production actually needs. Read this before deciding
-whether a gap you hit is known or new.
+(The honest status doc — what's broken, what's missing — is linked near the top of this README,
+under [Where this actually stands today](#where-this-actually-stands-today).)
 
 ## Everyday commands
 

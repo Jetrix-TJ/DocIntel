@@ -83,3 +83,31 @@ def test_mark_promoted_updates_status(tmp_path):
     store.mark_promoted(correction_id)
 
     assert store.get(correction_id).status == "promoted"
+
+
+def test_falls_back_to_the_shared_state_root_when_the_env_var_is_unset(tmp_path, monkeypatch):
+    """I3 (final-review fix wave): Task 15 wired `paths.state_root()` into
+    `jobs.store`/`telemetry`/`ocr_cache` but missed this module, which kept a
+    hardcoded `var/corrections.sqlite3`. With no explicit `path` and no
+    `DOCINTEL_CORRECTIONS_DB`, the DB must land under `state_root()` (honoring
+    `DOCINTEL_STATE_DIR`), not relative to whatever CWD the process started in.
+    """
+    monkeypatch.delenv("DOCINTEL_CORRECTIONS_DB", raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    store = CorrectionStore()
+
+    assert store.path == tmp_path / "corrections.sqlite3"
+    assert store.path.exists()
+
+
+def test_the_modules_own_env_var_still_wins_over_the_shared_state_root(tmp_path, monkeypatch):
+    """Precedence, same as every other module Task 15 touched: the specific
+    override outranks the shared root, and an explicit constructor arg outranks
+    both."""
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path / "shared"))
+    monkeypatch.setenv("DOCINTEL_CORRECTIONS_DB", str(tmp_path / "specific.sqlite3"))
+
+    assert CorrectionStore().path == tmp_path / "specific.sqlite3"
+    explicit = tmp_path / "explicit.sqlite3"
+    assert CorrectionStore(explicit).path == explicit

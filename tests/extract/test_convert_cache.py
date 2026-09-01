@@ -7,6 +7,7 @@ own "second call served from disk, not a recompute" proof (see
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 from PIL import Image
 
@@ -58,7 +59,7 @@ def test_save_then_load_round_trips_the_file(tmp_path):
 
 
 def test_a_corrupted_cache_entry_falls_through_to_none(tmp_path, monkeypatch):
-    monkeypatch.setattr(convert_cache, "CACHE_DIR", tmp_path / "convert-cache")
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(tmp_path / "convert-cache"))
     path = tmp_path / "source.pdf"
     Image.new("RGB", (100, 100)).save(path, "PDF")
     key = convert_cache.cache_key(str(path), "office")
@@ -88,7 +89,7 @@ def test_disabling_the_shared_env_var_bypasses_the_cache(tmp_path, monkeypatch):
 
 
 def test_a_cache_miss_converts_and_a_cache_hit_does_not(tmp_path, monkeypatch):
-    monkeypatch.setattr(convert_cache, "CACHE_DIR", tmp_path / "convert-cache")
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(tmp_path / "convert-cache"))
 
     png = tmp_path / "invoice.png"
     _image(png)
@@ -112,12 +113,13 @@ def test_a_cache_miss_converts_and_a_cache_hit_does_not(tmp_path, monkeypatch):
 
 
 def test_a_cache_hits_path_is_never_a_temp_dir_the_caller_should_clean_up(tmp_path, monkeypatch):
-    """The hard constraint: a cache-hit path lives under `convert_cache.
-    CACHE_DIR`, which the `Runner` never learns about via `ctx.temp_dirs` -
-    if a caller mistakenly cleaned up the cache-hit path's directory, every
-    cached conversion would be deleted after its first reuse."""
+    """The hard constraint: a cache-hit path lives under
+    `convert_cache._cache_dir()`, which the `Runner` never learns about via
+    `ctx.temp_dirs` - if a caller mistakenly cleaned up the cache-hit path's
+    directory, every cached conversion would be deleted after its first
+    reuse."""
     cache_dir = tmp_path / "convert-cache"
-    monkeypatch.setattr(convert_cache, "CACHE_DIR", cache_dir)
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(cache_dir))
 
     docx_source = tmp_path / "invoice.docx"
     docx_source.write_bytes(b"not a real docx - the converter is faked below")
@@ -137,7 +139,7 @@ def test_the_office_converter_wiring_test_still_only_converts_once(tmp_path, mon
     `convert_to_pdf_cached` at all - if it called `convert_office_to_pdf`
     directly again, this would still pass, so this is a narrower unit check
     that the cache layer specifically sits in front of the real converter."""
-    monkeypatch.setattr(convert_cache, "CACHE_DIR", tmp_path / "convert-cache")
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(tmp_path / "convert-cache"))
     docx = tmp_path / "invoice.docx"
     docx.write_bytes(b"not a real docx")
 
@@ -155,3 +157,48 @@ def test_the_office_converter_wiring_test_still_only_converts_once(tmp_path, mon
     convert.convert_to_pdf_cached(str(docx), ".docx")
 
     assert calls == [str(docx)]
+
+
+# -- where the cache lives (I3, final-review fix wave) ------------------------
+
+
+def test_cache_dir_falls_back_to_the_shared_state_root_when_no_specific_override_is_set(
+    monkeypatch, tmp_path
+):
+    """I3: Task 15 closed this exact gap for `ocr_cache` and missed
+    `convert_cache`, which kept a module-level `CACHE_DIR = Path("var") /
+    "convert-cache"` with no override at all. `_cache_dir()` now falls back to
+    `docintel.paths.state_root()` (honoring `DOCINTEL_STATE_DIR`) whenever its
+    own specific `DOCINTEL_CONVERT_CACHE_DIR` isn't set."""
+    monkeypatch.delenv(convert_cache.ENV_CACHE_DIR, raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    assert convert_cache._cache_dir() == tmp_path / "convert-cache"
+
+
+def test_the_specific_convert_cache_dir_override_wins_over_the_shared_state_root(
+    monkeypatch, tmp_path
+):
+    """Same precedence as `ocr_cache`/`jobs.store`: the module's own env var
+    outranks the shared root."""
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path / "shared"))
+    monkeypatch.setenv(convert_cache.ENV_CACHE_DIR, str(tmp_path / "specific"))
+
+    assert convert_cache._cache_dir() == tmp_path / "specific"
+
+
+def test_a_save_load_round_trip_actually_writes_under_the_state_root(monkeypatch, tmp_path):
+    """Not just `_cache_dir()`'s return value: the real write path must land
+    there too, which is what proves every former `CACHE_DIR` call site was
+    migrated and none still resolves `var/convert-cache` from CWD."""
+    monkeypatch.delenv(convert_cache.ENV_CACHE_DIR, raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path / "state"))
+
+    source = tmp_path / "source.pdf"
+    Image.new("RGB", (100, 100)).save(source, "PDF")
+    key = convert_cache.cache_key(str(source), "office")
+
+    cached_path = convert_cache.save(key, str(source))
+
+    assert (tmp_path / "state" / "convert-cache") in Path(cached_path).parents
+    assert convert_cache.load(key) == cached_path

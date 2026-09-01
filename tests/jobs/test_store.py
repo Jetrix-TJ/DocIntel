@@ -242,3 +242,16 @@ def test_an_old_shaped_database_migrates_cleanly(tmp_path):
     # The rebuilt index must actually enforce single-flight post-migration.
     created = queue.enqueue_once("northstar|edco", "standard_invoice", kind="prior_balance_basis")
     assert created is False
+
+
+def test_falls_back_to_the_shared_state_root_when_docintel_jobs_db_is_unset(tmp_path, monkeypatch):
+    """Task 15: with no explicit `path` and no `DOCINTEL_JOBS_DB`, the queue
+    must land under `docintel.paths.state_root()` (honoring
+    `DOCINTEL_STATE_DIR`), not always `var/jobs.sqlite3` relative to CWD."""
+    monkeypatch.delenv("DOCINTEL_JOBS_DB", raising=False)
+    monkeypatch.setenv("DOCINTEL_STATE_DIR", str(tmp_path))
+
+    queue = SQLiteJobQueue()
+
+    assert queue.path == tmp_path / "jobs.sqlite3"
+    assert queue.path.exists()
