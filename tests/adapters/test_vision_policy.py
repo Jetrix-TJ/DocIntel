@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import pytest
 
-from docintel.adapters.vision.policy import VISION_OBSERVABLE, sanitize, VISION_CEILING, VISION_FLOOR
+from docintel.adapters.vision.policy import (
+    VISION_CEILING,
+    VISION_FLOOR,
+    VISION_OBSERVABLE,
+    sanitize,
+)
 from docintel.adapters.vision.port import VisionResult
-from docintel.core.confidence import CEILING, MODIFIERS
+from docintel.core.confidence import MODIFIERS
 from docintel.core.models import DERIVED_ONLY
 from docintel.pipeline.stages.s7_gate import FORCING_MODIFIERS, VERY_LOW_FLOOR
 

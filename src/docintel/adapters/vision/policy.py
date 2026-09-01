@@ -47,7 +47,7 @@ the bad key through.
 from __future__ import annotations
 
 from docintel.adapters.vision.port import VisionResult
-from docintel.core.confidence import CEILING, MODIFIERS
+from docintel.core.confidence import MODIFIERS
 from docintel.core.models import DERIVED_ONLY
 
 # Section 5 modifiers a vision model is a competent witness for. See rule 2.
