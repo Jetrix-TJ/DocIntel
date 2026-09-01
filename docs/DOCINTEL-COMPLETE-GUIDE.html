@@ -595,6 +595,32 @@ print(record["fields"])        # raw printed values, as your selectors found the
 print(record["derived"])       # business-logic outputs - e.g. amount_payable</div>
     <p class="lead"><code>vision=FakeVision()</code> is deliberate here — it answers nothing, so this run proves your persona's selectors alone, with zero API calls and zero cost. Once fields come back right, switch to <code>CassetteVision</code> (replays a recorded response, still free) or <code>GeminiVision()</code> (real calls, real cost) — see <a href="#vision">Vision &amp; Gemini</a> below.</p>
     <div class="tip"><b>Reading the result:</b> <code>fields</code> holds exactly what your selectors captured — raw, pre-business-logic. <code>derived</code> holds what the <code>adjust</code> ops computed from those raw values. Always read <code>derived.amount_payable</code> for what's actually owed, never <code>fields.total_printed</code> directly — that's the one distinction this whole system exists to protect.</div>
+
+    <p class="lead">What that actually looks like — a real record, actually run through <code>docintel process</code> against a real invoice in this project's test corpus (trimmed to the fields that tell the story):</p>
+    <div class="codeblock"><span class="fname">real output — not a mock-up</span>{
+  "schema_version": "1",
+  "document_id": "northstar-edco-077087",
+  "doc_type": "standard_invoice",
+  "disposition": "processed",
+  "lane": "high",
+  "review_flag": false,
+  "fields": {
+    "vendor_name": "EDCO WASTE &amp; RECYCLING SERVICE",
+    "prior_balance": "298.34",
+    "current_charges": "69.62",
+    "total_printed": "367.96"
+  },
+  "derived": {
+    "amount_payable": "69.62",
+    "payable_basis": "current_charges",
+    "carried_balance": "298.34"
+  },
+  "confidence": {
+    "total_printed": 0.90,
+    "current_charges": 0.99
+  }
+}</div>
+    <p class="lead">The printed total is <b>367.96</b> — the biggest number on the page. The amount actually owed is <b>69.62</b>: a prior balance of 298.34 was already carried forward, and only the current period's charges are due — this exact invoice's filename is literally <i>"current charges can be misleading, paying $69.62."</i> That gap between what's printed and what's owed is the whole reason <code>derived</code> and <code>fields</code> stay separate.</p>
   </section>
 
   <div class="rule"></div>
@@ -602,16 +628,18 @@ print(record["derived"])       # business-logic outputs - e.g. amount_payable</d
 <section id="formats" class="step">
     <div class="step-h"><h2>Supported file formats</h2></div>
     <p class="step-sub">// docintel process handles all of these the same way — no format-specific flag</p>
-    <div class="pillrow">
-      <span class="pill">.pdf (native)</span><span class="pill">.pdf (scanned)</span>
-      <span class="pill">.png</span><span class="pill">.jpg / .jpeg</span>
-      <span class="pill">.bmp</span><span class="pill">.gif</span><span class="pill">.tiff / .tif</span>
-      <span class="pill">.docx</span><span class="pill">.xlsx</span>
-      <span class="pill">.txt</span><span class="pill">.csv</span><span class="pill">.html / .htm</span>
-      <span class="pill">.eml</span><span class="pill">.msg</span>
-    </div>
+    <table class="dtable">
+      <thead><tr><th>File type</th><th>Supported</th><th>Needs LibreOffice</th></tr></thead>
+      <tbody>
+        <tr><td>PDF (native or scanned)</td><td>✅</td><td>No</td></tr>
+        <tr><td>PNG / JPG / TIFF / BMP / GIF</td><td>✅</td><td>No</td></tr>
+        <tr><td>TXT / CSV / HTML</td><td>✅</td><td>No</td></tr>
+        <tr><td><code>.eml</code> / <code>.msg</code></td><td>✅</td><td>No (<code>.msg</code> needs the <code>email</code> extra)</td></tr>
+        <tr class="pick"><td><b>XLSX</b></td><td>✅</td><td><b>No</b> — works either way. Without it, a pure-Python fallback (a real HTML/image rendering built from the workbook itself) is used instead — slightly lower fidelity, never a dead letter for lack of it.</td></tr>
+        <tr class="pick"><td><b>DOCX</b></td><td>✅</td><td><b>Yes</b> — required, no fallback. Without it, a <code>.docx</code> dead-letters with a clear, actionable error rather than failing silently.</td></tr>
+      </tbody>
+    </table>
     <p class="lead">An <code>.eml</code>/<code>.msg</code> is unwrapped automatically — every real attachment inside becomes its own separate document. <b>Your <code>pack.json</code> and <code>persona.json</code> never know or care which format a document arrived in</b> — one persona works across every format a vendor happens to send in, with zero extra config.</p>
-    <div class="tip"><b>One dependency to know about:</b> <code>.docx</code> needs LibreOffice (<code>soffice</code>) installed on the host. <code>.xlsx</code> does not — it works either way.</div>
   </section>
 
   <div class="rule"></div>
