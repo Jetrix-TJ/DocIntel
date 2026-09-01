@@ -115,7 +115,8 @@ def test_a_structured_response_becomes_a_vision_result(tmp_path):
     result = v.extract(_pages(), FIELDS, source_path=_pdf(tmp_path))
 
     assert result.fields == {"vendor_name": "ACME", "total_printed": "1,177.70"}
-    assert result.confidence["total_printed"] == pytest.approx(0.8)
+    # Raw model confidence 0.8 is clamped to VISION_CEILING (0.70).
+    assert result.confidence["total_printed"] == pytest.approx(0.70)
 
 
 def test_an_empty_transcription_is_absence_not_a_value(tmp_path):
