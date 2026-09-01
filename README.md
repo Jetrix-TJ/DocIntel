@@ -1,15 +1,17 @@
 # docintel
 
-**Every vendor bill your AP team touches by hand today, docintel reads, checks, and routes —
-and only hands you the ones that genuinely need a person.**
+**Every vendor bill your team processes by hand today, docintel reads, checks, and routes —
+and only hands back the ones that genuinely need a person.**
 
-Right now, someone on your team opens each invoice, figures out who sent it and what it is,
-copies the numbers that matter into your system, checks whether what's *owed* actually matches
-what's *printed* (they're not always the same — a bill with a balance forward often prints a
-big total that isn't the amount due), and hopes nothing was missed. docintel does that first
+Right now, whoever handles vendor bills at your organization opens each one, figures out who
+sent it and what it is, copies the numbers that matter into your system, and checks whether
+what's *owed* actually matches what's *printed* (they're not always the same — a bill with a
+balance forward often prints a big total that isn't the amount due). docintel does that first
 pass automatically, on every document, and tells you — per field, not just per document — how
 sure it is. The ones it's confident about go straight through. The ones it isn't land in a
-review queue with the reason attached, not just a red flag.
+review queue with the reason attached, not just a red flag. It's a general-purpose library, not
+built for one company's process — the rules for what "confident" means are something you
+configure per vendor, not something baked in.
 
 ## What it actually does
 
@@ -74,17 +76,18 @@ real page: every document that didn't clear the bar, waiting for a decision.
 
 ## Supported file types
 
-| Format | Needs LibreOffice? | Without it |
-|---|---|---|
-| `.pdf` (native or scanned) | No | — |
-| `.png` `.jpg`/`.jpeg` `.tiff`/`.tif` `.bmp` `.gif` | No | — |
-| `.xlsx` | No | Extracts through a pure-Python fallback — a real HTML/image rendering built from the workbook itself, not a soffice conversion. Slightly lower fidelity than the LibreOffice path, never a dead letter for lack of it. |
-| `.docx` | **Yes** | Dead-letters with a clear, actionable error (`"LibreOffice ('soffice') is not installed or not on PATH"`) — there's no fallback for Word documents today. |
-| `.txt` `.csv` `.html`/`.htm` | No | — |
-| `.eml` / `.msg` | No (`.msg` needs the `email` extra) | Unwrapped automatically — every real attachment inside becomes its own document, processed on its own merits, through this same table. |
+| File type | Supported | Needs LibreOffice |
+|---|:---:|---|
+| PDF (native or scanned) | ✅ | No |
+| PNG / JPG / TIFF / BMP / GIF | ✅ | No |
+| TXT / CSV / HTML | ✅ | No |
+| `.eml` / `.msg` | ✅ | No (`.msg` needs the `email` extra) |
+| **XLSX** | ✅ | **No** — works either way. Without it, a pure-Python fallback (a real HTML/image rendering built from the workbook itself) is used instead — slightly lower fidelity, never a dead letter for lack of it. |
+| **DOCX** | ✅ | **Yes** — required, no fallback. Without it, a `.docx` dead-letters with a clear, actionable error rather than failing silently. |
 
 One call (`docintel process`) handles every row above the same way — no format-specific flag,
-no branching in your own code.
+no branching in your own code. `.eml`/`.msg` is unwrapped automatically: every real attachment
+inside becomes its own document, processed on its own merits through this same table.
 
 ## Whose bill is it, and how do you add a new vendor?
 
