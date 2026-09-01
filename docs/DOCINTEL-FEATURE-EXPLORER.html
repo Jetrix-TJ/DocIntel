@@ -374,9 +374,10 @@ record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
   </div>
 
   <section class="cfg" id="vendors">
-    <div class="col-h"><h2>Current vendors — what's live today</h2><span class="hint">// four packs, four onboarding shapes</span></div>
+    <div class="col-h"><h2>Reference packs — example patterns only</h2><span class="hint">// four shapes; zero ship by default</span></div>
+    <div class="note2"><b>Shipped as a pure framework:</b> <code>PACK_MODULES</code>/<code>PACK_FILES</code> are both empty tuples. All real company configuration (northstar, digitaldirection, spt_metals, acme_freight) lives only under <code>tests/fixtures/packs/</code>, loaded via <code>pyproject.toml</code>'s <code>pythonpath</code> — never shipped. These are reference examples showing the four onboarding shapes; adopters will build their own packs.</div>
     <table class="cli-table">
-      <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Vendors</th></tr></thead>
+      <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Example vendors</th></tr></thead>
       <tbody>
         <tr><td><code>northstar</code></td><td>Full Python module</td><td>complete_beverage_destruction, dtss, edco, federal_recycling, upak, veritiv</td></tr>
         <tr><td><code>digitaldirection</code></td><td>Full Python module</td><td>centracom, comcast, lumen, windstream (+ spectrum, draft)</td></tr>
@@ -617,8 +618,8 @@ fixture = draft_gold_fixture(record, "acme-0001", source_file="invoice.pdf")
   <footer>
     <h3>How to read this</h3>
     <ul>
-      <li><b>One front door:</b> <code>build_pipeline(vision=…)</code> returns a <code>Runner</code>. Pick a <b>Vision</b> mode, whether you're loading <b>Packs</b> beyond the shipped four, and whether a <b>Jobs queue</b> should persist review-worthy documents — then layer in optional features.</li>
-      <li><b>The two extension points compose independently:</b> <code>DOCINTEL_EXTRA_PERSONAS_DIR</code> adds a vendor to a pack that already ships; <code>extra_packs=</code> adds a whole new company. Neither ever touches the installed package, so <code>pip install --upgrade</code> can't wipe them.</li>
+      <li><b>One front door:</b> <code>build_pipeline(vision=…)</code> returns a <code>Runner</code>. Pick a <b>Vision</b> mode, whether you're loading <b>Packs</b> of your own, and whether a <b>Jobs queue</b> should persist review-worthy documents — then layer in optional features.</li>
+      <li><b>The two extension points compose independently:</b> <code>DOCINTEL_EXTRA_PERSONAS_DIR</code> adds a vendor to an existing pack (e.g., one of the reference examples); <code>extra_packs=</code> adds a whole new company. Neither ever touches the installed package, so <code>pip install --upgrade</code> can't wipe them.</li>
       <li><b>Vision only ever answers questions a persona already poses</b> — it never decides classification or invents document structure. <code>fake</code> is for wiring checks, <code>cassette</code> replays recorded responses offline (the default, reproducible), <code>live</code> actually calls Gemini.</li>
       <li><b>The "always on" row is not optional — it's the point.</b> Emit-always, the 14-rule validator, the draft confidence penalty, the safe unclaimed-vendor path, and in-run dedup all run automatically. You don't wire correctness guarantees — the pipeline provides them.</li>
       <li><b>Operational tasks live in the CLI, not your code.</b> Draining the review queue, exporting a spreadsheet, reconciling against contracts, checking queue health — see <b>Command-line operations</b> above.</li>
@@ -758,7 +759,7 @@ function genLines(){
   if(has("extra_persona_dir")){
     add("import os","extra_persona_dir");
     add('os.environ["DOCINTEL_EXTRA_PERSONAS_DIR"] = r"C:\\my_docintel_config"','extra_persona_dir');
-    add("# adds a vendor to a pack that already ships - zero code, picked up below","extra_persona_dir");
+    add("# adds a vendor to an existing pack - zero code, picked up below","extra_persona_dir");
     add("","extra_persona_dir");
   }
 

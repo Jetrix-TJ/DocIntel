@@ -307,7 +307,7 @@ footer.doc {
       <a class="sub" href="#realtime">Real-time notification, as a library</a>
       <a class="sub" href="#webui">Web UI</a>
       <a class="sub" href="#review">Review queue</a>
-      <a href="#current-vendors">Current vendors — what's live today</a>
+      <a href="#current-vendors">Reference packs — example patterns only</a>
       <p class="group-label">Configuring vendors</p>
       <a href="#new-vendor">New vendor, known company</a>
       <a href="#new-company">New company (no code)</a>
@@ -770,20 +770,24 @@ python -m docintel.cli serve</code></pre>
     </section>
 
     <section id="current-vendors" class="wide">
-      <h2>Current vendors — what's live today</h2>
+      <h2>Reference packs — example patterns only</h2>
+      <div class="callout">
+        <span class="label">Shipped as a pure framework — zero pre-configured vendors</span>
+        <p><code>PACK_MODULES</code>/<code>PACK_FILES</code> in <code>registry.py</code> are both empty tuples. All real company configuration (northstar, digitaldirection, spt_metals, acme_freight) lives only under <code>tests/fixtures/packs/</code>, loaded via <code>pyproject.toml</code>'s <code>pythonpath</code> — never shipped to a real adopter. These are reference examples showing the four onboarding shapes; your own adopters will build their own packs.</p>
+      </div>
       <p>
-        Packs are named on purpose, not discovered by scanning a directory — see
-        <code>PACK_MODULES</code>/<code>PACK_FILES</code> below. Check what's actually
-        registered, right now, with one line:
+        Packs are named on purpose, not discovered by scanning a directory. Check what's actually
+        registered in a fresh install with one line:
       </p>
       <pre><code>python -c "
 from docintel.packs.registry import load_packs
 for p in load_packs():
     print(p.name, '-&gt;', p.doc_types)
 "</code></pre>
+      <p><strong>Result on a fresh install: nothing.</strong> Here are the four reference examples under <code>tests/fixtures/packs/</code>, showing every onboarding shape:</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Vendors</th><th>doc_types</th></tr></thead>
+          <thead><tr><th>Pack</th><th>Onboarding shape</th><th>Example vendors</th><th>doc_types</th></tr></thead>
           <tbody>
             <tr><td><code>northstar</code></td><td>Full Python module</td><td>complete_beverage_destruction, dtss, edco, federal_recycling, upak, veritiv</td><td>standard_invoice, credit_memo, contra_invoice, invoice_with_attachment, statement_of_account, own_paperwork</td></tr>
             <tr><td><code>digitaldirection</code></td><td>Full Python module</td><td>centracom, comcast, lumen, windstream</td><td>telecom_bill, credit_memo, disconnect_notice, contract</td></tr>
@@ -792,7 +796,7 @@ for p in load_packs():
           </tbody>
         </table>
       </div>
-      <p>Four packs, three genuinely different onboarding shapes — the choice depends on exactly one question: <strong>does this company need a fact or a rule the page can never print, that no existing hook already supplies?</strong></p>
+      <p>Four reference packs, three genuinely different onboarding shapes — the choice depends on exactly one question: <strong>does this company need a fact or a rule the page can never print, that no existing hook already supplies?</strong></p>
       <div class="card-grid">
         <div class="card"><h4>Pure data — <code>acme_freight</code></h4><p>One <code>pack.json</code>, a <code>personas/</code> folder, zero Python. Gets the ladder, claim guard, field sets, thresholds, aliases. Cannot register a pack-specific hook. Right when a company's business logic is fully covered by the shared op registry.</p></div>
         <div class="card"><h4>Hybrid — <code>spt_metals</code></h4><p>A thin class wrapping a <code>DataPack</code> for everything a data-only pack already does, adding exactly one <code>afterExtraction</code> hook to supply weight-tier margins, a CTL adder, and per-state freight rates — none ever printed on the invoice. ~120 lines, not ~1,200. Right when one non-printed fact is missing and nothing else is.</p></div>
@@ -807,7 +811,7 @@ for p in load_packs():
 
     <section id="new-vendor" class="wide">
       <h2>Configuring a new vendor of an existing company</h2>
-      <p>The common case: <code>northstar</code> or <code>digitaldirection</code> already exists, and a 7th (or 5th) vendor starts billing them. <strong>This is a configuration change, not a software release.</strong></p>
+      <p>A common pattern (once a pack exists, as shown in the reference examples above): a 7th vendor for <code>northstar</code>, or another carrier for <code>digitaldirection</code>. <strong>This is a configuration change, not a software release.</strong> An adopter who owns the pack (either by forking the reference or building their own) adds a persona to that pack's <code>personas/</code> folder:</p>
 
       <ol class="steps">
         <li>

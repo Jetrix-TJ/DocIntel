@@ -131,7 +131,7 @@ Confirm nothing regressed and the new vendor scores correctly.
 
 ## 5. No commit access to this repo? Two fully-supported paths, zero repo edits
 
-**A new vendor for a pack that already ships** (`northstar`, `spt_metals`, `digitaldirection`, etc.): set `DOCINTEL_EXTRA_PERSONAS_DIR` to a directory you own, laid out `<dir>/<pack_name>/*.json` (personas) plus an optional `aliases.local.json`. Picked up automatically by the CLI — no code change, no script.
+**A new vendor for an existing pack** (like the reference examples `northstar`, `spt_metals`, or `digitaldirection`): set `DOCINTEL_EXTRA_PERSONAS_DIR` to a directory you own, laid out `<dir>/<pack_name>/*.json` (personas) plus an optional `aliases.local.json`. Picked up automatically by the CLI — no code change, no script.
 
 > **One tested exception**: for `digitaldirection` specifically, a genuinely new carrier billing a client not already in the managed-client roster still needs a real edit to the shipped alias table (a PR) — the overlay reaches persona lookup and fingerprint resolution but not that particular claim decision. Check a pack's claim-rule `kind` before assuming the overlay alone is enough.
 

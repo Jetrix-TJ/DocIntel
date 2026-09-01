@@ -439,7 +439,7 @@
         <thead><tr><th>Folder</th><th>Read by</th><th>Required for</th></tr></thead>
         <tbody>
           <tr><td><code>my_packs/&lt;company&gt;/</code></td><td><code>load_pack_file()</code>, passed to <code>extra_packs=[...]</code></td><td>A wholly new company no shipped pack claims</td></tr>
-          <tr><td><code>&lt;DOCINTEL_EXTRA_PERSONAS_DIR&gt;/&lt;pack_name&gt;/</code></td><td><code>registry.load_extra_personas</code>/<code>load_extra_aliases</code>, via one env var</td><td>A new vendor under a pack that already ships — picked up by the CLI automatically, no script needed</td></tr>
+          <tr><td><code>&lt;DOCINTEL_EXTRA_PERSONAS_DIR&gt;/&lt;pack_name&gt;/</code></td><td><code>registry.load_extra_personas</code>/<code>load_extra_aliases</code>, via one env var</td><td>A new vendor under an existing pack (e.g., a reference example) — picked up by the CLI automatically, no script needed</td></tr>
           <tr><td><code>docs/corpus/gold/</code></td><td><code>scorecard.replay_gold</code> — a plain relative path from wherever the process runs</td><td>An automated "did this change break anything" regression check</td></tr>
           <tr><td><code>var/jobs.sqlite3</code></td><td><code>SQLiteJobQueue</code>, passed as <code>jobs=</code></td><td>A durable place a hard-miss or low-confidence document actually lands for a human</td></tr>
         </tbody>

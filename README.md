@@ -100,11 +100,10 @@ versus what a human always checks — see
 directly in a browser).
 
 **No commit access to this repo?** A vendor, or a whole new company, can be onboarded entirely
-from your own project — `DOCINTEL_EXTRA_PERSONAS_DIR` for a vendor under a company docintel
-already ships, `build_pipeline(..., extra_packs=[pack])` for a wholly new one. Neither touches
-the installed package, so `pip install --upgrade` never wipes them out. Full step-by-step, with
-a worked example (three real invoices, three different clients, zero repo edits), is in the one
-doc below.
+from your own project — `DOCINTEL_EXTRA_PERSONAS_DIR` for a vendor under an existing pack,
+`build_pipeline(..., extra_packs=[pack])` for a wholly new one. Neither touches the installed
+package, so `pip install --upgrade` never wipes them out. Full step-by-step, with a worked example
+(three real invoices, three different clients, zero repo edits), is in the one doc below.
 
 ## Go deeper — one page, everything
 
@@ -119,6 +118,10 @@ data & scoring, and a troubleshooting section built from the real gotchas hit wh
 narrative companion for a reviewing engineer deciding whether to adopt this: the two ideas that
 explain the whole design, a walkthrough of one document end to end, per-mechanism Q&A, and an
 honest table of what's deliberately not shipped yet.
+
+**[`docs/BUGS-FEATURES-PRODUCTION.md`](docs/BUGS-FEATURES-PRODUCTION.md)** — the running, honest list
+of what's broken, what's missing, and what production actually needs. Read this before deciding
+whether a gap you hit is known or new.
 
 ## Everyday commands
 
