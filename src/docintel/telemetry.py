@@ -27,7 +27,16 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-DEFAULT_LOG_PATH = "var/logs/docintel.jsonl"
+from docintel.paths import state_root
+
+
+def _default_log_path() -> str:
+    """Final fallback when neither an explicit `path` nor
+    `DOCINTEL_TELEMETRY_LOG` is given: `state_root() / "logs/docintel.jsonl"`
+    (`state_root()` itself honors `DOCINTEL_STATE_DIR`, else `var`, matching
+    the historical default)."""
+    return str(state_root() / "logs" / "docintel.jsonl")
+
 
 _LOGGER_NAME = "docintel.telemetry"
 
@@ -53,10 +62,11 @@ def configure(path: str | None = None) -> logging.Logger:
     Safe to call more than once - each call replaces only the handler
     *this module itself previously attached*, never a handler an adopter or
     a different caller added to this logger name. `path` defaults to
-    `DOCINTEL_TELEMETRY_LOG` if set, then `DEFAULT_LOG_PATH` - the same
-    override convention `jobs.store`/`evals.history` already use.
+    `DOCINTEL_TELEMETRY_LOG` if set, then `state_root() / "logs/docintel.jsonl"`
+    - the same override convention `jobs.store` already uses, falling back
+    to the shared `docintel.paths.state_root()` root.
     """
-    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or DEFAULT_LOG_PATH
+    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or _default_log_path()
     logger = logging.getLogger(_LOGGER_NAME)
     for handler in list(logger.handlers):
         if getattr(handler, _OWNED_MARKER, False):
@@ -141,9 +151,9 @@ def aggregate(path: str | None = None, since_days: float | None = None) -> dict[
     confidence across whatever `log_record` has written - the trend view
     `docintel telemetry-report` prints. `path` resolves the same way
     `configure()`'s does: given path, then `DOCINTEL_TELEMETRY_LOG`, then
-    `DEFAULT_LOG_PATH`.
+    `state_root() / "logs/docintel.jsonl"`.
     """
-    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or DEFAULT_LOG_PATH
+    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or _default_log_path()
     entries = _read_lines(resolved)
     if since_days is not None:
         cutoff = datetime.now(UTC) - timedelta(days=since_days)
@@ -177,7 +187,7 @@ def problem_records(path: str | None = None, since_days: float | None = None) ->
     `aggregate()` reports. Same file, same age-filtering convention as
     `aggregate()`; reads only, never writes.
     """
-    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or DEFAULT_LOG_PATH
+    resolved = path or os.environ.get("DOCINTEL_TELEMETRY_LOG") or _default_log_path()
     entries = _read_lines(resolved)
     if since_days is not None:
         cutoff = datetime.now(UTC) - timedelta(days=since_days)

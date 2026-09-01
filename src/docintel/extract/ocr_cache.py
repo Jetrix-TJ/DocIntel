@@ -38,9 +38,10 @@ from pathlib import Path
 
 from docintel.core.geometry import line_tolerance
 from docintel.core.models import PageText, Word
+from docintel.paths import state_root
 
-CACHE_DIR = Path("var") / "ocr-cache"
 ENV_DISABLE = "DOCINTEL_OCR_CACHE"
+ENV_CACHE_DIR = "DOCINTEL_OCR_CACHE_DIR"
 MAX_ENTRIES = 512  # eviction cap: oldest-by-mtime entries are pruned past this
 
 # Bumped whenever a change to `ocr.py`'s extraction/scaling logic - or to
@@ -61,6 +62,17 @@ MAX_ENTRIES = 512  # eviction cap: oldest-by-mtime entries are pruned past this
 #       - a v1 image-OCR cache entry's word coordinates are in the WRONG
 #       coordinate space for every downstream region selector.
 CACHE_SCHEMA_VERSION = 2
+
+
+def _cache_dir() -> Path:
+    """Where cache entries live: `DOCINTEL_OCR_CACHE_DIR` if set, else
+    `state_root() / "ocr-cache"`. Previously a module-level `CACHE_DIR`
+    constant with no override at all - this closes that gap while still
+    falling back to the same shared root the other two `var/...` writers
+    (`jobs.store`, `telemetry`) fall back to.
+    """
+    override = os.environ.get(ENV_CACHE_DIR)
+    return Path(override) if override else state_root() / "ocr-cache"
 
 
 def enabled() -> bool:
@@ -115,7 +127,7 @@ def cache_key(
 
 
 def _cache_path(key: str) -> Path:
-    return CACHE_DIR / f"{key}.json"
+    return _cache_dir() / f"{key}.json"
 
 
 def load(key: str) -> tuple[PageText, ...] | None:
@@ -169,7 +181,7 @@ def save(key: str, pages: tuple[PageText, ...]) -> None:
     if not enabled():
         return
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _cache_dir().mkdir(parents=True, exist_ok=True)
         raw = [
             {
                 "page_number": p.page_number,
@@ -191,7 +203,7 @@ def save(key: str, pages: tuple[PageText, ...]) -> None:
 
 def _evict_oldest_past_cap() -> None:
     try:
-        entries = sorted(CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        entries = sorted(_cache_dir().glob("*.json"), key=lambda p: p.stat().st_mtime)
         excess = len(entries) - MAX_ENTRIES
         for stale in entries[:excess]:
             try:

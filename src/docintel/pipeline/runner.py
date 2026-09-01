@@ -75,9 +75,10 @@ class Runner:
         # Opt-in only: stays fully inert (no directory/file/handler created)
         # unless a caller explicitly asks. `True` uses telemetry.configure()'s
         # own default-path resolution ($DOCINTEL_TELEMETRY_LOG, then
-        # DEFAULT_LOG_PATH); a string is an explicit override. A bad path
-        # raises HERE, at construction - the caller opted in and should know
-        # immediately, not silently on the first document processed.
+        # docintel.paths.state_root()); a string is an explicit override. A
+        # bad path raises HERE, at construction - the caller opted in and
+        # should know immediately, not silently on the first document
+        # processed.
         self._telemetry: Any = None
         self._telemetry_warned = False
         if telemetry:
