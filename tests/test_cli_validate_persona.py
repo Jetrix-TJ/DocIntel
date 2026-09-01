@@ -146,6 +146,38 @@ def test_a_missing_pack_file_fails_cleanly(tmp_path, capsys):
     assert "could not load pack file" in capsys.readouterr().err
 
 
+def test_pack_file_warns_about_a_field_that_can_silently_disappear(tmp_path, capsys):
+    """acme_freight's standard_invoice declares invoice_number, but this persona
+    covers everything else and leaves it with no selector, not required, and
+    supplied by no op - exactly the authoring gap `undeclared_risk_fields`
+    exists to surface. Must still exit 0: this is a warning, not a failure."""
+    persona = {
+        "sender_fingerprint": "acmefreight.example|acme freight services",
+        "doc_type": "standard_invoice",
+        "rule_version": 1,
+        "status": "active",
+        "field_selectors": [
+            {"field": "bill_to_name", "region": "top-left", "pattern": "text"},
+            {"field": "vendor_name", "region": "header-block", "pattern": "text"},
+            {"field": "invoice_date", "anchor": "Date", "region": "near-anchor", "pattern": "date"},
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor", "pattern": "currency"},
+            # invoice_number has NO selector at all
+        ],
+    }
+    persona_path = _write(tmp_path, "persona.json", persona)
+
+    result = main([
+        "validate-persona", persona_path,
+        "--pack-file", "tests/fixtures/packs/acme_freight/pack.json",
+    ])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "pack 'acme_freight'" in captured.out
+    assert "warning:" in captured.err
+    assert "invoice_number" in captured.err
+
+
 def test_pack_and_pack_file_are_mutually_exclusive(tmp_path, capsys):
     persona_path = _write(tmp_path, "persona.json", _GOOD_PERSONA)
 

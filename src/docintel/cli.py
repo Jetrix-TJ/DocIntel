@@ -588,7 +588,7 @@ def _cmd_validate_persona(args: argparse.Namespace) -> int:
     claiming to have checked everything past it.
     """
     from docintel.core.errors import ValidationError
-    from docintel.grammar.validator import validate_persona
+    from docintel.grammar.validator import undeclared_risk_fields, validate_persona
 
     try:
         with open(args.persona, encoding="utf-8") as fh:
@@ -624,6 +624,14 @@ def _cmd_validate_persona(args: argparse.Namespace) -> int:
 
     if pack is not None:
         print(f"OK: {args.persona} is valid against pack {pack.name!r}.")
+        risky = undeclared_risk_fields(persona, pack)
+        if risky:
+            print(
+                f"warning: {len(risky)} field(s) can silently disappear - declared by "
+                "the pack, not required, no op supplies them, no selector covers them: "
+                f"{', '.join(risky)}",
+                file=sys.stderr,
+            )
     else:
         print(
             f"OK: {args.persona} is structurally valid. "

@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from docintel.core.errors import ValidationError
-from docintel.grammar.validator import validate_persona
+from docintel.grammar.validator import undeclared_risk_fields, validate_persona
 
 
 def _base(**over: Any) -> dict[str, Any]:
@@ -882,3 +882,68 @@ def test_a_required_field_with_neither_selector_nor_op_still_fails_v13() -> None
              "pattern": "currency"},
         ]), pack=FakePack(fields={"total_printed", "bill_to_name"},
                           required={"bill_to_name"}))
+
+
+# ==========================================================================
+# undeclared_risk_fields: the authoring-time warning behind the s7_gate blind
+# spot. Non-fatal by construction - see the function's own docstring for why
+# this must never become a V-numbered hard failure.
+# ==========================================================================
+
+
+def test_undeclared_risk_fields_flags_an_optional_money_field_with_no_selector_and_no_op() -> None:
+    pack = FakePack(
+        fields={"bill_to_name", "subtotal", "total_printed"},
+        required={"bill_to_name"},
+    )
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "bill_to_name", "region": "top-left", "pattern": "text"},
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+            # subtotal has NO selector at all
+        ],
+    }
+    risky = undeclared_risk_fields(persona, pack)
+    assert risky == ["subtotal"]
+
+
+def test_undeclared_risk_fields_does_not_flag_a_field_an_op_supplies() -> None:
+    """vendor_name is exactly what `resolve_vendor_alias` supplies (schema.py):
+    Lumen's letterhead is an image and Windstream's text layer breaks the brand
+    mid-word, so no selector can or should exist for it - it must not be flagged."""
+    pack = FakePack(fields={"vendor_name"})
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency", "adjust": ["resolve_vendor_alias"]},
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == []
+
+
+def test_undeclared_risk_fields_does_not_flag_a_required_field() -> None:
+    """A required field with no selector is V13's job, not this warning's -
+    flagging it too would be redundant noise on top of a hard failure."""
+    pack = FakePack(fields={"bill_to_name"}, required={"bill_to_name"})
+    persona = {"doc_type": "standard_invoice", "field_selectors": []}
+    assert undeclared_risk_fields(persona, pack) == []
+
+
+def test_undeclared_risk_fields_does_not_flag_a_derived_only_field() -> None:
+    """amount_payable can never carry a selector (V10); it would be flagged on
+    every persona ever written if this function didn't exempt it too."""
+    pack = FakePack(
+        fields={"amount_payable", "total_printed"},
+        derived_only={"amount_payable"},
+    )
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == []

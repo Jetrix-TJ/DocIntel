@@ -523,6 +523,35 @@ def _check_required_coverage(
             )
 
 
+def undeclared_risk_fields(persona: Mapping[str, Any], pack: Pack) -> list[str]:
+    """Fields that can silently vanish: declared by the pack, not required, not
+    derived_only, not supplied by any adjust op, and not covered by any selector
+    in THIS persona.
+
+    Non-fatal on purpose. V1 through V13 are the hard security boundary (spec
+    Part 6, "the agent writes data, never code") and every one of them rejects
+    the whole write. This is different: a field genuinely CAN be legitimately
+    absent on some vendor's documents, so making this a hard validation failure
+    would break real, already-shipped personas. It exists to be surfaced as a
+    warning at authoring time - see `cli.py`'s `_cmd_validate_persona` - not to
+    block anything.
+    """
+    doc_type = persona.get("doc_type")
+    if doc_type is None:
+        return []
+    declared = set(pack.fields_for(doc_type))
+    required = set(pack.required_fields(doc_type))
+    derived = set(pack.derived_only_fields(doc_type))
+    supplied = set(_op_supplied(persona))
+    covered = {
+        str(sel["field"])
+        for sel in persona.get("field_selectors", ())
+        if isinstance(sel, Mapping) and "field" in sel
+    }
+    at_risk = declared - required - derived - supplied - covered
+    return sorted(at_risk)
+
+
 def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> None:
     """Validate a persona write against V1-V13. Returns None; raises on any failure.
 
