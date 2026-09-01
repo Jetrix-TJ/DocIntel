@@ -74,17 +74,18 @@ real page: every document that didn't clear the bar, waiting for a decision.
 
 ## Supported file types
 
-| Format | Needs LibreOffice? | Without it |
-|---|---|---|
-| `.pdf` (native or scanned) | No | — |
-| `.png` `.jpg`/`.jpeg` `.tiff`/`.tif` `.bmp` `.gif` | No | — |
-| `.xlsx` | No | Extracts through a pure-Python fallback — a real HTML/image rendering built from the workbook itself, not a soffice conversion. Slightly lower fidelity than the LibreOffice path, never a dead letter for lack of it. |
-| `.docx` | **Yes** | Dead-letters with a clear, actionable error (`"LibreOffice ('soffice') is not installed or not on PATH"`) — there's no fallback for Word documents today. |
-| `.txt` `.csv` `.html`/`.htm` | No | — |
-| `.eml` / `.msg` | No (`.msg` needs the `email` extra) | Unwrapped automatically — every real attachment inside becomes its own document, processed on its own merits, through this same table. |
+| File type | Supported | Needs LibreOffice |
+|---|:---:|---|
+| PDF (native or scanned) | ✅ | No |
+| PNG / JPG / TIFF / BMP / GIF | ✅ | No |
+| TXT / CSV / HTML | ✅ | No |
+| `.eml` / `.msg` | ✅ | No (`.msg` needs the `email` extra) |
+| **XLSX** | ✅ | **No** — works either way. Without it, a pure-Python fallback (a real HTML/image rendering built from the workbook itself) is used instead — slightly lower fidelity, never a dead letter for lack of it. |
+| **DOCX** | ✅ | **Yes** — required, no fallback. Without it, a `.docx` dead-letters with a clear, actionable error rather than failing silently. |
 
 One call (`docintel process`) handles every row above the same way — no format-specific flag,
-no branching in your own code.
+no branching in your own code. `.eml`/`.msg` is unwrapped automatically: every real attachment
+inside becomes its own document, processed on its own merits through this same table.
 
 ## Whose bill is it, and how do you add a new vendor?
 
