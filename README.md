@@ -7,7 +7,7 @@ about rather than guessing.
 ## Install
 
 ```bash
-pip install "docintel[ui] @ git+https://github.com/jeevatechjays/DocIntel.git"
+pip install "docintel[ui] @ git+https://github.com/Jetrix-TJ/DocIntel.git"
 ```
 
 Contributing to docintel itself instead of just using it? Clone the repo and install editable:

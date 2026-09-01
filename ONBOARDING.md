@@ -9,7 +9,7 @@ This guide covers two things: **installing and running it**, and **onboarding a 
 ## 1. Install
 
 ```bash
-pip install "docintel[ui] @ git+https://github.com/jeevatechjays/DocIntel.git"
+pip install "docintel[ui] @ git+https://github.com/Jetrix-TJ/DocIntel.git"
 ```
 
 Contributing to the repo itself instead of just using it? Clone it and install editable:
