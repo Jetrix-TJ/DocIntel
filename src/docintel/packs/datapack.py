@@ -162,6 +162,23 @@ class DataPack:
             raise PackSpecError(
                 f"{name}: fields declared for undeclared doc_types {sorted(unknown)}"
             )
+
+        # Validate that each fields.<doc_type> entry only has allowed keys. A typo
+        # like "require" instead of "required" would otherwise silently disable
+        # required-field enforcement with no error anywhere.
+        _ALLOWED_FIELDS_KEYS = frozenset({"all", "required", "any_of", "derived_only", "_why"})
+        for doc_type, field_spec in self._fields.items():
+            if not isinstance(field_spec, dict):
+                raise PackSpecError(f"{name}: fields[{doc_type!r}] must be an object")
+            bad_keys = set(field_spec) - _ALLOWED_FIELDS_KEYS
+            if bad_keys:
+                raise PackSpecError(
+                    f"{name}: fields[{doc_type!r}] has unrecognized key(s) {sorted(bad_keys)} - "
+                    f"only {sorted(_ALLOWED_FIELDS_KEYS)} are valid. A typo here (e.g. 'require' "
+                    f"instead of 'required') would otherwise silently disable that key's "
+                    f"enforcement with no error."
+                )
+
         unknown_vision = set(self._vision_defaults) - set(self.doc_types)
         if unknown_vision:
             raise PackSpecError(

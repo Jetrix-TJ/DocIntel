@@ -405,3 +405,24 @@ def test_vision_defaults_is_not_a_required_pack_protocol_method() -> None:
     for pack in load_packs():
         if pack.name in ("northstar", "digitaldirection"):
             assert getattr(pack, "vision_defaults", None) is None
+
+
+# --------------------------------------------------------------------------
+# fields.<doc_type> key validation - catch typos at load time
+# --------------------------------------------------------------------------
+
+
+def test_a_typo_d_fields_key_raises_at_load_time_instead_of_silently_disabling_it() -> None:
+    """A pack author who writes `"require"` instead of `"required"` silently
+    gets zero required-field enforcement with no error anywhere today. Validate
+    the key set at load time, matching every other structural check already
+    in DataPack.__init__."""
+    spec = _spec()
+    spec["fields"][spec["doc_types"][0]] = {
+        "all": ["vendor_name"],
+        "require": ["vendor_name"],  # TYPO: should be "required"
+        "any_of": [],
+        "derived_only": [],
+    }
+    with pytest.raises(PackSpecError, match="require"):
+        DataPack(spec, directory=str(PACK_DIR))
