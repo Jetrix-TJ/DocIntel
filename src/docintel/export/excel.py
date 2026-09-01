@@ -30,6 +30,22 @@ class UnknownLayoutError(ValueError):
     every other closed-vocabulary check in this codebase."""
 
 
+_FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
+
+
+def _escape_formula_injection(value: Any) -> Any:
+    """A leading =/+/-/@ makes Excel treat a cell as a live formula. Prefix
+    with a single quote, which every spreadsheet application already renders
+    as "force this to be text" - the same guard OWASP recommends for any
+    CSV/XLSX export of untrusted string data. Non-strings pass through
+    unchanged; a leading '-' on a real negative number never reaches this
+    function as a string in the first place (see _get()'s callers, which
+    keep numeric fields as numbers, not formatted strings)."""
+    if isinstance(value, str) and value.startswith(_FORMULA_TRIGGER_CHARS):
+        return "'" + value
+    return value
+
+
 def _get(record: dict[str, Any], *, field: str | None = None, derived: str | None = None) -> Any:
     if field is not None:
         return (record.get("fields") or {}).get(field)
@@ -114,5 +130,6 @@ def write_records_to_xlsx(
     worksheet.title = layout
     worksheet.append(header)
     for record in records:
-        worksheet.append(row_fn(record))
+        row = [_escape_formula_injection(cell) for cell in row_fn(record)]
+        worksheet.append(row)
     workbook.save(path)
