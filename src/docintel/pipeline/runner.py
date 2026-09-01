@@ -57,10 +57,16 @@ class Runner:
         hooks: HookRegistry,
         max_retries: int = 0,
         telemetry: bool | str = False,
+        retry_backoff_seconds: float = 0.5,
     ) -> None:
         self.stages = stages
         self.hooks = hooks
         self.max_retries = max_retries
+        # Exponential: retry_backoff_seconds * 2**attempt between attempts.
+        # Retries are the exception path, not the common one, so the default
+        # is meaningfully non-instant (a real rate limit needs a moment to
+        # clear) without materially slowing a normal, non-retrying run.
+        self.retry_backoff_seconds = retry_backoff_seconds
         self._intaken = 0
         self._emitted = 0
         # One index per Runner: duplicate detection is scoped to a single run
@@ -209,11 +215,13 @@ class Runner:
     def _run_one(self, stage: Stage, ctx: JobContext) -> JobContext:
         attempts = self.max_retries + 1
         last: Exception | None = None
-        for _ in range(attempts):
+        for attempt in range(attempts):
             try:
                 result = stage.run(ctx)
             except TransientError as exc:
                 last = exc
+                if attempt < attempts - 1:  # never sleep after the final attempt
+                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
                 continue
             if not isinstance(result, JobContext):
                 raise TypeError(f"stage {stage.name!r} must return a JobContext")

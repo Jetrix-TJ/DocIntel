@@ -1,5 +1,7 @@
 import glob
 import os
+import threading
+import unittest.mock
 
 import pdfplumber
 from PIL import Image, ImageDraw
@@ -46,6 +48,95 @@ def test_detection_is_memoized_and_does_not_mutate_shared_state():
     first = detect_flattened(FEDERAL, pages, meta)
     second = detect_flattened(FEDERAL, pages, meta)
     assert first is second is True
+
+
+def test_pdfium_render_lock_serializes_concurrent_calls():
+    """Proves the lock is actually acquired around the pdfium-touching call:
+    patches the REAL pdfplumber Page.to_image (not an invented fake page —
+    this file has no such fixture) to detect re-entrancy while "rendering".
+
+    `detect_flattened` is memoized (`functools.lru_cache`, see
+    `annotations.py`), so a cache hit would skip `to_image` entirely and make
+    this test vacuous. Guard against that explicitly with a call counter,
+    not just the in-flight list, per the task brief's instruction — a
+    fixture already cached (e.g. because another test in this file ran
+    first, in the same process) must not silently turn this into a no-op.
+
+    Note: a bare `threading.Thread` swallows an `AssertionError` raised
+    inside its target — `Thread.join()` does not re-raise it, pytest only
+    logs a `PytestUnhandledThreadExceptionWarning`, and the test itself
+    still reports PASSED. Confirmed by running this against the pre-fix
+    code with the naive "just start/join" version: it printed the exact
+    re-entrancy AssertionError to the warnings summary yet pytest still said
+    "1 passed". Threads therefore report failures into a shared list that
+    the main thread inspects after joining, so a re-entrancy violation
+    actually fails the test.
+    """
+    import pdfplumber.page
+
+    calls_in_flight = []
+    call_count = 0
+    original_to_image = pdfplumber.page.Page.to_image
+
+    def tracking_to_image(self, *args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        calls_in_flight.append(1)
+        assert len(calls_in_flight) == 1, "two calls entered the pdfium region concurrently"
+        try:
+            return original_to_image(self, *args, **kwargs)
+        finally:
+            calls_in_flight.pop()
+
+    errors: list[BaseException] = []
+
+    def run_detect_flattened(pages, meta):
+        try:
+            detect_flattened(CLEAN, pages, meta)
+        except BaseException as exc:  # noqa: BLE001 - propagate any thread failure to the main thread
+            errors.append(exc)
+
+    with unittest.mock.patch.object(pdfplumber.page.Page, "to_image", tracking_to_image):
+        pages, meta, _ = load_document(CLEAN)
+        threads = [threading.Thread(target=run_detect_flattened, args=(pages, meta)) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert not errors, f"{len(errors)} thread(s) raised: {errors[0]!r}"
+    assert call_count >= 1, (
+        "tracking_to_image was never called - detect_flattened(CLEAN, ...) must have hit the "
+        "memoization cache (populated by an earlier test in this process) rather than actually "
+        "rendering, so this run proves nothing about the lock; run in isolation "
+        "(pytest ... -k pdfium_render_lock) to get a real, uncached exercise of the lock."
+    )
+
+
+def test_concurrent_detection_on_real_fixtures_produces_correct_results_under_load():
+    """A softer regression guard using this file's own real fixtures: many
+    threads calling detect_flattened concurrently must all still return the
+    correct, already-established answer (see test_clean_document_is_not_flagged
+    and test_federal_recycling_flattened_annotations_are_detected above) - not
+    a segfault, not a wrong result from interleaved native state."""
+    federal_pages, federal_meta, _ = load_document(FEDERAL)
+    clean_pages, clean_meta, _ = load_document(CLEAN)
+    results = []
+
+    def check_federal():
+        results.append(("federal", detect_flattened(FEDERAL, federal_pages, federal_meta)))
+
+    def check_clean():
+        results.append(("clean", detect_flattened(CLEAN, clean_pages, clean_meta)))
+
+    threads = [threading.Thread(target=check_federal if i % 2 == 0 else check_clean) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    for name, result in results:
+        assert result == (name == "federal")
 
 
 def test_greyscale_annotations_are_a_known_blind_spot_not_detected():

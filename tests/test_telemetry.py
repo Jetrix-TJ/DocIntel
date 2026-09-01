@@ -80,6 +80,33 @@ def test_configure_replaces_prior_handlers_not_accumulates(tmp_path):
     assert (tmp_path / "second.jsonl").read_text().strip() != ""
 
 
+def test_configure_never_closes_a_handler_it_did_not_attach_itself(tmp_path):
+    """Task 14: an adopter (or a different caller) may attach their own
+    handler to this exact logger name to also stream telemetry into their
+    own observability pipeline. configure() must never close it out from
+    under them - only a handler this module itself previously attached
+    (tagged via _OWNED_MARKER) is fair game to remove/close."""
+    import logging
+
+    logger = logging.getLogger("docintel.telemetry")
+    foreign_handler = logging.NullHandler()
+    logger.addHandler(foreign_handler)
+    try:
+        telemetry.configure(str(tmp_path / "telemetry.jsonl"))
+
+        assert foreign_handler in logger.handlers, "foreign handler was closed/removed"
+        assert getattr(foreign_handler, "_docintel_telemetry_owned", False) is False
+
+        # Prove it wasn't just left in the list but actually still usable -
+        # a closed handler would raise or no-op on emit.
+        record = logging.LogRecord(
+            "docintel.telemetry", logging.INFO, __file__, 0, "probe", None, None,
+        )
+        foreign_handler.handle(record)  # must not raise
+    finally:
+        logger.removeHandler(foreign_handler)
+
+
 def test_aggregate_on_a_missing_file_is_all_zeroes(tmp_path):
     result = telemetry.aggregate(str(tmp_path / "nope.jsonl"))
     assert result == {

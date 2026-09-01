@@ -10,6 +10,13 @@ name: CI
 # main, not on "100% green". The gold corpus is at 1/15 today - gating on
 # all-green would block every future PR immediately and teach people to
 # route around CI, not fix real drift.
+#
+# lint/typecheck/test are three independent jobs, not one linear job's
+# steps - a ruff failure must never hide whether the test suite itself
+# would have passed. Ruff is pinned to an exact version (see pyproject.toml's
+# `dev` extra) rather than a floor: an unpinned `ruff>=` always resolves the
+# newest release, which can add newly-selected default lint rules a repo was
+# never actually written against.
 
 on:
   push:
@@ -17,6 +24,36 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install docintel
+        run: pip install -e ".[dev]"
+
+      - name: ruff
+        run: ruff check src
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install docintel
+        run: pip install -e ".[dev]"
+
+      - name: mypy
+        run: mypy
+
   test:
     strategy:
       fail-fast: false
@@ -32,23 +69,23 @@ jobs:
 
       - name: Install Tesseract (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+        timeout-minutes: 10
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends tesseract-ocr
 
       - name: Install Tesseract (Windows)
         if: runner.os == 'Windows'
         run: choco install tesseract --version=5.3.3.20231005 -y
 
       - name: Install docintel
-        run: pip install -e ".[dev,ui]"
-
-      - name: ruff
-        run: ruff check src
-
-      - name: mypy
-        run: mypy
+        run: pip install -e ".[dev,ui,vision,export,email]"
 
       - name: pytest
         run: pytest -q
+
+      - name: Real-pack fixture suite (non-blocking today)
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        run: pytest tests/fixtures/packs/ -q
 
       # Eval history is per-runner-ephemeral by default; cache it per-branch
       # so a PR's "candidate" run has a real "baseline" (the last push to

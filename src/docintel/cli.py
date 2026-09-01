@@ -45,6 +45,14 @@ def _build_vision(mode: str, cassette: str) -> object:
         # inner=None: a replay must not be able to fall through to a live call.
         # That fallthrough is how a "deterministic" run quietly starts billing and
         # stops being reproducible.
+        if not os.path.isfile(cassette):
+            print(
+                f"warning: no cassette found at {cassette!r} - every vision lookup will "
+                f"miss. This is expected in a fresh install with no recorded cassette; "
+                f"pass --vision fake for a wiring check, or --vision live with "
+                f"GEMINI_API_KEY set for a real read.",
+                file=sys.stderr,
+            )
         return CassetteVision(inner=None, path=cassette, mode="replay")
 
     from docintel.adapters.vision.gemini_adapter import MODEL, GeminiVision
@@ -57,9 +65,23 @@ def _build_vision(mode: str, cassette: str) -> object:
 
 def _build_runner(args: argparse.Namespace | None = None, *, telemetry: bool = False) -> Runner:
     from docintel.jobs.store import SQLiteJobQueue
+    from docintel.packs.datapack import load_pack_file
 
     mode = getattr(args, "vision", None) or "cassette"
     cassette = getattr(args, "cassette", None) or DEFAULT_CASSETTE
+    # An adopter's own pack.json, given via `docintel process --extra-packs`
+    # (nargs="+" on the arg parser) - the CLI path to the `build_pipeline(
+    # extra_packs=[...])` library API (see CLAUDE.md's "Two ways to add
+    # vendor data" section). `DOCINTEL_EXTRA_PACKS` (os.pathsep-separated) is
+    # a fallback for a caller who can't pass CLI flags at all, matching the
+    # existing `DOCINTEL_EXTRA_PERSONAS_DIR` convention - only consulted when
+    # the flag itself was not given, never merged in behind an explicit flag.
+    extra_pack_paths = getattr(args, "extra_packs", None) or []
+    if not extra_pack_paths:
+        env_value = os.environ.get("DOCINTEL_EXTRA_PACKS")
+        if env_value:
+            extra_pack_paths = env_value.split(os.pathsep)
+    extra_packs = [load_pack_file(path) for path in extra_pack_paths]
     # A real queue: `docintel process` is a genuine production entry point, so
     # a hard-miss sender or an unknown prior_balance_basis should land
     # somewhere a reviewer can act on it (see `docintel.jobs.store`,
@@ -70,7 +92,10 @@ def _build_runner(args: argparse.Namespace | None = None, *, telemetry: bool = F
     # genuine production entry point, opts in by passing `telemetry=True` at
     # its own call site (see `Runner.process()`/`docintel.telemetry`).
     return build_pipeline(
-        vision=_build_vision(mode, cassette), jobs=SQLiteJobQueue(), telemetry=telemetry,
+        vision=_build_vision(mode, cassette),
+        jobs=SQLiteJobQueue(),
+        telemetry=telemetry,
+        extra_packs=extra_packs,
     )
 
 
@@ -588,7 +613,7 @@ def _cmd_validate_persona(args: argparse.Namespace) -> int:
     claiming to have checked everything past it.
     """
     from docintel.core.errors import ValidationError
-    from docintel.grammar.validator import validate_persona
+    from docintel.grammar.validator import undeclared_risk_fields, validate_persona
 
     try:
         with open(args.persona, encoding="utf-8") as fh:
@@ -624,6 +649,14 @@ def _cmd_validate_persona(args: argparse.Namespace) -> int:
 
     if pack is not None:
         print(f"OK: {args.persona} is valid against pack {pack.name!r}.")
+        risky = undeclared_risk_fields(persona, pack)
+        if risky:
+            print(
+                f"warning: {len(risky)} field(s) can silently disappear - declared by "
+                "the pack, not required, no op supplies them, no selector covers them: "
+                f"{', '.join(risky)}",
+                file=sys.stderr,
+            )
     else:
         print(
             f"OK: {args.persona} is structurally valid. "
@@ -919,6 +952,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("paths", nargs="+")
     p.add_argument("--json", action="store_true")
+    p.add_argument(
+        "--extra-packs",
+        nargs="+",
+        default=None,
+        metavar="PACK_JSON",
+        help="path(s) to a pack.json to load for this run - the CLI path to "
+             "build_pipeline(extra_packs=[...]) for a pack you authored. "
+             "Falls back to the DOCINTEL_EXTRA_PACKS env var (os.pathsep-"
+             "separated) when not given.",
+    )
     _add_vision_args(p)
     p.set_defaults(func=_cmd_process)
 

@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5", "mypy>=1.10"]
+dev = ["pytest>=8.0", "ruff==0.14.13", "mypy>=1.10"]
 # `pypdf` reads page count and enforces the byte/page ceilings before a PDF
 # is sent to Gemini (adapters/vision/gemini_adapter.py::_read_pdf) - without
 # it declared here, `docintel[vision]` installs clean and then fails with

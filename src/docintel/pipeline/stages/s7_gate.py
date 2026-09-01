@@ -197,20 +197,34 @@ class ConfidenceGate:
 
     def _confidence_lane(self, ctx: JobContext) -> str:
         thresholds = self._thresholds_for(ctx)
+        declared = self._declared_fields(ctx)
         short = [
-            name for name, score in ctx.confidence.items()
-            if score < thresholds.get(name, DEFAULT_THRESHOLD)
+            name for name in declared
+            if ctx.confidence.get(name, 0.0) < thresholds.get(name, DEFAULT_THRESHOLD)
         ]
         if not short:
             return "high"
 
-        very_low = [
-            name for name, score in ctx.confidence.items()
-            if score < VERY_LOW_FLOOR
-        ]
-        if len(very_low) / len(ctx.confidence) >= VERY_LOW_SHARE:
+        very_low = [name for name in declared if ctx.confidence.get(name, 0.0) < VERY_LOW_FLOOR]
+        if len(very_low) / len(declared) >= VERY_LOW_SHARE:
             return "low"
         return "medium"
+
+    def _declared_fields(self, ctx: JobContext) -> frozenset[str]:
+        """Every field the pack declares for this doc_type, unioned with anything
+        that produced a confidence entry anyway.
+
+        Iterating `ctx.confidence` alone (the prior behavior) is blind to a field
+        that never produced a value at all - no selector wrote to it, so it has
+        no entry to be "short" against. A pack-declared field with no confidence
+        entry is treated as score 0.0 (worse than any real miss the gate already
+        catches), which is what makes it count as `short` below. The union with
+        `ctx.confidence.keys()` keeps this correct even when `ctx.pack` is None
+        (a caller-injected `thresholds` test seam with no real pack attached).
+        """
+        getter = getattr(ctx.pack, "fields_for", None)
+        declared = getter(ctx.doc_type) if getter is not None and ctx.doc_type else frozenset()
+        return declared | frozenset(ctx.confidence.keys())
 
     # -- run ---------------------------------------------------------------
 

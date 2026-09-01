@@ -33,9 +33,10 @@ Three rules, each closing a specific hole:
 
 3. **Confidence is clamped, not trusted.** JSON Schema cannot express
    `minimum`/`maximum` (the API's supported-keyword subset omits them), so the
-   bound is enforced here. `CEILING` applies for the same reason it applies
-   everywhere else: this pipeline never reports certainty about a value read off a
-   document.
+   bound is enforced here. `VISION_CEILING` is applied separately from the global
+   `CEILING` because a model's self-reported confidence is not evidence the way a
+   matched selector's confidence is: a vision-only read must never itself clear an
+   auto-approve threshold.
 
 `sanitize` drops rather than raises. A model that returns one bad key alongside
 nine good values should give us the nine - the alternative is throwing away a
@@ -46,7 +47,7 @@ the bad key through.
 from __future__ import annotations
 
 from docintel.adapters.vision.port import VisionResult
-from docintel.core.confidence import CEILING, MODIFIERS
+from docintel.core.confidence import MODIFIERS
 from docintel.core.models import DERIVED_ONLY
 
 # Section 5 modifiers a vision model is a competent witness for. See rule 2.
@@ -59,6 +60,15 @@ VISION_OBSERVABLE: frozenset[str] = frozenset({
 # `FakeVision` and `s5b`'s own default: a vision read is a starting point, not a
 # strong one.
 DEFAULT_CONFIDENCE = 0.50
+
+# A model's self-reported confidence is not evidence the way a matched
+# selector's confidence is - a selector confirms it found the label AND the
+# shape it expected; a vision model can be confidently wrong about a value it
+# invented. Capped below the lowest threshold ANY shipped pack configures
+# (0.75-0.95, see selector-grammar.md section 5) so a vision-only read can
+# never itself clear the auto-approve bar - it can only ever land a document
+# in medium/review, same as any other soft-miss modifier.
+VISION_CEILING = 0.70
 
 # The LOWER clamp, and the other half of rule 3.
 #
@@ -80,7 +90,7 @@ DEFAULT_CONFIDENCE = 0.50
 # evidence about a selector.
 VISION_FLOOR = 0.50
 
-_CEILING = float(CEILING)
+_CEILING = float(VISION_CEILING)
 
 
 def _clean_value(value: object) -> str | None:

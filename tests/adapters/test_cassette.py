@@ -58,7 +58,8 @@ def test_replay_returns_the_recorded_result_without_calling_the_inner_adapter(tm
     result = v.extract(_pages(), ["total_printed"])
 
     assert result.fields["total_printed"] == "1177.70"
-    assert result.confidence["total_printed"] == pytest.approx(0.82)
+    # Confidence is clamped to VISION_CEILING (0.70), not the recorded 0.82.
+    assert result.confidence["total_printed"] == pytest.approx(0.70)
 
 
 def test_replay_miss_is_a_loud_failure_not_a_silent_empty_result(tmp_path):
@@ -95,7 +96,7 @@ def test_replay_sanitizes_the_entry_so_a_hand_edited_cassette_cannot_smuggle_a_f
     result = v.extract(_pages(), ["total_printed"])
 
     assert set(result.fields) == {"total_printed"}
-    assert result.confidence["total_printed"] == pytest.approx(0.99)  # clamped
+    assert result.confidence["total_printed"] == pytest.approx(0.70)  # clamped to VISION_CEILING
     assert result.irregularities == ["handwriting_detected"]
 
 

@@ -1,11 +1,12 @@
 import json
 import logging
+import time
 
 import pytest
 from docintel import telemetry
 from docintel.core.contract import validate_record
 from docintel.core.errors import PackError, PermanentError, TransientError
-from docintel.core.models import JobContext
+from docintel.core.models import JobContext, new_context
 from docintel.grammar.ops.derive import derive_document_identity
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
@@ -88,7 +89,10 @@ def test_transient_error_is_retried_then_dead_lettered():
             raise TransientError("timeout")
 
     flaky = Flaky()
-    r = Runner(stages=[flaky], hooks=HookRegistry(), max_retries=2)
+    # retry_backoff_seconds=0: this test is about retry-exhaustion behavior,
+    # not backoff timing (that's test_retries_wait_between_attempts_not_instant
+    # below) - zero keeps it from adding real wall-clock delay.
+    r = Runner(stages=[flaky], hooks=HookRegistry(), max_retries=2, retry_backoff_seconds=0)
     rec = r.process("d1", "/tmp/a.pdf")
     assert flaky.calls == 3            # initial + 2 retries
     assert rec["disposition"] == "dead_letter"
@@ -108,11 +112,57 @@ def test_transient_error_that_recovers_emits_processed():
                 raise TransientError("timeout")
             return _classified(ctx)
 
-    r = Runner(stages=[Flaky()], hooks=HookRegistry(), max_retries=2)
+    # retry_backoff_seconds=0: same rationale as the test above - this test
+    # is about eventual recovery, not backoff timing.
+    r = Runner(stages=[Flaky()], hooks=HookRegistry(), max_retries=2, retry_backoff_seconds=0)
     rec = r.process("d1", "/tmp/a.pdf")
     validate_record(rec)
     assert rec["disposition"] == "processed"
     assert r.stats == {"intaken": 1, "emitted": 1}
+
+
+def test_retries_wait_between_attempts_not_instant(monkeypatch):
+    """Task 14: three instant retries against a real rate limit make the
+    situation worse, not better - each retry must wait, and wait longer than
+    the last (exponential backoff)."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+
+    class AlwaysTransient:
+        name = "flaky"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            raise TransientError("rate limited")
+
+    runner = Runner(
+        stages=[AlwaysTransient()], hooks=HookRegistry(),
+        max_retries=2, retry_backoff_seconds=0.5,
+    )
+    with pytest.raises(TransientError):
+        runner._run_one(AlwaysTransient(), new_context("d1", "/tmp/a.pdf"))
+
+    assert sleeps == [pytest.approx(0.5), pytest.approx(1.0)]  # 0.5*2^0, 0.5*2^1
+
+
+def test_retries_never_sleep_after_the_final_attempt(monkeypatch):
+    """No point waiting once there are no more attempts left to make."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+
+    class AlwaysTransient:
+        name = "flaky"
+
+        def run(self, ctx: JobContext) -> JobContext:
+            raise TransientError("rate limited")
+
+    runner = Runner(
+        stages=[AlwaysTransient()], hooks=HookRegistry(),
+        max_retries=0, retry_backoff_seconds=0.5,
+    )
+    with pytest.raises(TransientError):
+        runner._run_one(AlwaysTransient(), new_context("d1", "/tmp/a.pdf"))
+
+    assert sleeps == []
 
 
 def test_the_invariant_holds_over_a_burst_with_mixed_failures():

@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import os
 
+from docintel.core.errors import PermanentError
 from docintel.core.models import JobContext
 from docintel.extract import (
     annotations,
@@ -76,6 +77,15 @@ from docintel.extract import (
 from docintel.extract.normalize import load_document, load_image_document
 
 ALLOWED_SUFFIXES = convert.ACCEPTED_SUFFIXES
+
+# A page-count ceiling, checked once every format branch below has settled on
+# a final `pages` tuple - generous relative to any real invoice (a 500-page,
+# 5MB PDF already measured 42.2s/2,969MB on one thread well under this), so
+# crossing it is itself evidence this was never a real invoice/bill. Raising
+# `PermanentError` here, rather than catching it locally, matches every other
+# Stage 2 rejection in this file (see the module docstring): the `Runner`'s
+# existing catch-all in `process()` turns it into `disposition = "dead_letter"`.
+MAX_PAGES = 750
 
 
 class AttachmentFilter:
@@ -161,6 +171,18 @@ class AttachmentFilter:
 
             pages, page_meta, text_source = load_document(path)
             has_flattened = annotations.detect_flattened(path, pages, page_meta)
+
+        if len(pages) > MAX_PAGES:
+            # Checked once here, after every format branch above has settled
+            # on a final `pages` tuple, rather than duplicated per-branch -
+            # a PDF/Office document is the realistic attack surface (the
+            # measured 500-page case), but an image/plaintext/XLSX-fallback
+            # document past the ceiling is just as clearly not a real
+            # invoice/bill.
+            raise PermanentError(
+                f"{len(pages)} pages exceeds the {MAX_PAGES}-page ceiling - "
+                f"this is almost certainly not a real invoice/bill"
+            )
 
         ctx.pages = pages
         ctx.page_meta, used_last_resort_role_fallback = pageroles.assign(pages, page_meta)

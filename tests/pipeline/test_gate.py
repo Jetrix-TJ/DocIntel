@@ -540,3 +540,26 @@ def test_empty_export_list_enqueues_nothing():
 def test_no_jobs_queue_with_an_auto_profile_is_a_safe_no_op():
     out = _gate(thresholds={}).run(_profile_ctx(reconciliation="auto", export=["standard"]))
     assert out.lane in {"high", "medium", "review", "low"}
+
+
+# ==========================================================================
+# Declared but missing fields
+# ==========================================================================
+
+
+def test_a_field_the_pack_declares_but_no_selector_ever_extracted_still_demotes_the_lane():
+    """The exact northstar-veritiv defect: five undeclared-required money
+    fields drop silently and the document still routes `high`."""
+    class _Pack:
+        thresholds: dict[str, float] = {}
+
+        def fields_for(self, doc_type: str) -> frozenset[str]:
+            return frozenset({"bill_to_name", "subtotal", "tax_amount", "total_printed"})
+
+    ctx = new_context("d", "/x.pdf")
+    ctx.pack = _Pack()
+    ctx.doc_type = "standard_invoice"
+    ctx.confidence = {"bill_to_name": 0.97, "total_printed": 0.95}  # subtotal, tax_amount MISSING
+    gate = ConfidenceGate()
+    lane = gate._confidence_lane(ctx)
+    assert lane != "high"

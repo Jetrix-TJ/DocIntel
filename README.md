@@ -39,7 +39,8 @@ pipeline = build_pipeline(vision=FakeVision())
 record = pipeline.process(document_id="d1", source_path="invoice.pdf")
 ```
 
-**One `Runner` per concurrent worker, not one shared across threads.** A `Runner`
+**One `Runner` per concurrent worker, not one shared across threads — and PDF
+rendering itself is also not thread-safe, independent of `Runner` count.** A `Runner`
 keeps small mutable state for the documents it processes (an in-run duplicate-detection
 index, a processed-document counter) — safe for one worker calling `.process()`
 repeatedly, not safe for two threads calling `.process()` on the *same* `Runner` at
@@ -47,6 +48,15 @@ once. `build_pipeline()` is cheap to call again per worker (the packs and person
 loads are cached process-wide), so the right pattern for a concurrent service is one
 `Runner` per worker/thread, built once and reused for that worker's whole lifetime —
 never a single `Runner` shared across concurrent callers.
+
+A `Runner` per worker fixes the Python-level state; it does NOT make concurrent PDF
+rendering safe, because pypdfium2 (reached during annotation detection) holds
+process-global native state — even one `Runner` per thread still crashes if two
+threads render PDFs at the same time. `docintel` serializes its own internal calls
+into pypdfium2 with a lock, but if your own code also renders PDFs directly
+alongside `docintel` in the same process, use process-based concurrency
+(`multiprocessing`, or a WSGI server's process workers rather than threads) for true
+isolation.
 
 ## Real-time notification
 
@@ -90,11 +100,10 @@ versus what a human always checks — see
 directly in a browser).
 
 **No commit access to this repo?** A vendor, or a whole new company, can be onboarded entirely
-from your own project — `DOCINTEL_EXTRA_PERSONAS_DIR` for a vendor under a company docintel
-already ships, `build_pipeline(..., extra_packs=[pack])` for a wholly new one. Neither touches
-the installed package, so `pip install --upgrade` never wipes them out. Full step-by-step, with
-a worked example (three real invoices, three different clients, zero repo edits), is in the one
-doc below.
+from your own project — `DOCINTEL_EXTRA_PERSONAS_DIR` for a vendor under an existing pack,
+`build_pipeline(..., extra_packs=[pack])` for a wholly new one. Neither touches the installed
+package, so `pip install --upgrade` never wipes them out. Full step-by-step, with a worked example
+(three real invoices, three different clients, zero repo edits), is in the one doc below.
 
 ## Go deeper — one page, everything
 
@@ -109,6 +118,10 @@ data & scoring, and a troubleshooting section built from the real gotchas hit wh
 narrative companion for a reviewing engineer deciding whether to adopt this: the two ideas that
 explain the whole design, a walkthrough of one document end to end, per-mechanism Q&A, and an
 honest table of what's deliberately not shipped yet.
+
+**[`docs/BUGS-FEATURES-PRODUCTION.md`](docs/BUGS-FEATURES-PRODUCTION.md)** — the running, honest list
+of what's broken, what's missing, and what production actually needs. Read this before deciding
+whether a gap you hit is known or new.
 
 ## Everyday commands
 

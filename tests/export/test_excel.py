@@ -98,3 +98,159 @@ def test_multiple_records_write_in_the_given_order(tmp_path):
     wb = openpyxl.load_workbook(path)
     rows = list(wb.active.iter_rows(values_only=True))
     assert [r[0] for r in rows[1:]] == ["d1", "d2"]
+
+
+def test_a_vendor_name_starting_with_equals_is_escaped_not_written_as_a_live_formula(tmp_path):
+    """A vendor name of =cmd|...!A1 becomes a live formula the instant Excel opens the file.
+    This is classic CSV/spreadsheet formula injection. Escape it with a leading single quote,
+    the standard spreadsheet text-force guard that every application renders as text."""
+    openpyxl = pytest.importorskip("openpyxl")
+    records = [{
+        "document_id": "d1",
+        "derived": {"vendor_name": "=cmd|'/c calc'!A1"},
+        "fields": {}, "disposition": "processed", "lane": "high",
+    }]
+    out_path = tmp_path / "out.xlsx"
+    write_records_to_xlsx(records, str(out_path), layout="standard")
+
+    wb = openpyxl.load_workbook(out_path)
+    cell_value = wb.active.cell(row=2, column=2).value  # vendor_name is column 2
+    assert not cell_value.startswith("="), f"Cell value should be escaped but got: {cell_value!r}"
+    assert cell_value.startswith("'"), f"Cell value should start with quote but got: {cell_value!r}"
+
+
+def test_formula_injection_escaping_covers_all_trigger_chars(tmp_path):
+    """Test all four formula-injection trigger characters: =, +, -, @ are escaped."""
+    openpyxl = pytest.importorskip("openpyxl")
+
+    test_cases = [
+        ("=cmd|'/c calc'!A1", "="),
+        ("+2+5", "+"),
+        ("-2+3", "-"),
+        ("@SUM(A1:A10)", "@"),
+    ]
+
+    for i, (injection_str, trigger_char) in enumerate(test_cases):
+        records = [{
+            "document_id": f"d{i}",
+            "derived": {"vendor_name": injection_str},
+            "fields": {}, "disposition": "processed", "lane": "high",
+        }]
+        out_path = tmp_path / f"out_{i}.xlsx"
+        write_records_to_xlsx(records, str(out_path), layout="standard")
+
+        wb = openpyxl.load_workbook(out_path)
+        cell_value = wb.active.cell(row=2, column=2).value  # vendor_name is column 2
+        # The escaped value should start with a single quote and contain the original content
+        assert cell_value.startswith("'"), (
+            f"Trigger char {trigger_char!r} should be escaped with a quote, "
+            f"but got: {cell_value!r}"
+        )
+        # The content after the quote should be the original injection string
+        expected = "'" + injection_str
+        assert cell_value == expected, (
+            f"Escaped value should be quote + original string, "
+            f"but got: {cell_value!r} instead of {expected!r}"
+        )
+
+
+def test_formula_injection_escaping_applies_to_telecom_detail_layout(tmp_path):
+    """Ensure escaping works for both standard and telecom_detail layouts."""
+    openpyxl = pytest.importorskip("openpyxl")
+    records = [{
+        "document_id": "d1",
+        "fields": {
+            "account_number": "0384043574",
+            "bill_date": "2026-01-01",
+        },
+        "derived": {
+            "vendor_name": "=cmd|'/c calc'!A1",
+            "amount_payable": "13752.60",
+        },
+        "disposition": "processed",
+        "lane": "high",
+    }]
+    out_path = tmp_path / "out.xlsx"
+    write_records_to_xlsx(records, str(out_path), layout="telecom_detail")
+
+    wb = openpyxl.load_workbook(out_path)
+    cell_value = wb.active.cell(row=2, column=2).value  # vendor_name is column 2
+    assert cell_value.startswith("'"), f"Cell value should be escaped but got: {cell_value!r}"
+
+
+def test_normal_strings_starting_with_other_chars_are_not_escaped(tmp_path):
+    """Ensure that normal strings that don't start with formula chars are not modified."""
+    openpyxl = pytest.importorskip("openpyxl")
+    records = [{
+        "document_id": "d1",
+        "derived": {"vendor_name": "NormalVendorName"},
+        "fields": {}, "disposition": "processed", "lane": "high",
+    }]
+    out_path = tmp_path / "out.xlsx"
+    write_records_to_xlsx(records, str(out_path), layout="standard")
+
+    wb = openpyxl.load_workbook(out_path)
+    cell_value = wb.active.cell(row=2, column=2).value  # vendor_name is column 2
+    assert cell_value == "NormalVendorName", f"Normal string should not be escaped: {cell_value!r}"
+
+
+def test_numeric_fields_are_unaffected_by_escaping(tmp_path):
+    """Numeric fields (like total_printed) are stored as strings by
+    core/contract.py's own serialization, but a string that parses as a
+    plain float is recognized as genuine numeric data and left alone."""
+    openpyxl = pytest.importorskip("openpyxl")
+    records = [{
+        "document_id": "d1",
+        "fields": {
+            "total_printed": "33876.40",  # This is a string representation of a number
+        },
+        "derived": {"vendor_name": "TestVendor"},
+        "disposition": "processed",
+        "lane": "high",
+    }]
+    out_path = tmp_path / "out.xlsx"
+    write_records_to_xlsx(records, str(out_path), layout="standard")
+
+    wb = openpyxl.load_workbook(out_path)
+    # total_printed is in column 5 of standard layout
+    cell_value = wb.active.cell(row=2, column=5).value
+    # The value should be "33876.40" without a leading quote
+    assert cell_value == "33876.40", f"Numeric string should not be escaped: {cell_value!r}"
+
+
+def test_negative_numeric_fields_are_not_corrupted_by_escaping(tmp_path):
+    """A leading '-' on a real negative number (payments_credits, carried_balance,
+    etc.) is a genuine, already-shipped data shape - core/contract.py serializes
+    Decimal fields as plain strings via format(value, "f"), so "-24120.20" is a
+    string starting with one of the formula-trigger characters. It must round-trip
+    unchanged, NOT come back as "'-24120.20" (a real, silent XLSX corruption that
+    breaks SUM()/arithmetic for the finance/AP audience the export exists for)."""
+    openpyxl = pytest.importorskip("openpyxl")
+    out_path = tmp_path / "out.xlsx"
+
+    write_records_to_xlsx([_RECORD], str(out_path), layout="telecom_detail")
+
+    wb = openpyxl.load_workbook(out_path)
+    header, data = list(wb.active.iter_rows(values_only=True))[0:2]
+    as_dict = dict(zip(header, data, strict=True))
+    assert as_dict["payments_credits"] == "-24120.20", (
+        f"Negative numeric string must not be escaped: {as_dict['payments_credits']!r}"
+    )
+
+
+def test_a_negative_looking_formula_payload_is_still_escaped(tmp_path):
+    """A payload that starts with '-' but is NOT a genuine number (e.g. a
+    formula-injection string crafted to look numeric-ish) must still be
+    escaped - only strings that actually parse as a plain float are exempt."""
+    openpyxl = pytest.importorskip("openpyxl")
+    records = [{
+        "document_id": "d1",
+        "derived": {"vendor_name": "-2+3+cmd|'/c calc'!A1"},
+        "fields": {}, "disposition": "processed", "lane": "high",
+    }]
+    out_path = tmp_path / "out.xlsx"
+    write_records_to_xlsx(records, str(out_path), layout="standard")
+
+    wb = openpyxl.load_workbook(out_path)
+    cell_value = wb.active.cell(row=2, column=2).value  # vendor_name is column 2
+    assert cell_value.startswith("'"), f"Non-numeric payload should still be escaped: {cell_value!r}"
