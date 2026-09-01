@@ -224,6 +224,7 @@
   <nav class="jumpnav">
     <a href="#install">Install</a><span class="jn-sep">/</span>
     <a href="#stages">Pipeline</a><span class="jn-sep">/</span>
+    <a href="#output">Output</a><span class="jn-sep">/</span>
     <a href="#vision">Vision</a><span class="jn-sep">/</span>
     <a href="#compose">Compose</a><span class="jn-sep">/</span>
     <a href="#vendors">Vendors</a><span class="jn-sep">/</span>
@@ -306,6 +307,35 @@ record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
       <div class="knob"><div class="knob-h"><code>8 · emit</code></div><p>Always exactly one record — even a dead-lettered document. <code>count(intaken) == count(emitted)</code> is machine-checked, not a convention.</p></div>
     </div>
     <div class="warn"><b>Why this order matters.</b> Classification and persona lookup happen BEFORE any AI call — a company with no configuration yet is caught cheaply at Stage 4, not after an expensive vision round-trip. The confidence gate runs AFTER extraction finishes, so a real-time notification hook always sees the finished routing decision, never a partial one.</div>
+  </section>
+
+  <section class="cfg" id="output">
+    <div class="col-h"><h2>What one result looks like</h2><span class="hint">// real output, not a mock-up</span></div>
+    <p class="cfg-lead">This is a real output record — actually run through <code>docintel process</code> against a real invoice in this project's test corpus (trimmed to the fields that tell the story; the full record also carries every line item, the confidence of every other field, and a full audit trail):</p>
+    <pre class="cfg-code">{
+  "schema_version": "1",
+  "document_id": "northstar-edco-077087",
+  "doc_type": "standard_invoice",
+  "disposition": "processed",
+  "lane": "high",
+  "review_flag": false,
+  "fields": {
+    "vendor_name": "EDCO WASTE &amp; RECYCLING SERVICE",
+    "prior_balance": "298.34",
+    "current_charges": "69.62",
+    "total_printed": "367.96"
+  },
+  "derived": {
+    "amount_payable": "69.62",
+    "payable_basis": "current_charges",
+    "carried_balance": "298.34"
+  },
+  "confidence": {
+    "total_printed": 0.90,
+    "current_charges": 0.99
+  }
+}</pre>
+    <p class="cfg-lead">The printed total is <b>367.96</b> — the biggest number on the page, in the biggest box. The amount actually owed is <b>69.62</b>: a prior balance of 298.34 was already carried forward (<code>derived.carried_balance</code>), and only the current period's charges are due — this exact invoice's filename is literally <i>"current charges can be misleading, paying $69.62."</i> <code>derived.amount_payable</code> is never the raw printed total by default — it's computed from <code>prior_balance</code> and <code>current_charges</code>, the two fields actually printed on the bill. <code>fields</code> is always what's printed, verbatim; <code>derived</code> is always the answer to "what do we actually pay" — keeping the two separate is the one distinction this whole system exists to protect.</p>
   </section>
 
   <section class="cfg" id="vision">
@@ -420,6 +450,36 @@ record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
     <div class="col-h"><h2>Writing classification — pack.json</h2><span class="hint">// which company, which document type</span></div>
     <p class="cfg-lead">A pack claims a document when <b>any rule holds and no veto holds</b>, then an ordered <b>ladder</b> of rungs — first whose condition holds wins — decides the <code>doc_type</code>. Both are plain JSON; nothing here is Python.</p>
 
+    <p class="cfg-lead"><b>The company-level fields — every key at the top of <code>pack.json</code>:</b></p>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h"><code>name</code></div><p>The pack's own slug — matches its folder name. Shows up in telemetry and CLI output when a document routes through it.</p></div>
+      <div class="knob"><div class="knob-h"><code>default_currency</code></div><p>The fallback when <code>infer_currency</code>'s whole ladder (ISO code → symbol → tax regime → vendor address) comes up empty. Applied last, flagged <code>currency_inferred_weak</code> when it fires.</p></div>
+      <div class="knob"><div class="knob-h"><code>doc_types</code></div><p>Every document type this vendor can send — <code>["standard_invoice", "credit_memo"]</code>. Each name needs a matching key under <code>fields</code> and, usually, a ladder rung that can reach it.</p></div>
+      <div class="knob"><div class="knob-h"><code>thresholds</code></div><p>Per-field confidence floor for the "high" (auto-approved) lane — <code>{"total_printed": 0.90}</code>. A field scoring below its threshold routes to human review even if nothing else flagged it.</p></div>
+    </div>
+
+    <p class="cfg-lead"><b>Which fields exist — the <code>fields</code> block, one entry per doc_type:</b></p>
+    <div class="cfg-grid">
+      <div class="knob"><div class="knob-h"><code>all</code></div><p>Every field this doc_type can carry, extracted or not. The complete vocabulary a persona's <code>field</code> keys are checked against (validation rule V1).</p></div>
+      <div class="knob"><div class="knob-h"><code>required</code></div><p>Must be covered — by a selector, or by an op that supplies it — or the persona write is rejected outright unless its <code>status</code> is <code>"draft"</code> (V13).</p></div>
+      <div class="knob"><div class="knob-h"><code>any_of</code></div><p>At least one field from this group must be present. For a vendor that prints either a PO number or a contract number, never guaranteed to print both.</p></div>
+      <div class="knob"><div class="knob-h"><code>derived_only</code></div><p>Computed by an <code>adjust</code> op, never printed as a standalone value a selector could point at — <code>amount_payable</code> is the standing example. A selector naming one of these is rejected (V10).</p></div>
+    </div>
+
+    <pre class="cfg-code">{
+  "name": "acme_widgets", "default_currency": "USD",
+  "doc_types": ["standard_invoice"],
+  "thresholds": { "total_printed": 0.90 },
+  "fields": {
+    "standard_invoice": {
+      "all":          ["vendor_name", "invoice_number", "total_printed", "prior_balance", "current_charges", "amount_payable"],
+      "required":      ["vendor_name", "invoice_number", "total_printed"],
+      "any_of":        [],
+      "derived_only":  ["amount_payable"]
+    }
+  }
+}</pre>
+
     <div class="cfg-grid">
       <div class="knob"><div class="knob-h"><code>markers</code></div><p>A name/address specific enough that no other business prints it — the primary guard for an AP department claiming by bill-to.</p></div>
       <div class="knob"><div class="knob-h"><code>corroborated_markers</code></div><p>A weak marker (a bare ZIP) that only counts alongside a second co-occurring token — avoids over-claiming on the weak marker alone.</p></div>
@@ -501,6 +561,34 @@ record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
     </table>
     <div class="warn"><b>Never target <code>amount_payable</code> directly.</b> It's computed by an <code>adjust</code> op from <code>prior_balance</code> + <code>current_charges</code> + <code>total_printed</code> — a selector naming it is rejected outright (validation rule V10). On 7 of the original 10 corpus documents, reading the printed total straight onto it would look perfectly correct and still be wrong.</div>
 
+    <p class="cfg-lead"><b>The other two selector shapes.</b> <code>field_selectors</code> mixes all three freely — a persona is usually mostly <code>field_selector</code> entries, one <code>row_group_selector</code> for the line-items table, and at most one <code>scanline_selector</code>.</p>
+
+    <pre class="cfg-code">{ "row_group": "line_items", "table_anchor": "DESCRIPTION",
+  "column_headers": { "description": "DESCRIPTION", "charges": "CHARGES" },
+  "columns":        { "description": "text",         "charges": "currency" },
+  "sub_group": { "anchor": "WORK ORDER#:", "field": "work_order", "pattern": "text" },
+  "row_count": { "min": 1, "max": 40 }, "allow_empty_cells": true }</pre>
+    <table class="cli-table">
+      <thead><tr><th>Key</th><th>Required</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>row_group</code></td><td>yes</td><td>A name for this repeating group — becomes <code>record["line_items"]</code> on the emitted record.</td></tr>
+        <tr><td><code>table_anchor</code></td><td>yes</td><td>Header row text used to find the table on the page.</td></tr>
+        <tr><td><code>region</code></td><td>no</td><td>Narrows the page search before looking for <code>table_anchor</code>.</td></tr>
+        <tr><td><code>columns</code></td><td>yes</td><td>Column name → pattern. Matched by the printed <b>header text</b>, never by position — a reordered column doesn't silently break it.</td></tr>
+        <tr><td><code>column_headers</code></td><td>no</td><td>Explicit column-name → printed-header-text map, when the header text isn't identical to the column name itself.</td></tr>
+        <tr><td><code>sub_group</code></td><td>no · one level only</td><td>A second value captured from an anchor line inside each row group — e.g. a work-order number printed above its own charge lines. Nesting beyond one level is rejected (V8).</td></tr>
+        <tr><td><code>row_count</code></td><td>no</td><td>A <code>{min, max}</code> range — never an exact count (V9); real tables vary length invoice to invoice.</td></tr>
+        <tr><td><code>allow_empty_cells</code></td><td>no · default true</td><td>Whether a row with some blank cells is still accepted.</td></tr>
+      </tbody>
+    </table>
+
+    <pre class="cfg-code">{ "scanline": true, "region": "remittance-block",
+  "asserts": [
+    { "field": "total_printed",  "as": "digits_no_decimal" },
+    { "field": "account_number", "as": "digits_only" }
+  ] }</pre>
+    <p class="cfg-lead">A <code>scanline_selector</code> reads the OCR-A digit line printed along a remittance stub's edge. It produces <b>no field value</b> — it can only raise or lower confidence on fields a <code>field_selector</code> already extracted. <code>asserts[].field</code> may only name <code>total_printed</code>, <code>account_number</code>, <code>invoice_number</code>, or <code>due_date</code> — never <code>amount_payable</code> or <code>current_charges</code> (V7).</p>
+
     <p class="cfg-lead">Closed region enum:</p>
     <div class="pillrow">
       <span class="pill">near-anchor</span><span class="pill">same-row</span><span class="pill">same-cell</span>
@@ -515,19 +603,60 @@ record = pipeline.process(document_id="d1", source_path="invoice.pdf")</pre>
       <span class="pill">integer</span><span class="pill">decimal</span><span class="pill">date</span><span class="pill">date_loose</span>
       <span class="pill">account_number</span><span class="pill">phone</span><span class="pill">postal_code</span><span class="pill">tax_id</span><span class="pill">digits_run</span>
     </div>
-    <p class="cfg-lead">The <code>adjust</code> op registry — a selector may only reference these, never invent one:</p>
+    <p class="cfg-lead">The complete <code>adjust</code> op registry — 26 names, a selector may only reference these, never invent one. Four groups, run in dependency order regardless of how a persona lists them:</p>
+
+    <p class="cfg-lead">Value ops — transform one field's own value, no other field involved (11):</p>
     <table class="cli-table">
       <thead><tr><th>Op</th><th>Effect</th></tr></thead>
       <tbody>
-        <tr><td><code>derive_amount_payable</code></td><td>What's actually owed from prior balance + current charges + printed total. Refuses (never guesses) when the arithmetic doesn't close.</td></tr>
-        <tr><td><code>resolve_carried_balance</code></td><td>Works out whether the prior balance was already net of payments, or still gross.</td></tr>
-        <tr><td><code>normalize_credit_sign</code></td><td>Forces a payment/credit negative regardless of printed notation (parens, trailing CR, unsigned).</td></tr>
-        <tr><td><code>resolve_vendor_alias</code> / <code>resolve_bill_to_alias</code></td><td>Supplies vendor/bill-to name from the pack's own table when no label anchors it on the page.</td></tr>
-        <tr><td><code>crosscheck_line_sum</code> / <code>_total_composition</code> / <code>_balance_composition</code></td><td>Scoring only — do the numbers actually add up? Boosts confidence or flags a mismatch.</td></tr>
-        <tr><td><code>normalize_date_iso</code> · <code>strip_currency_symbols</code> · <code>parens_to_negative</code> · <code>uppercase</code>/<code>lowercase</code>/<code>trim</code></td><td>Plain value normalization — the base ops every pack gets for free.</td></tr>
+        <tr><td><code>strip_internal_whitespace</code></td><td><code>8495 44 462 0365242</code> → <code>8495444620365242</code> — for account numbers.</td></tr>
+        <tr><td><code>strip_currency_symbols</code></td><td><code>$1,177.70</code> → <code>1177.70</code>.</td></tr>
+        <tr><td><code>parens_to_negative</code></td><td><code>(249.84)</code> → <code>-249.84</code>.</td></tr>
+        <tr><td><code>trailing_cr_to_negative</code></td><td><code>212.87 cr</code> → <code>-212.87</code>.</td></tr>
+        <tr><td><code>normalize_date_iso</code></td><td>Any accepted date shape → <code>YYYY-MM-DD</code>.</td></tr>
+        <tr><td><code>uppercase</code> · <code>lowercase</code> · <code>trim</code></td><td>Plain text normalization.</td></tr>
+        <tr><td><code>collapse_internal_spaces</code></td><td>Squeezes whitespace runs to one space — for matching a name reliably.</td></tr>
+        <tr><td><code>join_lines_comma</code></td><td>A multi-line <code>text_block</code> address → one comma-joined string.</td></tr>
+        <tr><td><code>dedupe_preserve_order</code></td><td>Drops repeats from an <code>all_matches</code> list, keeping first-seen order.</td></tr>
       </tbody>
     </table>
-    <p class="note2"><b>26 ops total.</b> A genuinely new one — a new kind of arithmetic no existing op expresses — is a reviewed Python change with a test, never a config edit.</p>
+
+    <p class="cfg-lead">Derivation ops — the business-logic layer, computing a field no selector may touch directly (6):</p>
+    <table class="cli-table">
+      <thead><tr><th>Op</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>derive_amount_payable</code></td><td>What's actually owed, from carried balance + current charges + printed total. Refuses — sets <code>null</code> and raises review — rather than guessing when the arithmetic doesn't close.</td></tr>
+        <tr><td><code>resolve_carried_balance</code></td><td>Works out whether the prior balance was already net of payments, or still gross, from the pack's <code>prior_balance_basis</code> convention.</td></tr>
+        <tr><td><code>normalize_credit_sign</code></td><td>Forces a payment/credit negative regardless of printed notation — runs before any arithmetic touches it.</td></tr>
+        <tr><td><code>subtract_prior_balance_if_present</code></td><td><code>total_printed − prior_balance</code>, when current charges are never printed as their own line.</td></tr>
+        <tr><td><code>prefer_current_charges_line</code></td><td>When several current-charge anchors match, take the one nearest the totals block.</td></tr>
+        <tr><td><code>derive_price_per_foot</code></td><td>A second, unrelated derivation family — weight-tier manufacturing pricing, for packs outside telecom billing.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="cfg-lead">Consistency ops — scoring only, never change a value, only corroborate or flag one (6):</p>
+    <table class="cli-table">
+      <thead><tr><th>Op</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>crosscheck_line_sum</code></td><td>Σ line items vs. printed subtotal.</td></tr>
+        <tr><td><code>crosscheck_total_composition</code></td><td>Subtotal + charges vs. printed total.</td></tr>
+        <tr><td><code>crosscheck_balance_composition</code></td><td>Prior + current vs. printed total — mismatch also forces review, always.</td></tr>
+        <tr><td><code>crosscheck_scanline</code></td><td>Does the value also appear in the remittance-stub OCR-A digit line?</td></tr>
+        <tr><td><code>crosscheck_duplicate_anchor</code></td><td>Does a value printed twice (body + stub) agree with itself?</td></tr>
+        <tr><td><code>crosscheck_filename</code></td><td>Does the value appear in the source filename itself?</td></tr>
+      </tbody>
+    </table>
+
+    <p class="cfg-lead">Inference ops — fill in a fact the page doesn't state outright (3):</p>
+    <table class="cli-table">
+      <thead><tr><th>Op</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>infer_currency</code></td><td>Ladder: ISO code → symbol → tax regime → vendor address country → pack's <code>default_currency</code>. Every rung below the printed code carries a confidence penalty.</td></tr>
+        <tr><td><code>resolve_vendor_alias</code></td><td>Applies the pack's alias table to the vendor name; prefers the remittance payee over the letterhead when they differ.</td></tr>
+        <tr><td><code>resolve_bill_to_alias</code></td><td>Supplies the bill-to name from the pack's own client roster when no label anchors it anywhere on the page.</td></tr>
+      </tbody>
+    </table>
+    <p class="note2">A genuinely new op — a new kind of arithmetic no existing one expresses — is a reviewed Python change with a test, never a config edit.</p>
 
     <p class="cfg-lead">Confidence modifiers — one multiplicative mechanism, every one that fired listed on the record. No other way to lower confidence exists:</p>
     <table class="cli-table">

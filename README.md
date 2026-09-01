@@ -1,15 +1,17 @@
 # docintel
 
-**Every vendor bill your AP team touches by hand today, docintel reads, checks, and routes —
-and only hands you the ones that genuinely need a person.**
+**Every vendor bill your team processes by hand today, docintel reads, checks, and routes —
+and only hands back the ones that genuinely need a person.**
 
-Right now, someone on your team opens each invoice, figures out who sent it and what it is,
-copies the numbers that matter into your system, checks whether what's *owed* actually matches
-what's *printed* (they're not always the same — a bill with a balance forward often prints a
-big total that isn't the amount due), and hopes nothing was missed. docintel does that first
+Right now, whoever handles vendor bills at your organization opens each one, figures out who
+sent it and what it is, copies the numbers that matter into your system, and checks whether
+what's *owed* actually matches what's *printed* (they're not always the same — a bill with a
+balance forward often prints a big total that isn't the amount due). docintel does that first
 pass automatically, on every document, and tells you — per field, not just per document — how
 sure it is. The ones it's confident about go straight through. The ones it isn't land in a
-review queue with the reason attached, not just a red flag.
+review queue with the reason attached, not just a red flag. It's a general-purpose library, not
+built for one company's process — the rules for what "confident" means are something you
+configure per vendor, not something baked in.
 
 ## What it actually does
 
