@@ -37,13 +37,22 @@ def _escape_formula_injection(value: Any) -> Any:
     """A leading =/+/-/@ makes Excel treat a cell as a live formula. Prefix
     with a single quote, which every spreadsheet application already renders
     as "force this to be text" - the same guard OWASP recommends for any
-    CSV/XLSX export of untrusted string data. Non-strings pass through
-    unchanged; a leading '-' on a real negative number never reaches this
-    function as a string in the first place (see _get()'s callers, which
-    keep numeric fields as numbers, not formatted strings)."""
-    if isinstance(value, str) and value.startswith(_FORMULA_TRIGGER_CHARS):
+    CSV/XLSX export of untrusted string data. A string that parses as a
+    plain number is left alone even though it starts with one of these
+    characters: `core/contract.py` serializes Decimal fields
+    (payments_credits, carried_balance, etc.) as plain strings via
+    `format(value, "f")`, and a negative value like "-24120.20" is a real,
+    already-shipped data shape (see the Windstream fixture and this module's
+    own _RECORD test fixture) - nothing that parses as a float can also
+    execute as a formula, so this distinction closes the injection vector
+    without corrupting legitimate numeric business data."""
+    if not isinstance(value, str) or not value.startswith(_FORMULA_TRIGGER_CHARS):
+        return value
+    try:
+        float(value)
+        return value  # a genuine number, not an injection payload
+    except ValueError:
         return "'" + value
-    return value
 
 
 def _get(record: dict[str, Any], *, field: str | None = None, derived: str | None = None) -> Any:
