@@ -122,6 +122,47 @@ def test_a_corrupt_eml_falls_back_to_the_original_path_not_a_crash(tmp_path):
     assert len(items) >= 1
 
 
+def test_one_malformed_attachment_does_not_discard_the_others_that_parsed_fine(tmp_path, monkeypatch):
+    """The old code wrapped `list(self._from_eml(path))` in one try/except, so
+    one bad attachment mid-iteration discarded every attachment already
+    yielded before it. Simulate a realistic per-attachment failure (writing
+    the decoded bytes to a temp file blows up for exactly one attachment) and
+    confirm the attachments before AND after it still survive - not just that
+    nothing crashes."""
+    import docintel.adapters.intake.email as email_module
+
+    eml = tmp_path / "invoice.eml"
+    _write_eml(
+        eml, message_id="<mixed@vendor.example>",
+        attachments=[
+            ("good1.pdf", b"%PDF-1.4 good one"),
+            ("bad.pdf", b"%PDF-1.4 bad one"),
+            ("good2.pdf", b"%PDF-1.4 good two"),
+        ],
+    )
+
+    original_write = email_module._write_temp_attachment
+
+    def _write_temp_attachment_maybe_raise(filename: str, data: bytes) -> str:
+        if filename == "bad.pdf":
+            raise OSError("simulated failure writing this one attachment to disk")
+        return original_write(filename, data)
+
+    monkeypatch.setattr(email_module, "_write_temp_attachment", _write_temp_attachment_maybe_raise)
+
+    items = list(EmailIntake([str(eml)]).items())
+
+    contents = set()
+    for item in items:
+        with open(item.source_path, "rb") as fh:
+            contents.add(fh.read())
+
+    # Both attachments that parsed fine (one BEFORE, one AFTER the bad one in
+    # iteration order) survive - the old bug would have discarded both,
+    # falling back to a single item for the raw .eml path.
+    assert contents == {b"%PDF-1.4 good one", b"%PDF-1.4 good two"}
+
+
 def test_a_directory_is_walked_for_nested_eml_files(tmp_path):
     (tmp_path / "not-an-email.pdf").write_bytes(b"%PDF-1.4")
     deep = tmp_path / "inbox"
@@ -172,6 +213,55 @@ def test_msg_files_are_unwrapped_via_extract_msg(tmp_path, monkeypatch):
     assert items[0].email_id == "msg123@vendor.example"
     with open(items[0].source_path, "rb") as fh:
         assert fh.read() == b"%PDF-1.4 fake msg attachment"
+
+
+class _FakeAttachmentThatFailsToDecode:
+    """Simulates a corrupt OLE attachment stream: `getFilename()` works fine,
+    but reading `.data` raises - the same shape of failure `.data` access can
+    hit on a genuinely damaged `.msg` attachment."""
+
+    def __init__(self, filename: str) -> None:
+        self._filename = filename
+
+    def getFilename(self) -> str:
+        return self._filename
+
+    @property
+    def data(self) -> bytes:
+        raise RuntimeError("simulated corrupt OLE attachment stream")
+
+
+class _FakeMsgMessageWithMixedAttachments:
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.sender = "vendor@example.com"
+        self.messageId = "<mixed-msg@vendor.example>"
+        self.attachments = [
+            _FakeAttachment("good1.pdf", b"%PDF-1.4 good one"),
+            _FakeAttachmentThatFailsToDecode("bad.pdf"),
+            _FakeAttachment("good2.pdf", b"%PDF-1.4 good two"),
+        ]
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_one_malformed_msg_attachment_does_not_discard_the_others_that_parsed_fine(tmp_path, monkeypatch):
+    import extract_msg
+
+    msg_path = tmp_path / "invoice.msg"
+    msg_path.write_bytes(b"fake ole bytes - extract_msg.Message is mocked")
+    monkeypatch.setattr(extract_msg, "Message", _FakeMsgMessageWithMixedAttachments)
+
+    items = list(EmailIntake([str(msg_path)]).items())
+
+    contents = set()
+    for item in items:
+        with open(item.source_path, "rb") as fh:
+            contents.add(fh.read())
+
+    assert contents == {b"%PDF-1.4 good one", b"%PDF-1.4 good two"}
 
 
 def test_missing_extract_msg_dependency_fails_loudly_once_per_batch(monkeypatch, tmp_path):

@@ -1,3 +1,4 @@
+import logging
 import os
 
 from docintel.adapters.intake.filesystem import FilesystemIntake
@@ -75,6 +76,22 @@ def test_a_directory_walk_now_also_finds_images_and_office_documents(tmp_path):
 
     found = {os.path.basename(i.source_path) for i in FilesystemIntake([str(tmp_path)]).items()}
     assert found == {"a.pdf", "b.png", "c.docx", "d.xlsx", "e.jpg", "f.tiff"}
+
+
+def test_an_unrecognized_extension_is_logged_when_skipped(tmp_path, caplog):
+    """A typo'd extension or an unsupported format placed in a watched
+    directory used to vanish with zero trace. It's still correctly excluded
+    from the yielded items (Stage 2's allowlist is unchanged), but the skip
+    itself must now be observable."""
+    (tmp_path / "invoice.pdf").write_bytes(b"%PDF-1.4...")
+    (tmp_path / "readme.xyz").write_text("not a document")
+
+    with caplog.at_level(logging.INFO, logger="docintel.adapters.intake.filesystem"):
+        items = list(FilesystemIntake([str(tmp_path)]).items())
+
+    assert len(items) == 1  # only the .pdf became an IntakeItem
+    assert os.path.basename(items[0].source_path) == "invoice.pdf"
+    assert "readme.xyz" in caplog.text
 
 
 def test_a_directory_walk_now_also_finds_text_documents(tmp_path):

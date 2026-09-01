@@ -6,11 +6,14 @@ An IMAP source slots in behind the same port later without the pipeline changing
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from collections.abc import Iterator
 
 from docintel.adapters.intake.port import IntakeItem
 from docintel.extract.convert import ACCEPTED_SUFFIXES
+
+_LOG = logging.getLogger(__name__)
 
 
 def _stable_id(path: str) -> str:
@@ -53,8 +56,8 @@ class FilesystemIntake:
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames.sort()  # deterministic traversal order
             for name in sorted(filenames):
+                full_path = os.path.join(dirpath, name)
                 if os.path.splitext(name)[1].lower() in ACCEPTED_SUFFIXES:
-                    yield IntakeItem(
-                        _stable_id(os.path.join(dirpath, name)),
-                        os.path.join(dirpath, name),
-                    )
+                    yield IntakeItem(_stable_id(full_path), full_path)
+                else:
+                    _LOG.info("skipping unrecognized file at intake: %s", full_path)

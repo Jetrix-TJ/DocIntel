@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import email as email_stdlib
 import hashlib
+import logging
 import os
 import tempfile
 from collections.abc import Iterator
@@ -41,6 +42,8 @@ from email import policy as email_policy
 
 from docintel.adapters.intake.port import IntakeItem
 from docintel.core.errors import PermanentError
+
+_LOG = logging.getLogger(__name__)
 
 MSG_SUFFIX = ".msg"
 EML_SUFFIX = ".eml"
@@ -131,13 +134,12 @@ class EmailIntake:
 
     def _items_for(self, path: str) -> Iterator[IntakeItem]:
         suffix = os.path.splitext(path)[1].lower()
+        items: list[IntakeItem] = []
         try:
             if suffix == EML_SUFFIX:
-                items = list(self._from_eml(path))
+                items = list(self._from_eml_resilient(path))
             elif suffix == MSG_SUFFIX:
-                items = list(self._from_msg(path))
-            else:
-                items = []
+                items = list(self._from_msg_resilient(path))
         except Exception:  # noqa: BLE001 - deliberate: a bad email must fall back, not crash
             items = []
         if items:
@@ -145,7 +147,13 @@ class EmailIntake:
         else:
             yield IntakeItem(_fallback_document_id(path), path)
 
-    def _from_eml(self, path: str) -> Iterator[IntakeItem]:
+    def _from_eml_resilient(self, path: str) -> Iterator[IntakeItem]:
+        """Wraps the per-attachment work in its own try/except so ONE bad
+        attachment's exception doesn't discard every attachment already
+        yielded before it. The old code wrapped the whole `list(...)` call in
+        a single try/except in `_items_for`, so attachment 3 of 5 raising
+        lost the first 2 that had already parsed fine - they were replaced by
+        one fallback item for the raw, unparseable-as-a-document path."""
         with open(path, "rb") as fh:
             raw = fh.read()
         msg = email_stdlib.message_from_bytes(raw, policy=email_policy.default)
@@ -153,19 +161,28 @@ class EmailIntake:
         sender = msg.get("From")
 
         index = 0
-        for part in msg.iter_attachments():
-            data = part.get_payload(decode=True)
-            if not data:
+        for position, part in enumerate(msg.iter_attachments(), start=1):
+            try:
+                data = part.get_payload(decode=True)
+                if not data:
+                    continue
+                index += 1
+                filename = part.get_filename() or f"attachment-{index}"
+                temp_path = _write_temp_attachment(filename, data)
+                document_id = _attachment_document_id(email_key, index, filename, len(data))
+            except Exception:
+                _LOG.warning(
+                    "eml %s: attachment at position %d failed to decode, skipping it only",
+                    path, position,
+                )
                 continue
-            index += 1
-            filename = part.get_filename() or f"attachment-{index}"
-            temp_path = _write_temp_attachment(filename, data)
-            document_id = _attachment_document_id(email_key, index, filename, len(data))
             yield IntakeItem(
                 document_id, temp_path, sender_email=sender, email_id=email_key
             )
 
-    def _from_msg(self, path: str) -> Iterator[IntakeItem]:
+    def _from_msg_resilient(self, path: str) -> Iterator[IntakeItem]:
+        """Same per-attachment isolation as `_from_eml_resilient`, applied to
+        `.msg` containers."""
         import extract_msg
 
         with open(path, "rb") as fh:
@@ -176,14 +193,21 @@ class EmailIntake:
             sender = msg.sender
 
             index = 0
-            for attachment in msg.attachments:
-                data = attachment.data
-                if not data:
+            for position, attachment in enumerate(msg.attachments, start=1):
+                try:
+                    data = attachment.data
+                    if not data:
+                        continue
+                    index += 1
+                    filename = attachment.getFilename() or f"attachment-{index}"
+                    temp_path = _write_temp_attachment(filename, data)
+                    document_id = _attachment_document_id(email_key, index, filename, len(data))
+                except Exception:
+                    _LOG.warning(
+                        "msg %s: attachment at position %d failed to decode, skipping it only",
+                        path, position,
+                    )
                     continue
-                index += 1
-                filename = attachment.getFilename() or f"attachment-{index}"
-                temp_path = _write_temp_attachment(filename, data)
-                document_id = _attachment_document_id(email_key, index, filename, len(data))
                 yield IntakeItem(
                     document_id, temp_path, sender_email=sender, email_id=email_key
                 )
