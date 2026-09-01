@@ -82,6 +82,11 @@ jobs:
       - name: pytest
         run: pytest -q
 
+      - name: Real-pack fixture suite (non-blocking today)
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        run: pytest tests/fixtures/packs/ -q
+
       # Eval history is per-runner-ephemeral by default; cache it per-branch
       # so a PR's "candidate" run has a real "baseline" (the last push to
       # main) to compare against, restored here and saved back only below on
