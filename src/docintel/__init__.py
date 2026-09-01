@@ -55,11 +55,26 @@ exactly as everywhere else: nothing is written to disk unless you ask.
 
 from __future__ import annotations
 
+from PIL import Image
+
 from docintel import telemetry
 from docintel.packs.registry import load_packs
 from docintel.pipeline.hooks import HookRegistry
 from docintel.pipeline.runner import Runner
 from docintel.pipeline.stages import build_default_stages, build_pipeline
+
+# Decompression-bomb guard, set once here at import time: unset (the Pillow
+# default), Image.open() will silently allocate however many pixels a
+# crafted file's dimensions claim - a 200x200-inch page inside a modest
+# 25MB upload rasterizes to roughly 4.8GB unguarded. 400 million pixels is
+# generous for any real scanned invoice page (a 300 DPI Letter page is
+# ~8.5M pixels), so this only ever trips on a genuinely oversized image.
+# Placed after the imports above (not interleaved with them) purely to keep
+# `ruff`'s E402 happy - nothing above this line does its own Pillow work at
+# import time, so ordering relative to them has no functional effect; what
+# matters is only that it runs before any document is ever processed, which
+# it always does, since this module is `docintel`'s own `__init__.py`.
+Image.MAX_IMAGE_PIXELS = 400_000_000
 
 __version__ = "0.1.0"
 
