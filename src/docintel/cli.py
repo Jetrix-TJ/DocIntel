@@ -45,6 +45,14 @@ def _build_vision(mode: str, cassette: str) -> object:
         # inner=None: a replay must not be able to fall through to a live call.
         # That fallthrough is how a "deterministic" run quietly starts billing and
         # stops being reproducible.
+        if not os.path.isfile(cassette):
+            print(
+                f"warning: no cassette found at {cassette!r} - every vision lookup will "
+                f"miss. This is expected in a fresh install with no recorded cassette; "
+                f"pass --vision fake for a wiring check, or --vision live with "
+                f"GEMINI_API_KEY set for a real read.",
+                file=sys.stderr,
+            )
         return CassetteVision(inner=None, path=cassette, mode="replay")
 
     from docintel.adapters.vision.gemini_adapter import MODEL, GeminiVision

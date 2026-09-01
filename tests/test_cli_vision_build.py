@@ -63,3 +63,16 @@ def test_live_and_record_never_touch_credentials_until_extract_is_called():
     assert live._client is None  # not resolved yet
     record = _build_vision("record", DEFAULT_CASSETTE)
     assert record.inner._client is None
+
+
+def test_cassette_mode_warns_clearly_when_the_default_cassette_is_not_packaged(capsys):
+    """A fresh pip install user running `docintel process any.pdf --json` gets
+    --vision cassette by default, pointing at a path that won't exist post-install.
+    The cassette loads gracefully on missing file, so this would silently produce
+    vision misses on every field with no signal why. Print an actionable warning
+    instead of proceeding mute."""
+    vision = _build_vision("cassette", "/definitely/does/not/exist/corpus.json")
+    captured = capsys.readouterr()
+    assert "no cassette found" in captured.err.lower()
+    # still returns a working (if empty) CassetteVision - never raises, never silently proceeds mute
+    assert vision is not None
