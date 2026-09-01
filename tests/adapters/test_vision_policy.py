@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from docintel.adapters.vision.policy import VISION_OBSERVABLE, sanitize
+from docintel.adapters.vision.policy import VISION_OBSERVABLE, sanitize, VISION_CEILING, VISION_FLOOR
 from docintel.adapters.vision.port import VisionResult
 from docintel.core.confidence import CEILING, MODIFIERS
 from docintel.core.models import DERIVED_ONLY
-from docintel.adapters.vision.policy import VISION_FLOOR
 from docintel.pipeline.stages.s7_gate import FORCING_MODIFIERS, VERY_LOW_FLOOR
 
 
@@ -72,12 +71,12 @@ def test_a_non_string_value_is_dropped():
 # -- confidence ------------------------------------------------------------
 
 
-def test_confidence_is_clamped_to_the_global_ceiling():
+def test_confidence_is_clamped_to_the_vision_ceiling():
     """JSON Schema cannot express minimum/maximum in the API's supported subset, so
-    the bound lives here. CEILING applies because nothing read off a document is
-    ever certain."""
+    the bound lives here. VISION_CEILING applies because a model's self-reported
+    confidence is not evidence the way a matched selector's is."""
     result = VisionResult(fields={"a": "1"}, confidence={"a": 4.2})
-    assert sanitize(result, ["a"]).confidence["a"] == pytest.approx(float(CEILING))
+    assert sanitize(result, ["a"]).confidence["a"] == pytest.approx(float(VISION_CEILING))
 
 
 def test_confidence_is_floored_so_a_model_cannot_demand_regeneration():
@@ -121,6 +120,16 @@ def test_a_bool_is_not_a_confidence():
     i.e. as certainty."""
     result = VisionResult(fields={"a": "1"}, confidence={"a": True})  # type: ignore[dict-item]
     assert sanitize(result, ["a"]).confidence["a"] == pytest.approx(0.50)
+
+
+def test_vision_confidence_never_exceeds_the_vision_ceiling_even_when_the_model_claims_higher():
+    result = VisionResult(
+        fields={"total_printed": "100.00"},
+        confidence={"total_printed": 0.99},  # model claims near-certain
+    )
+    cleaned = sanitize(result, field_names=["total_printed"], table_requests={})
+    assert cleaned.confidence["total_printed"] <= VISION_CEILING
+    assert VISION_CEILING < 0.75  # below the lowest real pack threshold this repo ships
 
 
 def test_confidence_for_a_dropped_field_does_not_survive():

@@ -363,7 +363,8 @@ def test_a_recorded_cassette_drives_the_stage_end_to_end(tmp_path):
     VisionOneShot(vision=replay, field_names=["total_printed"]).run(ctx)
 
     assert ctx.extracted.get("total_printed") == "1,177.70"
-    assert ctx.extracted.match_quality["total_printed"] == pytest.approx(0.82)
+    # Confidence is clamped to VISION_CEILING (0.70), not the global ceiling (0.99)
+    assert ctx.extracted.match_quality["total_printed"] == pytest.approx(0.70)
     assert "handwriting_detected" in ctx.modifiers
 
 
