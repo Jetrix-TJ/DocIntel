@@ -82,9 +82,13 @@ jobs:
       - name: pytest
         run: pytest -q
 
-      - name: Real-pack fixture suite (non-blocking today)
+      # Blocking. `pytest -q` above deliberately excludes tests/fixtures (see
+      # pyproject's addopts), so without this step nothing in CI ever exercises
+      # a real pack end to end - and a change that broke every real document's
+      # confidence lane shipped through 14 subsequent reviews unnoticed for
+      # exactly that reason. This suite is green, so it can hold that line.
+      - name: Real-pack fixture suite
         if: matrix.os == 'ubuntu-latest'
-        continue-on-error: true
         run: pytest tests/fixtures/packs/ -q
 
       # Eval history is per-runner-ephemeral by default; cache it per-branch

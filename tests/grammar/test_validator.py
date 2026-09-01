@@ -947,3 +947,96 @@ def test_undeclared_risk_fields_does_not_flag_a_derived_only_field() -> None:
         ],
     }
     assert undeclared_risk_fields(persona, pack) == []
+
+
+def test_undeclared_risk_fields_credits_a_row_group_column_as_covered() -> None:
+    """A row_group column IS a selector for that field, and this warning must
+    say so - `validate_persona`'s own V13 coverage check always counted it.
+
+    The two disagreeing is not hypothetical: reading only scalar
+    `sel["field"]` entries made this function report 49 at-risk fields on
+    `northstar/complete_beverage.json`, a real, valid, shipped persona whose
+    line-item money fields are row-group columns. Both now read the same
+    `_covered_fields` collection.
+    """
+    pack = FakePack(fields={"total_printed", "quantity", "unit_price", "amount"})
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+            {
+                "row_group": "line_items",
+                "table_anchor": "Description",
+                "columns": {
+                    "quantity": "integer",
+                    "unit_price": "currency",
+                    "amount": "currency",
+                },
+            },
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == []
+
+
+def test_undeclared_risk_fields_credits_a_sub_group_field_as_covered() -> None:
+    """Same argument one nesting level down (V8 permits exactly one): a
+    sub_group's `field` is written by that selector, and `validate_persona`
+    counts it toward V13 coverage, so this warning must not call it at risk."""
+    pack = FakePack(fields={"total_printed", "amount", "service_date"})
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+            {
+                "row_group": "line_items",
+                "table_anchor": "Description",
+                "columns": {"amount": "currency"},
+                "sub_group": {"field": "service_date", "pattern": "date"},
+            },
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == []
+
+
+def test_undeclared_risk_fields_still_flags_a_field_no_row_group_column_names() -> None:
+    """The complement, so the fix above is a narrowing and not a blanket
+    silencing: a field absent from every scalar selector AND every row_group
+    column is still genuinely at risk of vanishing silently."""
+    pack = FakePack(fields={"total_printed", "amount", "subtotal"})
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+            {
+                "row_group": "line_items",
+                "table_anchor": "Description",
+                "columns": {"amount": "currency"},
+            },
+            # subtotal is named nowhere - no scalar selector, no column
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == ["subtotal"]
+
+
+def test_undeclared_risk_fields_does_not_credit_a_scanline_assert_as_coverage() -> None:
+    """A scanline's `asserts` cross-check a value extracted elsewhere; they do
+    not write it (see `_check_scanline` / V7). `validate_persona` never counted
+    them toward coverage, so neither may this - crediting them would silence a
+    warning about a field genuinely nothing extracts."""
+    pack = FakePack(fields={"total_printed", "amount_payable_printed"})
+    persona = {
+        "doc_type": "standard_invoice",
+        "field_selectors": [
+            {"field": "total_printed", "anchor": "Total", "region": "near-anchor",
+             "pattern": "currency"},
+            {
+                "scanline": True,
+                "region": "payment-stub",
+                "asserts": [{"field": "amount_payable_printed", "as": "digits_only"}],
+            },
+        ],
+    }
+    assert undeclared_risk_fields(persona, pack) == ["amount_payable_printed"]

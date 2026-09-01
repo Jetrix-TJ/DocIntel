@@ -471,6 +471,53 @@ def _op_supplied(persona: Mapping[str, Any]) -> frozenset[str]:
     return frozenset(supplied)
 
 
+def _covered_fields(selectors: Any) -> set[str]:
+    """Every field name this persona's selectors write to - all three kinds.
+
+    The single source of truth for "does this persona cover that field",
+    consulted by `validate_persona` (V13's required-coverage check) and by
+    `undeclared_risk_fields`. It exists as one function precisely because the
+    two once disagreed: `undeclared_risk_fields` originally read only scalar
+    `sel["field"]` entries and so credited nothing a `row_group` covers, which
+    made it report 49 false positives on `northstar/complete_beverage.json` -
+    a real, valid, shipped persona whose money fields are row-group columns.
+
+    Three kinds, matching `validate_persona`'s own loop exactly:
+
+    * a scalar selector covers its `field`;
+    * a `row_group` covers every key of its `columns` mapping, plus its
+      `sub_group`'s `field` if it has one;
+    * a `scanline` covers NOTHING. Its `asserts` are cross-checks against
+      values extracted elsewhere (limited to `SCANLINE_ASSERTABLE`), not
+      writes - see `_check_scanline` - so counting them would credit coverage
+      no selector actually produces.
+
+    Purely collection: every shape question here is validated by
+    `validate_persona`, which raises before any caller uses this set, so
+    malformed input is skipped rather than re-diagnosed.
+    """
+    if isinstance(selectors, Mapping) or not isinstance(selectors, Sequence):
+        return set()
+
+    covered: set[str] = set()
+    for sel in selectors:
+        if not isinstance(sel, Mapping):
+            continue
+        if "scanline" in sel:
+            continue
+        if "row_group" in sel:
+            columns = sel.get("columns")
+            if isinstance(columns, Mapping):
+                covered |= {str(name) for name in columns}
+            sub = sel.get("sub_group")
+            if isinstance(sub, Mapping) and sub.get("field"):
+                covered.add(str(sub["field"]))
+            continue
+        if sel.get("field"):
+            covered.add(str(sel["field"]))
+    return covered
+
+
 def _check_required_coverage(
     persona: Mapping[str, Any], pack: Pack, covered: set[str], doc_type: str
 ) -> None:
@@ -528,6 +575,11 @@ def undeclared_risk_fields(persona: Mapping[str, Any], pack: Pack) -> list[str]:
     derived_only, not supplied by any adjust op, and not covered by any selector
     in THIS persona.
 
+    "Covered" is `_covered_fields`, the same collection `validate_persona`'s own
+    V13 check uses - so a `row_group` column or `sub_group` field counts as
+    covered here exactly as it does there. Deriving a narrower notion of
+    coverage locally is what made this fire on valid personas.
+
     Non-fatal on purpose. V1 through V13 are the hard security boundary (spec
     Part 6, "the agent writes data, never code") and every one of them rejects
     the whole write. This is different: a field genuinely CAN be legitimately
@@ -543,11 +595,7 @@ def undeclared_risk_fields(persona: Mapping[str, Any], pack: Pack) -> list[str]:
     required = set(pack.required_fields(doc_type))
     derived = set(pack.derived_only_fields(doc_type))
     supplied = set(_op_supplied(persona))
-    covered = {
-        str(sel["field"])
-        for sel in persona.get("field_selectors", ())
-        if isinstance(sel, Mapping) and "field" in sel
-    }
+    covered = _covered_fields(persona.get("field_selectors", ()))
     at_risk = declared - required - derived - supplied - covered
     return sorted(at_risk)
 
@@ -579,7 +627,12 @@ def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> No
 
     pack_derived = pack.derived_only_fields(doc_type) if pack is not None else frozenset()
     registered = pack.fields_for(doc_type) if pack is not None else None
-    covered: set[str] = set()
+    # One collection, shared with `undeclared_risk_fields`, so the two can never
+    # disagree about what a persona covers. Collected up front rather than
+    # accumulated through the loop below: nothing reads it until every selector
+    # has been validated (`_check_required_coverage`, at the end), and any
+    # malformed selector raises before that point.
+    covered: set[str] = _covered_fields(selectors)
 
     for index, sel in enumerate(selectors):
         if not isinstance(sel, Mapping):
@@ -615,12 +668,9 @@ def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> No
                     scoped=name in headers,
                     where=f"{where} column {name!r}",
                 )
-                covered.add(str(name))
 
             _check_row_count(sel.get("row_count"), where)
             sub_field = _check_sub_group(sel.get("sub_group"), pack, pack_derived, where)
-            if sub_field is not None:
-                covered.add(sub_field)
             _check_adjust(sel.get("adjust"), pack, where)
 
             if registered is not None and pack is not None:
@@ -652,7 +702,6 @@ def validate_persona(persona: Mapping[str, Any], pack: Pack | None = None) -> No
                 f"{where} is not a registered field for doc_type {doc_type!r} in pack "
                 f"{pack.name!r} (V1)"
             )
-        covered.add(str(field))
 
     # Persona-wide, so it runs after every selector has been seen: the anchor and
     # the value that collide may be declared in either order.

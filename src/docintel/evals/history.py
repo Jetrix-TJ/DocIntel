@@ -25,7 +25,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DB_PATH = "var/eval_history.sqlite3"
+from docintel.paths import state_root
+
+
+def _default_db_path() -> str:
+    """Final fallback when neither an explicit `path` nor
+    `DOCINTEL_EVAL_HISTORY_DB` is given: `state_root() / "eval_history.sqlite3"`
+    (`state_root()` itself honors `DOCINTEL_STATE_DIR`, else `var`, matching the
+    historical hardcoded default this replaced).
+
+    A function, not the `"var/eval_history.sqlite3"` constant it replaced, so
+    the root is resolved per call: a module-level constant would freeze
+    whatever `DOCINTEL_STATE_DIR`/CWD looked like at import time. Same shape as
+    `jobs.store._default_db_path`.
+    """
+    return str(state_root() / "eval_history.sqlite3")
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS eval_runs (
@@ -83,7 +98,7 @@ class EvalHistoryStore:
     own docstring and `docintel.jobs.store` for why."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        resolved = path or os.environ.get("DOCINTEL_EVAL_HISTORY_DB") or DEFAULT_DB_PATH
+        resolved = path or os.environ.get("DOCINTEL_EVAL_HISTORY_DB") or _default_db_path()
         self.path = Path(resolved)
         if str(self.path) != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)

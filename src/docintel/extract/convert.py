@@ -207,7 +207,7 @@ def convert_to_pdf_cached(source_path: str, suffix: str) -> tuple[str, str | Non
     - On a cache HIT: no conversion runs at all, `path` is the existing cache
       entry, and `temp_dir` is `None` - there is nothing new for the caller
       to register. This is the one detail a caller must get right: `path`
-      here lives under `convert_cache.CACHE_DIR`, a directory this function
+      here lives under `convert_cache._cache_dir()`, a directory this function
       never returns as `temp_dir` and the caller must never append to
       `ctx.temp_dirs` itself, or the `Runner`'s unconditional per-document
       cleanup would delete every cached conversion the first time it is

@@ -64,6 +64,8 @@ from __future__ import annotations
 
 import os
 
+import pdfplumber
+
 from docintel.core.errors import PermanentError
 from docintel.core.models import JobContext
 from docintel.extract import (
@@ -78,14 +80,49 @@ from docintel.extract.normalize import load_document, load_image_document
 
 ALLOWED_SUFFIXES = convert.ACCEPTED_SUFFIXES
 
-# A page-count ceiling, checked once every format branch below has settled on
-# a final `pages` tuple - generous relative to any real invoice (a 500-page,
-# 5MB PDF already measured 42.2s/2,969MB on one thread well under this), so
-# crossing it is itself evidence this was never a real invoice/bill. Raising
-# `PermanentError` here, rather than catching it locally, matches every other
-# Stage 2 rejection in this file (see the module docstring): the `Runner`'s
-# existing catch-all in `process()` turns it into `disposition = "dead_letter"`.
+# A page-count ceiling, enforced twice: cheaply BEFORE the expensive read for
+# the PDF branch (`_reject_past_page_ceiling` below), and again once every
+# format branch has settled on a final `pages` tuple, as the backstop for the
+# branches where no cheap pre-count exists. Generous relative to any real
+# invoice (a 500-page, 5MB PDF already measured 42.2s/2,969MB on one thread
+# well under this), so crossing it is itself evidence this was never a real
+# invoice/bill. Raising `PermanentError` from either check, rather than
+# catching it locally, matches every other Stage 2 rejection in this file (see
+# the module docstring): the `Runner`'s existing catch-all in `process()` turns
+# it into `disposition = "dead_letter"`.
 MAX_PAGES = 750
+
+
+def _reject_past_page_ceiling(path: str) -> None:
+    """Reject an over-ceiling PDF BEFORE any page is read or OCR'd.
+
+    The post-`load_document` check further down is the backstop for every
+    branch (image / plaintext / XLSX-fallback), but by the time it runs the
+    expensive work is already paid for: the measured 500-page case cost
+    42.2s/2,969MB inside `load_document` itself, so a check afterwards bounds
+    the record but not the resource burn a hostile document imposes. Counting
+    pages with `pdfplumber` first parses only the page tree - no text
+    extraction, no rasterization, no OCR - which is what makes the ceiling an
+    actual guard rather than an after-the-fact label.
+
+    PDF-only on purpose: this is the branch where `load_document` is
+    expensive, and `path` here is always a PDF (a `.pdf` source, or an Office
+    document already converted to one just above). A file `pdfplumber` cannot
+    open at all is left to `load_document` to fail on with its own established
+    error rather than being re-diagnosed here - the post-check still covers it.
+    """
+    if not path.lower().endswith(".pdf"):
+        return
+    try:
+        with pdfplumber.open(path) as peek:
+            count = len(peek.pages)
+    except Exception:  # noqa: BLE001 - see the docstring: not this function's call to make
+        return
+    if count > MAX_PAGES:
+        raise PermanentError(
+            f"{count} pages exceeds the {MAX_PAGES}-page ceiling - "
+            f"this is almost certainly not a real invoice/bill"
+        )
 
 
 class AttachmentFilter:
@@ -169,16 +206,20 @@ class AttachmentFilter:
                     # the render never carried forward.
                     ctx.add_tag("xlsx_hidden_content_present")
 
+            _reject_past_page_ceiling(path)
             pages, page_meta, text_source = load_document(path)
             has_flattened = annotations.detect_flattened(path, pages, page_meta)
 
         if len(pages) > MAX_PAGES:
-            # Checked once here, after every format branch above has settled
-            # on a final `pages` tuple, rather than duplicated per-branch -
-            # a PDF/Office document is the realistic attack surface (the
-            # measured 500-page case), but an image/plaintext/XLSX-fallback
-            # document past the ceiling is just as clearly not a real
-            # invoice/bill.
+            # The backstop, after every format branch above has settled on a
+            # final `pages` tuple. A PDF/Office document is the realistic
+            # attack surface (the measured 500-page case) and is already
+            # rejected before the expensive read by
+            # `_reject_past_page_ceiling`; this catches the remaining branches
+            # (image / plaintext / XLSX-fallback), where an over-ceiling
+            # document is just as clearly not a real invoice/bill but there is
+            # no equally cheap way to count pages ahead of the load. It also
+            # still fires for a PDF the pre-check could not open.
             raise PermanentError(
                 f"{len(pages)} pages exceeds the {MAX_PAGES}-page ceiling - "
                 f"this is almost certainly not a real invoice/bill"

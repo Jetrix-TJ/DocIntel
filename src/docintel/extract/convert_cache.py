@@ -15,6 +15,13 @@ batch (`docintel replay-gold` run twice, a retried webhook), re-invokes
 LibreOffice/Pillow from scratch every time on every DOCX/XLSX/TIFF/BMP/GIF -
 `ocr_cache.py`'s own motivation (repeat processing of the same file should be
 free) applies just as much to the conversion step as it does to OCR.
+
+The disable knob stays shared (`DOCINTEL_OCR_CACHE`, per above), but the
+LOCATION knob is this cache's own - `DOCINTEL_CONVERT_CACHE_DIR`, mirroring
+`DOCINTEL_OCR_CACHE_DIR`, falling back to `paths.state_root()`. Pointing two
+different caches at one directory would be a genuine footgun (a `.json` OCR
+entry and a `.pdf` conversion entry sharing an eviction sweep), which is the
+opposite of the disable knob's reasoning for being shared.
 """
 
 from __future__ import annotations
@@ -25,9 +32,25 @@ import shutil
 from pathlib import Path
 
 from docintel.extract.ocr_cache import ENV_DISABLE, content_hash
+from docintel.paths import state_root
 
-CACHE_DIR = Path("var") / "convert-cache"
+ENV_CACHE_DIR = "DOCINTEL_CONVERT_CACHE_DIR"
 MAX_ENTRIES = 512  # same eviction cap as ocr_cache.py, same rationale
+
+
+def _cache_dir() -> Path:
+    """Where cached PDFs live: `DOCINTEL_CONVERT_CACHE_DIR` if set, else
+    `state_root() / "convert-cache"`.
+
+    Previously a module-level `CACHE_DIR = Path("var") / "convert-cache"`
+    constant with no override at all - the same gap `ocr_cache` had, closed
+    the same way (see `ocr_cache._cache_dir`): resolved per call rather than
+    once at import, so `DOCINTEL_STATE_DIR` set after import still takes
+    effect, and state stops depending on whichever CWD the process happened
+    to start in.
+    """
+    override = os.environ.get(ENV_CACHE_DIR)
+    return Path(override) if override else state_root() / "convert-cache"
 
 
 def enabled() -> bool:
@@ -52,7 +75,7 @@ def cache_key(source_path: str, converter_name: str) -> str:
 
 
 def _cache_path(key: str) -> Path:
-    return CACHE_DIR / f"{key}.pdf"
+    return _cache_dir() / f"{key}.pdf"
 
 
 def load(key: str) -> str | None:
@@ -86,7 +109,7 @@ def save(key: str, pdf_path: str) -> str:
     if not enabled():
         return pdf_path
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _cache_dir().mkdir(parents=True, exist_ok=True)
         cache_path = _cache_path(key)
         tmp_path = cache_path.with_suffix(f".{os.getpid()}.tmp")
         shutil.copyfile(pdf_path, tmp_path)
@@ -99,7 +122,7 @@ def save(key: str, pdf_path: str) -> str:
 
 def _evict_oldest_past_cap() -> None:
     try:
-        entries = sorted(CACHE_DIR.glob("*.pdf"), key=lambda p: p.stat().st_mtime)
+        entries = sorted(_cache_dir().glob("*.pdf"), key=lambda p: p.stat().st_mtime)
         excess = len(entries) - MAX_ENTRIES
         for stale in entries[:excess]:
             try:

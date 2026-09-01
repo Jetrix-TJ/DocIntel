@@ -547,6 +547,15 @@ def test_no_jobs_queue_with_an_auto_profile_is_a_safe_no_op():
 # ==========================================================================
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Ruling: reverted - pack.fields_for() is the whole vocabulary, not per-document "
+        "expectations; real personas declare 10-16 of 58-61 fields. See progress.md's "
+        "final-review C1 finding. The real defect needs a different mechanism - Task 2's "
+        "authoring-time warning, or a new pack.json 'expected fields per doc_type' concept "
+        "distinct from fields.all - not gate-time inference from the field vocabulary."
+    )
+)
 def test_a_field_the_pack_declares_but_no_selector_ever_extracted_still_demotes_the_lane():
     """The exact northstar-veritiv defect: five undeclared-required money
     fields drop silently and the document still routes `high`."""

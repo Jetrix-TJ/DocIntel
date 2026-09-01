@@ -1,12 +1,26 @@
 """One configurable root for every path docintel writes state under.
 
-Three modules (jobs.store, telemetry, extract.ocr_cache) each resolved their
-own `var/...` path relative to the process's CWD, with inconsistent override
-support - ocr_cache had none at all. Under gunicorn (or any deployment where
-CWD isn't the repo root), state scatters to wherever the process happened to
-start, unpredictably. This is the one new knob; each module's own specific
-env var (DOCINTEL_JOBS_DB, DOCINTEL_TELEMETRY_LOG) still wins when set - this
-is only the fallback for the common root, and ocr_cache's new override.
+Six modules each resolved their own `var/...` path relative to the process's
+CWD, with inconsistent override support - `extract.ocr_cache` and
+`extract.convert_cache` had none at all. Under gunicorn (or any deployment
+where CWD isn't the repo root), state scatters to wherever the process
+happened to start, unpredictably.
+
+This is the one new knob. Each module's own specific env var still wins when
+set; this is only the fallback for the common root:
+
+| Module | Its own override | Falls back to |
+|---|---|---|
+| `jobs.store` | `DOCINTEL_JOBS_DB` | `state_root() / "jobs.sqlite3"` |
+| `telemetry` | `DOCINTEL_TELEMETRY_LOG` | `state_root() / ...` |
+| `extract.ocr_cache` | `DOCINTEL_OCR_CACHE_DIR` (new) | `state_root() / "ocr-cache"` |
+| `extract.convert_cache` | `DOCINTEL_CONVERT_CACHE_DIR` (new) | `state_root() / "convert-cache"` |
+| `evals.history` | `DOCINTEL_EVAL_HISTORY_DB` | `state_root() / "eval_history.sqlite3"` |
+| `evals.corrections` | `DOCINTEL_CORRECTIONS_DB` | `state_root() / "corrections.sqlite3"` |
+
+Every one of those fallbacks is computed inside a function, never frozen into
+a module-level constant at import time, so setting `DOCINTEL_STATE_DIR` after
+`docintel` is imported still takes effect.
 """
 
 from __future__ import annotations
